@@ -1,0 +1,13 @@
+{
+  "name": "eve-openai",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.15.0",
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "dev": "pnpm --recursive --parallel --if-present dev",
+    "lint": "pnpm --recursive --if-present lint",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
+  }
+}
