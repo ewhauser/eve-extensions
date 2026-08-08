@@ -1,0 +1,67 @@
+{
+  "note": "Synthetic catalog fixture shaped like the live plugin-runtime tools/list response. A recorded live snapshot, when present at catalog.live.json, is used in addition by the tests.",
+  "tools": [
+    {
+      "name": "github.search_repositories",
+      "title": "Search repositories",
+      "description": "Search GitHub repositories the user can access.",
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "github.search_issues",
+      "title": "Search issues",
+      "description": "Search issues and pull requests in GitHub repositories.",
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "github.create_issue",
+      "title": "Create issue",
+      "description": "Create a new issue in a GitHub repository.",
+      "inputSchema": { "type": "object", "properties": { "repo": { "type": "string" }, "title": { "type": "string" } }, "required": ["repo", "title"] },
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "github.delete_branch",
+      "title": "Delete branch",
+      "description": "Delete a branch from a GitHub repository.",
+      "inputSchema": { "type": "object", "properties": { "repo": { "type": "string" }, "branch": { "type": "string" } }, "required": ["repo", "branch"] },
+      "annotations": { "readOnlyHint": false, "destructiveHint": true, "openWorldHint": true }
+    },
+    {
+      "name": "google_drive.search_files",
+      "title": "Search Drive",
+      "description": "Search files in the user's Google Drive.",
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "google_drive.create_file",
+      "title": "Create Drive file",
+      "description": "Create a file in the user's Google Drive.",
+      "inputSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] },
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "notion.query_database",
+      "title": "Query Notion database",
+      "description": "Query a database in the user's Notion workspace.",
+      "inputSchema": { "type": "object", "properties": { "database_id": { "type": "string" } }, "required": ["database_id"] },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "openWorldHint": true }
+    },
+    {
+      "name": "codex_document_control.get_document_tool_schemas",
+      "title": "Get document tool schemas",
+      "description": "The longest observed live tool name, 48 characters.",
+      "inputSchema": { "type": "object" },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "openWorldHint": false }
+    },
+    {
+      "name": "hotline.call",
+      "title": "Hotline",
+      "description": "A tool with no annotations to exercise the fail-closed path.",
+      "inputSchema": { "type": "object" }
+    }
+  ]
+}

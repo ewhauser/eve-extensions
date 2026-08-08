@@ -1,3 +1,12 @@
 packages:
   - apps/*
   - packages/*
+
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - eve@0.31.3
+
+patchedDependencies:
+  eve@0.31.3: packages/eve-openai-connectors/patches/eve@0.31.3.patch

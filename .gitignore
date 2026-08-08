@@ -8,5 +8,10 @@ node_modules/
 dist/
 coverage/
 .turbo/
+.eve/
+.output/
+.vercel/
+.nitro/
+*.tsbuildinfo
 
 .DS_Store

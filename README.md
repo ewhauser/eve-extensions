@@ -11,3 +11,7 @@ Install dependencies with:
 ```sh
 pnpm install
 ```
+
+## Packages
+
+- [`eve-openai-connectors`](packages/eve-openai-connectors) — an Eve extension that exposes a user's authorized ChatGPT connectors through provider-native deferred tool search. It currently requires the version-pinned Eve patch documented in the package README.

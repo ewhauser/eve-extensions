@@ -1,0 +1,355 @@
+import type { Approval } from "eve/tools";
+import {
+  buildInventory,
+  InventoryCache,
+  searchInventory,
+  type Inventory,
+} from "./catalog.js";
+import { ConnectorAuthError, ConnectorToolError } from "./errors.js";
+import { searchResultsFromMessages } from "./messages.js";
+import {
+  searchToolName as buildSearchToolName,
+  statusToolName as buildStatusToolName,
+  validateMaxToolNameLength,
+  validateToolPrefix,
+} from "./naming.js";
+import { buildApprovalPolicy } from "./policy.js";
+import {
+  createProtocolClient,
+  DEFAULT_BASE_URL,
+  type ProtocolClient,
+} from "./protocol.js";
+import type {
+  ConnectorContext,
+  ConnectorSession,
+  ConnectorStatus,
+  ConnectorToolItem,
+  CreateConnectorsOptions,
+  SearchInput,
+} from "./types.js";
+
+/** Overall budget for the catalog load inside `begin()` (the resolver runs
+ * before every model call and must stay fast). The load continues in the
+ * background and populates the cache for the next step. */
+const BEGIN_CATALOG_BUDGET_MS = 5_000;
+
+/**
+ * Per-tool provider options that mark a tool as deferred for provider-native
+ * tool search. Eve's patched provider bridge forwards these options and
+ * injects the matching Anthropic or OpenAI search tool automatically.
+ */
+export const DEFER_PROVIDER_OPTIONS = {
+  anthropic: { deferLoading: true },
+  openai: { deferLoading: true },
+} as const;
+
+export interface Connectors {
+  /**
+   * Call from the `step.started` resolver. Returns `null` when disabled,
+   * when there is no principal, or when `getToken` yields no token —
+   * otherwise a session describing the discovery tool plus previously
+   * discovered tools rebuilt from history. Never throws.
+   */
+  begin(ctx: ConnectorContext & { messages?: readonly unknown[] }): Promise<ConnectorSession | null>;
+  /** Execute body for the search tool. Accepts the raw tool input object. */
+  search(
+    ctx: ConnectorContext,
+    input: SearchInput | Record<string, unknown>,
+  ): Promise<ConnectorToolItem[]>;
+  /** Execute body for a materialized connector tool. `upstream` must be the stored dotted name. */
+  call(ctx: ConnectorContext, upstream: string, input: Record<string, unknown>): Promise<unknown>;
+  /** Execute body for the optional status tool. */
+  status(ctx: ConnectorContext): Promise<ConnectorStatus>;
+  /** Approval policy for a discovered tool (declarative config or custom override). */
+  approvalFor(item: ConnectorToolItem): Approval;
+}
+
+function firstErrorLine(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split("\n", 1)[0] ?? message;
+}
+
+export function createConnectors(options: CreateConnectorsOptions): Connectors {
+  if (typeof options?.getToken !== "function") {
+    throw new Error("eve-openai-connectors: createConnectors requires a getToken(ctx) function.");
+  }
+  const enabled = options.enabled ?? true;
+  const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+  const toolPrefix = options.toolPrefix ?? "apps_";
+  validateToolPrefix(toolPrefix);
+  const maxToolNameLength = options.maxToolNameLength ?? 64;
+  validateMaxToolNameLength(maxToolNameLength);
+  const inventoryTtlMs = options.inventoryTtlMs ?? 300_000;
+  const maxMaterializedTools = options.maxMaterializedTools ?? 30;
+  const searchLimitDefault = options.searchLimitDefault ?? 8;
+  const searchLimitMax = options.searchLimitMax ?? 25;
+  const logger = options.logger ?? console;
+  const discovery = options.discovery ?? "search";
+
+  const searchToolName = buildSearchToolName(toolPrefix);
+  const statusToolName = buildStatusToolName(toolPrefix);
+  const approvalPolicy = options.approvalFor ?? buildApprovalPolicy(options.approvals);
+
+  const cache = new InventoryCache(inventoryTtlMs);
+  const clients = new Map<string, { client: ProtocolClient; token: string }>();
+  /** Principals whose most recent failure has already been logged. */
+  const loggedFailures = new Set<string>();
+
+  function principalOf(ctx: ConnectorContext): string | null {
+    if (options.getPrincipal) {
+      try {
+        return options.getPrincipal(ctx) || null;
+      } catch {
+        return null;
+      }
+    }
+    const auth = ctx?.session?.auth;
+    const caller = auth?.current ?? auth?.initiator ?? null;
+    if (!caller || typeof caller.principalId !== "string" || !caller.principalId) return null;
+    const issuer = caller.issuer ?? caller.authenticator;
+    return issuer ? `user:${issuer}:${caller.principalId}` : `user:${caller.principalId}`;
+  }
+
+  async function tokenFor(ctx: ConnectorContext, principal: string): Promise<string | null> {
+    try {
+      return (await options.getToken(ctx)) || null;
+    } catch (error) {
+      if (!loggedFailures.has(`token:${principal}`)) {
+        loggedFailures.add(`token:${principal}`);
+        logger.error(
+          `eve-openai-connectors: getToken failed for a user — treating as no access. ${firstErrorLine(error)}`,
+        );
+      }
+      return null;
+    }
+  }
+
+  function clientFor(principal: string, token: string): ProtocolClient {
+    const existing = clients.get(principal);
+    if (existing && existing.token === token) return existing.client;
+    const client = createProtocolClient({ baseUrl, token });
+    clients.set(principal, { client, token });
+    return client;
+  }
+
+  function loadInventory(principal: string, token: string): Promise<Inventory> {
+    return cache.get(principal, async () => {
+      const tools = await clientFor(principal, token).listTools();
+      const inventory = buildInventory(
+        tools,
+        toolPrefix,
+        (message) => logger.warn(message),
+        maxToolNameLength,
+      );
+      loggedFailures.delete(`catalog:${principal}`);
+      return inventory;
+    });
+  }
+
+  function searchDescription(inventory: Inventory | null): string {
+    const header =
+      "Search the ChatGPT connector tools available to the current user. " +
+      `Matching tools become callable on your next step using their generated name (e.g. ${toolPrefix}github_search_repositories). ` +
+      "Read-only tools run without approval; write tools require human approval before running.";
+    if (!inventory) {
+      return (
+        header +
+        " NOTE: the connector catalog is temporarily unavailable — previously discovered tools remain callable; retry the search later."
+      );
+    }
+    const services = [...inventory.services.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([service, count]) => `${service} (${count})`)
+      .join(", ");
+    return `${header} Available services: ${services}.`;
+  }
+
+  const searchInputSchema: ConnectorSession["searchInputSchema"] = {
+    type: "object",
+    properties: {
+      keywords: {
+        type: "string",
+        description: "Space-separated keywords describing the capability you need.",
+      },
+      service: {
+        type: "string",
+        description: "Optional service filter, e.g. \"github\" or \"google_drive\".",
+      },
+      limit: {
+        type: "number",
+        description: `Maximum results (default ${searchLimitDefault}, max ${searchLimitMax}).`,
+      },
+    },
+    required: ["keywords"],
+    additionalProperties: false,
+  };
+
+  const statusInputSchema: ConnectorSession["statusInputSchema"] = {
+    type: "object",
+    properties: {},
+    additionalProperties: false,
+  };
+
+  return {
+    async begin(ctx): Promise<ConnectorSession | null> {
+      try {
+        if (!enabled) return null;
+        const principal = principalOf(ctx);
+        if (!principal) return null;
+        const token = await tokenFor(ctx, principal);
+        if (!token) return null;
+
+        let inventory: Inventory | null = cache.peek(principal);
+        if (!inventory) {
+          // Bounded attempt; the load keeps running and fills the cache for
+          // the next step. Failure degrades the search description only.
+          inventory = await Promise.race([
+            loadInventory(principal, token).catch((error: unknown) => {
+              if (!loggedFailures.has(`catalog:${principal}`)) {
+                loggedFailures.add(`catalog:${principal}`);
+                logger.warn(
+                  `eve-openai-connectors: connector catalog load failed — continuing with previously discovered tools. ${firstErrorLine(error)}`,
+                );
+              }
+              return null;
+            }),
+            new Promise<null>((resolve) => {
+              const timer = setTimeout(() => resolve(null), BEGIN_CATALOG_BUDGET_MS);
+              timer.unref?.();
+            }),
+          ]);
+        }
+
+        const discovered = searchResultsFromMessages(ctx.messages ?? [], {
+          searchToolName,
+          max: maxMaterializedTools,
+        });
+        const deferred =
+          discovery === "deferred" && inventory ? [...inventory.items] : [];
+
+        return {
+          principal,
+          searchToolName,
+          searchToolDescription: searchDescription(inventory),
+          searchInputSchema,
+          statusToolName,
+          statusToolDescription:
+            "Report the health of the ChatGPT connector catalog for the current user: available services, tool counts, and whether the access token works.",
+          statusInputSchema,
+          discovered,
+          deferred,
+        };
+      } catch (error) {
+        // The resolver must never throw.
+        logger.error(
+          `eve-openai-connectors: begin() failed unexpectedly — connectors disabled for this step. ${firstErrorLine(error)}`,
+        );
+        return null;
+      }
+    },
+
+    async search(ctx, input): Promise<ConnectorToolItem[]> {
+      const principal = principalOf(ctx);
+      if (!principal) throw new Error("Connector search is unavailable: no authenticated user.");
+      const token = await tokenFor(ctx, principal);
+      if (!token) throw new Error("Connector search is unavailable: the current user has no access token.");
+      const inventory = await loadInventory(principal, token);
+      return searchInventory(inventory, (input ?? { keywords: "" }) as SearchInput, {
+        limitDefault: searchLimitDefault,
+        limitMax: searchLimitMax,
+      });
+    },
+
+    async call(ctx, upstream, input): Promise<unknown> {
+      if (typeof upstream !== "string" || upstream.length === 0) {
+        throw new Error("Connector call requires the stored upstream tool name.");
+      }
+      const principal = principalOf(ctx);
+      if (!principal) throw new Error("Connector call is unavailable: no authenticated user.");
+      const token = await tokenFor(ctx, principal);
+      if (!token) throw new Error("Connector call is unavailable: the current user has no access token.");
+
+      const signal = (ctx as { abortSignal?: AbortSignal }).abortSignal;
+      const startedAt = Date.now();
+      let outcome = "ok";
+      try {
+        const result = await clientFor(principal, token).callTool(
+          upstream,
+          input ?? {},
+          signal ? { signal } : {},
+        );
+        if (result.isError) {
+          outcome = "tool-error";
+          throw new ConnectorToolError(extractErrorText(result.content) ?? `${upstream} reported an error.`);
+        }
+        return result.structuredContent ?? result.content;
+      } catch (error) {
+        if (outcome === "ok") outcome = "error";
+        throw error;
+      } finally {
+        // Log name, duration, and outcome only — never arguments or results.
+        if (outcome !== "ok") {
+          logger.warn(
+            `eve-openai-connectors: ${upstream} → ${outcome} in ${Date.now() - startedAt}ms`,
+          );
+        }
+      }
+    },
+
+    async status(ctx): Promise<ConnectorStatus> {
+      const principal = principalOf(ctx);
+      const token = principal ? await tokenFor(ctx, principal) : null;
+      if (!principal || !token) {
+        return {
+          enabled,
+          tokenPresent: false,
+          catalog: { ok: false, error: "No access token for the current user.", authError: false },
+        };
+      }
+      try {
+        const inventory = await loadInventory(principal, token);
+        return {
+          enabled,
+          tokenPresent: true,
+          catalog: {
+            ok: true,
+            totalTools: inventory.items.length,
+            readOnlyTools: inventory.readOnlyCount,
+            services: [...inventory.services.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .map(([service, tools]) => ({ service, tools })),
+          },
+        };
+      } catch (error) {
+        return {
+          enabled,
+          tokenPresent: true,
+          catalog: {
+            ok: false,
+            error: firstErrorLine(error),
+            authError: error instanceof ConnectorAuthError,
+          },
+        };
+      }
+    },
+
+    approvalFor(item): Approval {
+      return approvalPolicy(item);
+    },
+  };
+}
+
+function extractErrorText(content: unknown): string | null {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const texts = content
+      .map((part) =>
+        typeof part === "object" && part !== null && "text" in part
+          ? String((part as { text: unknown }).text)
+          : null,
+      )
+      .filter((text): text is string => text !== null && text.length > 0);
+    if (texts.length > 0) return texts.join("\n");
+  }
+  return null;
+}
