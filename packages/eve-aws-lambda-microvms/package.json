@@ -1,0 +1,55 @@
+{
+  "name": "eve-aws-lambda-microvms",
+  "version": "0.1.0",
+  "description": "An Eve sandbox backend for durable AWS Lambda MicroVMs.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "pnpm run clean && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "prepare": "pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda-microvms": "3.1075.0",
+    "@aws-sdk/client-s3": "3.1073.0",
+    "@aws-sdk/s3-request-presigner": "3.1073.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "ai": "^7.0.38",
+    "eve": "0.31.3",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": {
+    "eve": "0.31.3"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ewhauser/eve-openai.git",
+    "directory": "packages/eve-aws-lambda-microvms"
+  }
+}
