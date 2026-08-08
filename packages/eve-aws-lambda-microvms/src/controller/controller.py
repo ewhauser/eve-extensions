@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import hashlib
 import json
 import os
@@ -295,14 +296,15 @@ def prepare_checkpoint():
         "--zstd", "-cf", archive_path, "-C", UPPER, "."
     ])
     size = os.path.getsize(archive_path)
-    digest = file_sha256(archive_path)
+    digest, part_digests = file_sha256_parts(archive_path)
     return {
         "dirty": True,
         "checkpointId": checkpoint_id,
         "size": size,
         "sha256": digest,
         "partSize": PART_SIZE,
-        "partCount": max(1, (size + PART_SIZE - 1) // PART_SIZE),
+        "partCount": len(part_digests),
+        "partSha256s": part_digests,
     }
 
 
@@ -316,11 +318,23 @@ def upload_checkpoint(payload):
     with open(archive_path, "rb") as handle:
         for index, url in enumerate(urls, start=1):
             data = handle.read(PART_SIZE)
-            request = urllib.request.Request(url, data=data, method="PUT")
+            checksum = base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+            request = urllib.request.Request(
+                url,
+                data=data,
+                headers={
+                    "x-amz-checksum-sha256": checksum,
+                    "x-amz-sdk-checksum-algorithm": "SHA256",
+                },
+                method="PUT",
+            )
             with urllib.request.urlopen(request, timeout=300) as response:
                 etag = response.headers.get("ETag")
+                verified_checksum = response.headers.get("x-amz-checksum-sha256")
             if not etag:
                 raise RuntimeError(f"S3 upload part {index} returned no ETag")
+            if verified_checksum != checksum:
+                raise RuntimeError(f"S3 upload part {index} did not verify its SHA-256 checksum")
             parts.append({"partNumber": index, "etag": etag})
     return {"parts": parts}
 
@@ -372,6 +386,21 @@ def file_sha256(path):
                 break
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def file_sha256_parts(path):
+    digest = hashlib.sha256()
+    parts = []
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(PART_SIZE)
+            if not chunk:
+                if not parts:
+                    parts.append(hashlib.sha256(b"").hexdigest())
+                break
+            digest.update(chunk)
+            parts.append(hashlib.sha256(chunk).hexdigest())
+    return digest.hexdigest(), parts
 
 
 def read_file(path, offset, limit):

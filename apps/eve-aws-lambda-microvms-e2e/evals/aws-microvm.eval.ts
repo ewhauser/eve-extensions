@@ -64,8 +64,7 @@ async function terminateFixtureMicrovms(log: (message: string) => void): Promise
         ) {
           continue;
         }
-        const resourceArn = microvmArn(item.imageArn, item.microvmId);
-        const tags = await client.send(new ListTagsCommand({ Resource: resourceArn }));
+        const tags = await client.send(new ListTagsCommand({ Resource: item.imageArn }));
         if (tags.Tags?.["eve-e2e-stack"] === stackName) microvmIds.push(item.microvmId);
       }
       nextToken = output.nextToken;
@@ -106,14 +105,6 @@ async function waitForTermination(
     if (Date.now() >= deadline) throw new Error(`Timed out terminating MicroVM ${microvmId}.`);
     await sleep(2_000);
   }
-}
-
-function microvmArn(imageArn: string, microvmId: string): string {
-  const [arn, partition, service, region, account] = imageArn.split(":");
-  if (arn !== "arn" || service !== "lambda" || !partition || !region || !account) {
-    throw new Error(`Invalid MicroVM image ARN: ${imageArn}.`);
-  }
-  return `arn:${partition}:lambda:${region}:${account}:microvm:${microvmId}`;
 }
 
 function required(name: string): string {

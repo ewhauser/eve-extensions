@@ -29,7 +29,11 @@ export interface AwsLambdaMicrovmStorage {
   completeMultipartUpload(
     key: string,
     uploadId: string,
-    parts: readonly { readonly etag: string; readonly partNumber: number }[],
+    parts: readonly {
+      readonly etag: string;
+      readonly partNumber: number;
+      readonly sha256: string;
+    }[],
     sha256: string,
   ): Promise<{ readonly etag?: string }>;
   createMultipartUpload(key: string): Promise<string>;
@@ -42,7 +46,7 @@ export interface AwsLambdaMicrovmStorage {
   presignUploadParts(
     key: string,
     uploadId: string,
-    count: number,
+    partSha256s: readonly string[],
     expiresInSeconds?: number,
   ): Promise<readonly string[]>;
   putBytes(
@@ -87,24 +91,30 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
   async completeMultipartUpload(
     key: string,
     uploadId: string,
-    parts: readonly { readonly etag: string; readonly partNumber: number }[],
-    sha256: string,
+    parts: readonly {
+      readonly etag: string;
+      readonly partNumber: number;
+      readonly sha256: string;
+    }[],
+    _sha256: string,
   ): Promise<{ readonly etag?: string }> {
-    const checksum = sha256Base64(sha256);
     const output = await this.#client.send(
       new CompleteMultipartUploadCommand({
         Bucket: this.#bucket,
-        ChecksumSHA256: checksum,
-        ChecksumType: "FULL_OBJECT",
+        ChecksumType: "COMPOSITE",
         Key: key,
         MultipartUpload: {
-          Parts: parts.map((part) => ({ ETag: part.etag, PartNumber: part.partNumber })),
+          Parts: parts.map((part) => ({
+            ChecksumSHA256: sha256Base64(part.sha256),
+            ETag: part.etag,
+            PartNumber: part.partNumber,
+          })),
         },
         UploadId: uploadId,
       }),
     );
-    if (output.ChecksumSHA256 !== checksum || output.ChecksumType !== "FULL_OBJECT") {
-      throw new Error(`AWS S3 did not verify the full SHA-256 checksum for ${key}.`);
+    if (optionalString(output.ChecksumSHA256) === undefined || output.ChecksumType !== "COMPOSITE") {
+      throw new Error(`AWS S3 did not verify the composite SHA-256 checksum for ${key}.`);
     }
     return { etag: optionalString(output.ETag) };
   }
@@ -114,7 +124,7 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
       new CreateMultipartUploadCommand({
         Bucket: this.#bucket,
         ChecksumAlgorithm: "SHA256",
-        ChecksumType: "FULL_OBJECT",
+        ChecksumType: "COMPOSITE",
         ContentType: "application/zstd",
         Key: key,
       }),
@@ -179,22 +189,30 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
   async presignUploadParts(
     key: string,
     uploadId: string,
-    count: number,
+    partSha256s: readonly string[],
     expiresInSeconds = 3600,
   ): Promise<readonly string[]> {
     return await Promise.all(
       Array.from(
-        { length: count },
-        async (_, index) =>
+        partSha256s,
+        async (sha256, index) =>
           await getSignedUrl(
             this.#client,
             new UploadPartCommand({
               Bucket: this.#bucket,
+              ChecksumAlgorithm: "SHA256",
+              ChecksumSHA256: sha256Base64(sha256),
               Key: key,
               PartNumber: index + 1,
               UploadId: uploadId,
             }),
-            { expiresIn: expiresInSeconds },
+            {
+              expiresIn: expiresInSeconds,
+              unhoistableHeaders: new Set([
+                "x-amz-checksum-sha256",
+                "x-amz-sdk-checksum-algorithm",
+              ]),
+            },
           ),
       ),
     );

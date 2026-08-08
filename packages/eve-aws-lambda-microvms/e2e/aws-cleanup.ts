@@ -109,7 +109,7 @@ async function cleanupMicrovmResources(input: {
     await Promise.all(microvmIds.map((microvmId) => waitForMicrovmTermination(input.client, microvmId)));
 
     input.log(`deleting MicroVM image ${imageArn}`);
-    await retryConflicts(async () => {
+    await retryImageDeletion(async () => {
       await input.client.send(new DeleteMicrovmImageCommand({ imageIdentifier: imageArn }));
     });
   }
@@ -266,7 +266,7 @@ async function emptyBucket(input: {
   }
 }
 
-async function retryConflicts(operation: () => Promise<void>): Promise<void> {
+async function retryImageDeletion(operation: () => Promise<void>): Promise<void> {
   const deadline = Date.now() + RESOURCE_TIMEOUT_MS;
   for (;;) {
     try {
@@ -274,18 +274,20 @@ async function retryConflicts(operation: () => Promise<void>): Promise<void> {
       return;
     } catch (error) {
       if (isNotFound(error)) return;
-      if (!isConflict(error) || Date.now() >= deadline) throw error;
+      if (!isRetryableImageDeletion(error) || Date.now() >= deadline) throw error;
       await sleep(3_000);
     }
   }
 }
 
-function isConflict(error: unknown): boolean {
+export function isRetryableImageDeletion(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const name = String((error as { readonly name?: unknown }).name);
+  if (["ConflictException", "ResourceConflictException"].includes(name)) return true;
   return (
-    typeof error === "object" &&
-    error !== null &&
-    ["ConflictException", "ResourceConflictException"].includes(
-      String((error as { readonly name?: unknown }).name),
+    name === "ValidationException" &&
+    String((error as { readonly message?: unknown }).message).includes(
+      "Cannot delete MicroVM image in its current state",
     )
   );
 }

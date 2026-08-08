@@ -184,13 +184,7 @@ async function waitForImageVersion(
   for (;;) {
     const image = await api.getImageVersion(imageArn, imageVersion);
     if (image.state === "SUCCESSFUL" && image.status !== "INACTIVE") return image;
-    if (
-      image.state === "FAILED" ||
-      image.state === "DELETING" ||
-      image.state === "DELETED" ||
-      image.state === "DELETE_FAILED" ||
-      image.status === "INACTIVE"
-    ) {
+    if (isUnavailableImageVersion(image)) {
       throw new Error(
         `AWS Lambda MicroVM image ${imageArn}:${imageVersion} is unavailable: ${image.stateReason ?? `${image.state}/${image.status ?? "UNKNOWN"}`}. Check the configured CloudWatch build logs (default ${defaultBuildLogGroup(imageArn)}).`,
       );
@@ -203,6 +197,18 @@ async function waitForImageVersion(
     log?.(`waiting for MicroVM image ${imageVersion} (${image.state.toLowerCase()})`);
     await sleepWithJitter();
   }
+}
+
+export function isUnavailableImageVersion(
+  image: AwsLambdaMicrovmImageVersionRecord,
+): boolean {
+  return (
+    image.state === "FAILED" ||
+    image.state === "DELETING" ||
+    image.state === "DELETED" ||
+    image.state === "DELETE_FAILED" ||
+    (image.state === "SUCCESSFUL" && image.status === "INACTIVE")
+  );
 }
 
 async function sleepWithJitter(): Promise<void> {
