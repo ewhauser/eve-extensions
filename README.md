@@ -2,6 +2,8 @@
 
 This repository contains examples of how Eve can take advantage of OpenAI when you use Eve and OpenAI together. Some features demonstrated here require using Eve alongside a ChatGPT Enterprise or Business account.
 
+> **Important:** The connector extension in this repository uses an undocumented OpenAI API. That API may change, become restricted, or stop working without notice, so treat the integration as experimental and review upgrades carefully.
+
 ## Development
 
 This repository is a pnpm monorepo. Example applications live in `apps/`, and shared packages live in `packages/`.
