@@ -56,7 +56,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ewhauser/eve-openai.git",
+    "url": "git+https://github.com/ewhauser/eve-extensions.git",
     "directory": "packages/eve-aws-lambda-microvms"
   }
 }
