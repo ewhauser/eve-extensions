@@ -19,6 +19,7 @@ export async function uploadAwsLambdaMicrovmCheckpoint(input: {
 
   const checkpointId = expectDefined(preparation.checkpointId, "checkpointId");
   const partCount = expectDefined(preparation.partCount, "partCount");
+  const partSha256s = expectDefined(preparation.partSha256s, "partSha256s");
   const sha256 = expectDefined(preparation.sha256, "sha256");
   const size = expectDefined(preparation.size, "size");
   const key = `${input.objectKeyPrefix}/${input.generation}-${sha256}.tar.zst`;
@@ -27,14 +28,27 @@ export async function uploadAwsLambdaMicrovmCheckpoint(input: {
   let completedEtag: string | undefined;
 
   try {
-    const urls = await input.storage.presignUploadParts(key, uploadId, partCount);
+    const urls = await input.storage.presignUploadParts(key, uploadId, partSha256s);
     const parts = await input.controller.checkpointUpload(checkpointId, urls);
     if (parts.length !== partCount) {
       throw new Error(
         `AWS Lambda MicroVM controller uploaded ${parts.length} checkpoint parts; expected ${partCount}.`,
       );
     }
-    const result = await input.storage.completeMultipartUpload(key, uploadId, parts, sha256);
+    const checksummedParts = parts.map((part, index) => {
+      if (part.partNumber !== index + 1) {
+        throw new Error(
+          `AWS Lambda MicroVM controller returned checkpoint part ${part.partNumber} at position ${index + 1}.`,
+        );
+      }
+      return { ...part, sha256: partSha256s[index] as string };
+    });
+    const result = await input.storage.completeMultipartUpload(
+      key,
+      uploadId,
+      checksummedParts,
+      sha256,
+    );
     const stored = await input.storage.getObjectInfo(key);
     if (stored === null || stored.size !== size) {
       throw new Error(

@@ -95,6 +95,30 @@ describe("AWS Lambda MicroVM controller client", () => {
     ]);
   });
 
+  it("validates checkpoint part checksums before presigning uploads", async () => {
+    const api = fakeApi();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        jsonResponse({
+          checkpointId: "checkpoint-1",
+          dirty: true,
+          partCount: 2,
+          partSha256s: ["a".repeat(64), "b".repeat(64)],
+          partSize: 64 * 1024 * 1024,
+          sha256: "c".repeat(64),
+          size: 65 * 1024 * 1024,
+        }),
+      ),
+    );
+    const controller = new HttpAwsLambdaMicrovmController({ api, microvm: MICROVM });
+
+    await expect(controller.prepareCheckpoint()).resolves.toMatchObject({
+      partCount: 2,
+      partSha256s: ["a".repeat(64), "b".repeat(64)],
+    });
+  });
+
   it("retries an idempotent process start after a transient failure", async () => {
     const api = fakeApi();
     const processBodies: string[] = [];
@@ -161,7 +185,6 @@ function fakeApi(): AwsLambdaMicrovmApi & { readonly createAuthToken: ReturnType
       return MICROVM;
     },
     async suspendMicrovm() {},
-    async tagResource() {},
     async terminateMicrovm() {},
   };
 }

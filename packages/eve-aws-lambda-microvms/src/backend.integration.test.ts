@@ -115,15 +115,6 @@ describe("AWS Lambda MicroVM backend", () => {
       expect.objectContaining({ logging: { disabled: true } }),
     );
     expect(fixture.api.terminateMicrovm).toHaveBeenCalledTimes(1);
-    expect(fixture.api.tagResource).toHaveBeenCalledWith(
-      "arn:aws:lambda:us-east-1:123456789012:microvm:mvm-1",
-      expect.objectContaining({
-        "eve:application": expect.any(String),
-        "eve:controller": "1",
-        "eve:owner": "eve",
-        "eve:template": expect.any(String),
-      }),
-    );
 
     const handle = await backend.create({
       runtimeContext: { appRoot: "/app" },
@@ -278,7 +269,6 @@ function createFakeApi() {
       const current = microvms.get(microvmId);
       if (current !== undefined) microvms.set(microvmId, { ...current, state: "SUSPENDED" });
     }),
-    tagResource: vi.fn(async () => {}),
     terminateMicrovm: vi.fn(async (microvmId: string) => {
       const current = microvms.get(microvmId);
       if (current !== undefined) microvms.set(microvmId, { ...current, state: "TERMINATED" });
@@ -298,7 +288,11 @@ class FakeStorage implements AwsLambdaMicrovmStorage {
   async completeMultipartUpload(
     key: string,
     _uploadId: string,
-    _parts: readonly { readonly etag: string; readonly partNumber: number }[],
+    _parts: readonly {
+      readonly etag: string;
+      readonly partNumber: number;
+      readonly sha256: string;
+    }[],
     sha256: string,
   ): Promise<{ etag?: string }> {
     this.completedSha256s.push(sha256);
@@ -337,9 +331,9 @@ class FakeStorage implements AwsLambdaMicrovmStorage {
   async presignUploadParts(
     _key: string,
     _uploadId: string,
-    count: number,
+    partSha256s: readonly string[],
   ): Promise<readonly string[]> {
-    return Array.from({ length: count }, (_, index) => `https://s3.example.test/part/${index + 1}`);
+    return partSha256s.map((_, index) => `https://s3.example.test/part/${index + 1}`);
   }
   async putBytes(key: string, bytes: Uint8Array): Promise<void> {
     this.bytes.set(key, bytes);
@@ -384,6 +378,7 @@ class FakeController implements AwsLambdaMicrovmController {
           checkpointId: "checkpoint-1",
           dirty: true,
           partCount: 1,
+          partSha256s: ["b".repeat(64)],
           partSize: 64 * 1024 * 1024,
           sha256: "a".repeat(64),
           size: 12,

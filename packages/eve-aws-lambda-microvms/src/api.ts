@@ -90,6 +90,5 @@ export interface AwsLambdaMicrovmApi {
   resumeMicrovm(microvmId: string): Promise<void>;
   runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord>;
   suspendMicrovm(microvmId: string): Promise<void>;
-  tagResource(resourceArn: string, tags: Readonly<Record<string, string>>): Promise<void>;
   terminateMicrovm(microvmId: string): Promise<void>;
 }

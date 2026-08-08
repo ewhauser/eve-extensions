@@ -59,6 +59,6 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly shellAccess?: boolean;
   /** CloudWatch configuration, or `false` to disable logging. */
   readonly runtimeLogging?: AwsLambdaMicrovmCloudWatchLogging | false;
-  /** Tags attached to eve-owned image and MicroVM resources. */
+  /** Tags attached to eve-owned MicroVM images. */
   readonly tags?: Readonly<Record<string, string>>;
 }

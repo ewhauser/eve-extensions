@@ -96,7 +96,7 @@ The build role reads the uploaded image artifact and writes build logs. It does 
 }
 ```
 
-The build caller manages images, tags resources, passes the service roles, and reads and writes the artifact prefix:
+The build caller manages images, passes the service roles, and reads and writes the artifact prefix:
 
 ```json title="Build caller policy"
 {
@@ -116,8 +116,7 @@ The build caller manages images, tags resources, passes the service roles, and r
         "lambda:SuspendMicrovm",
         "lambda:ResumeMicrovm",
         "lambda:TerminateMicrovm",
-        "lambda:CreateMicrovmAuthToken",
-        "lambda:TagResource"
+        "lambda:CreateMicrovmAuthToken"
       ],
       "Resource": "*"
     },
@@ -160,8 +159,7 @@ The runtime caller needs lifecycle, token, tag, S3 checkpoint, and execution-rol
         "lambda:SuspendMicrovm",
         "lambda:ResumeMicrovm",
         "lambda:TerminateMicrovm",
-        "lambda:CreateMicrovmAuthToken",
-        "lambda:TagResource"
+        "lambda:CreateMicrovmAuthToken"
       ],
       "Resource": "*"
     },
@@ -234,7 +232,7 @@ For failures, start with the image version `stateReason`, its CloudWatch build s
 
 This repository includes an opt-in live acceptance harness. Each run creates a unique
 CloudFormation stack containing a private encrypted S3 bucket and a Lambda MicroVM image-build
-role. The application id, image, MicroVMs, S3 prefix, and resource tags are unique to that stack.
+role. The application id, image, MicroVMs, S3 prefix, and image tags are unique to that stack.
 The runner always attempts the following teardown sequence, whether the tests pass or fail:
 
 1. Find images tagged with the generated stack name.
@@ -270,7 +268,6 @@ lambda:ListTags
 lambda:ResumeMicrovm
 lambda:RunMicrovm
 lambda:SuspendMicrovm
-lambda:TagResource
 lambda:TerminateMicrovm
 ```
 

@@ -6,6 +6,7 @@ import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 import type { AwsLambdaMicrovmController, ControllerProcess } from "./controller-client.js";
 
 const WORKSPACE_ROOT = "/workspace";
+const HOME_ROOT = "/root";
 const BOOTSTRAP_FAILURE_EXIT_CODE = 1;
 const MAX_LOG_VALUE_LENGTH = 240;
 
@@ -162,6 +163,10 @@ export function createLoggingSandboxSession(input: {
 }
 
 function resolvePath(path: string): string {
+  if (path === "$HOME") return HOME_ROOT;
+  if (path.startsWith("$HOME/")) {
+    return posix.resolve(HOME_ROOT, path.slice("$HOME/".length));
+  }
   if (posix.isAbsolute(path)) return posix.normalize(path);
   return posix.resolve(WORKSPACE_ROOT, path);
 }

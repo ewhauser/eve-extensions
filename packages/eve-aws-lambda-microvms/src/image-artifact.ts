@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 
+import { CONTROLLER_ASSETS } from "./controller-assets.generated.js";
 import { createDeterministicZip } from "./deterministic-zip.js";
 
 export const AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION = 1;
@@ -26,5 +26,9 @@ export async function buildAwsLambdaMicrovmImageArtifact(): Promise<{
 }
 
 async function readControllerAsset(name: string): Promise<Buffer> {
-  return await readFile(new URL(`./controller/${name}`, import.meta.url));
+  const encoded = CONTROLLER_ASSETS[name as keyof typeof CONTROLLER_ASSETS];
+  if (encoded === undefined) {
+    throw new Error(`Unknown AWS Lambda MicroVM controller asset: ${name}`);
+  }
+  return Buffer.from(encoded, "base64");
 }

@@ -13,7 +13,6 @@ import {
   ResumeMicrovmCommand,
   RunMicrovmCommand,
   SuspendMicrovmCommand,
-  TagResourceCommand,
   TerminateMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 
@@ -27,6 +26,8 @@ import type {
   AwsLambdaMicrovmRunInput,
   AwsLambdaMicrovmState,
 } from "./api.js";
+
+const LIST_PAGE_SIZE = 50;
 
 export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
   readonly #client: LambdaMicrovmsClient;
@@ -128,7 +129,11 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
     let nextToken: string | undefined;
     do {
       const output = await this.#client.send(
-        new ListMicrovmImagesCommand({ maxResults: 100, nameFilter: name, nextToken }),
+        new ListMicrovmImagesCommand({
+          maxResults: LIST_PAGE_SIZE,
+          nameFilter: name,
+          nextToken,
+        }),
       );
       for (const item of expectArray(output.items, "items")) {
         const record = expectRecord(item, "image item");
@@ -152,7 +157,7 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
       const output = await this.#client.send(
         new ListMicrovmImageVersionsCommand({
           imageIdentifier: imageArn,
-          maxResults: 100,
+          maxResults: LIST_PAGE_SIZE,
           nextToken,
         }),
       );
@@ -169,7 +174,7 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
     let nextToken: string | undefined;
     do {
       const output = await this.#client.send(
-        new ListManagedMicrovmImagesCommand({ maxResults: 100, nextToken }),
+        new ListManagedMicrovmImagesCommand({ maxResults: LIST_PAGE_SIZE, nextToken }),
       );
       for (const item of expectArray(output.items, "items")) {
         items.push({
@@ -190,7 +195,7 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
       const output = await this.#client.send(
         new ListManagedMicrovmImageVersionsCommand({
           imageIdentifier: imageArn,
-          maxResults: 100,
+          maxResults: LIST_PAGE_SIZE,
           nextToken,
         }),
       );
@@ -231,10 +236,6 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
 
   async suspendMicrovm(microvmId: string): Promise<void> {
     await this.#client.send(new SuspendMicrovmCommand({ microvmIdentifier: microvmId }));
-  }
-
-  async tagResource(resourceArn: string, tags: Readonly<Record<string, string>>): Promise<void> {
-    await this.#client.send(new TagResourceCommand({ Resource: resourceArn, Tags: { ...tags } }));
   }
 
   async terminateMicrovm(microvmId: string): Promise<void> {

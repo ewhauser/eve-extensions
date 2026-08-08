@@ -507,30 +507,7 @@ async function runMicrovm(input: {
       eveSession: hashKey(input.purposeKey),
     }),
   });
-  try {
-    await input.services.api.tagResource(microvmArn(microvm), {
-      ...input.options.tags,
-      "eve:application": input.options.applicationHash,
-      "eve:controller": String(AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION),
-      "eve:owner": "eve",
-      ...(input.sessionKey === undefined
-        ? {}
-        : { "eve:session": hashKey(input.sessionKey).slice(0, 32) }),
-      "eve:template": input.templateHash.slice(0, 32),
-    });
-    return microvm;
-  } catch (error) {
-    await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
-    throw error;
-  }
-}
-
-function microvmArn(microvm: AwsLambdaMicrovmRecord): string {
-  const [arn, partition, service, region, account] = microvm.imageArn.split(":");
-  if (arn !== "arn" || service !== "lambda" || !partition || !region || !account) {
-    throw new Error(`AWS Lambda MicroVM image returned an invalid ARN: ${microvm.imageArn}.`);
-  }
-  return `arn:${partition}:lambda:${region}:${account}:microvm:${microvm.microvmId}`;
+  return microvm;
 }
 
 function resolveLogging(options: ResolvedAwsLambdaMicrovmOptions): AwsLambdaMicrovmLogging {

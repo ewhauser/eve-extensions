@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +15,11 @@ export async function runEveFixture(input: {
   readonly log: (message: string) => void;
   readonly stack: E2eStack;
 }): Promise<void> {
+  // This dedicated fixture consumes the package through its built `dist`
+  // export. Eve intentionally ignores dependency build output in its dev
+  // watcher, so discard generated fixture state to prevent a previous run's
+  // authored-module bundle or prewarm signature from masking current changes.
+  await rm(resolve(FIXTURE_ROOT, ".eve"), { force: true, recursive: true });
   input.log("running deterministic Eve attachment and packaged-skill eval");
   const exitCode = await new Promise<number>((resolveExit, reject) => {
     const child = spawn(

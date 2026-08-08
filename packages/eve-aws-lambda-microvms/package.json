@@ -19,11 +19,11 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "pnpm run clean && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "build": "node scripts/generate-controller-assets.mjs && pnpm run clean && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "prepare": "pnpm run build",
     "test": "vitest run",
-    "test:aws": "tsx e2e/runner.ts run",
+    "test:aws": "pnpm run build && tsx e2e/runner.ts run",
     "test:aws:cleanup": "tsx e2e/runner.ts cleanup",
     "test:aws:plan": "tsx e2e/runner.ts plan",
     "test:watch": "vitest",

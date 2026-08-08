@@ -12,6 +12,7 @@ export interface ControllerCheckpointPreparation {
   readonly checkpointId?: string;
   readonly dirty: boolean;
   readonly partCount?: number;
+  readonly partSha256s?: readonly string[];
   readonly partSize?: number;
   readonly sha256?: string;
   readonly size?: number;
@@ -123,10 +124,18 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
     if (output.dirty !== true) {
       throw new Error("AWS Lambda MicroVM controller returned invalid checkpoint state.");
     }
+    const partCount = expectPositiveInteger(output.partCount, "partCount");
+    const partSha256s = expectSha256Array(output.partSha256s, "partSha256s");
+    if (partSha256s.length !== partCount) {
+      throw new Error(
+        `AWS Lambda MicroVM controller returned ${partSha256s.length} part checksums; expected ${partCount}.`,
+      );
+    }
     return {
       checkpointId: expectString(output.checkpointId, "checkpointId"),
       dirty: true,
-      partCount: expectPositiveInteger(output.partCount, "partCount"),
+      partCount,
+      partSha256s,
       partSize: expectPositiveInteger(output.partSize, "partSize"),
       sha256: expectSha256(output.sha256),
       size: expectNonNegativeInteger(output.size, "size"),
@@ -506,6 +515,19 @@ function expectSha256(value: unknown): string {
     throw new Error("AWS Lambda MicroVM controller returned invalid sha256.");
   }
   return digest;
+}
+
+function expectSha256Array(value: unknown, name: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`AWS Lambda MicroVM controller returned invalid ${name}.`);
+  }
+  return value.map((entry, index) => {
+    try {
+      return expectSha256(entry);
+    } catch {
+      throw new Error(`AWS Lambda MicroVM controller returned invalid ${name}[${index}].`);
+    }
+  });
 }
 
 function expectDefined<T>(value: T | null | undefined, name: string): T {
