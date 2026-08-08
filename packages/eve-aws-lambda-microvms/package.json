@@ -23,8 +23,11 @@
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "prepare": "pnpm run build",
     "test": "vitest run",
+    "test:aws": "tsx e2e/runner.ts run",
+    "test:aws:cleanup": "tsx e2e/runner.ts cleanup",
+    "test:aws:plan": "tsx e2e/runner.ts plan",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-lambda-microvms": "3.1075.0",
@@ -32,9 +35,13 @@
     "@aws-sdk/s3-request-presigner": "3.1073.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-cloudformation": "3.1073.0",
+    "@aws-sdk/client-cloudwatch-logs": "3.1073.0",
+    "@aws-sdk/client-sts": "3.1073.0",
     "@types/node": "^24.0.0",
     "ai": "^7.0.38",
     "eve": "0.31.3",
+    "tsx": "^4.23.11",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },

@@ -230,6 +230,87 @@ eve does not prune images or durable checkpoints. Configure S3 lifecycle rules a
 
 For failures, start with the image version `stateReason`, its CloudWatch build stream, and AWS's [troubleshooting guide](https://docs.aws.amazon.com/lambda/latest/dg/microvms-troubleshooting.html). Also review AWS's [snapshot model](https://docs.aws.amazon.com/lambda/latest/dg/microvms-images-snapshots.html) and [best practices](https://docs.aws.amazon.com/lambda/latest/dg/microvms-best-practices.html).
 
+## Atomic AWS end-to-end tests
+
+This repository includes an opt-in live acceptance harness. Each run creates a unique
+CloudFormation stack containing a private encrypted S3 bucket and a Lambda MicroVM image-build
+role. The application id, image, MicroVMs, S3 prefix, and resource tags are unique to that stack.
+The runner always attempts the following teardown sequence, whether the tests pass or fail:
+
+1. Find images tagged with the generated stack name.
+2. Terminate every MicroVM using those images.
+3. Delete the images and wait for them to disappear.
+4. Delete the image-build CloudWatch log groups.
+5. Delete all S3 objects and abort multipart uploads.
+6. Delete the CloudFormation stack and wait for completion.
+
+The live suite validates package-level image provisioning and reuse, command and file APIs, native
+suspend/resume with a running process, and full-filesystem restore after forced termination. It
+then runs the deterministic Eve fixture in `apps/eve-aws-lambda-microvms-e2e`. That fixture sends
+an attachment through Eve's real staging path, loads a packaged skill, reads its sibling reference,
+resumes the session, forcibly terminates its MicroVM, and repeats the attachment and skill checks
+after replacement. It uses Eve's mock model, so no model-provider key is needed.
+
+Select a disposable AWS account and credentials before opting in. The caller must be able to use
+CloudFormation, create and delete the temporary IAM role and S3 bucket, pass the build role to
+Lambda, and perform these MicroVM actions:
+
+```text
+lambda:CreateMicrovmImage
+lambda:CreateMicrovmAuthToken
+lambda:DeleteMicrovmImage
+lambda:GetMicrovm
+lambda:GetMicrovmImageVersion
+lambda:ListManagedMicrovmImages
+lambda:ListManagedMicrovmImageVersions
+lambda:ListMicrovmImages
+lambda:ListMicrovmImageVersions
+lambda:ListMicrovms
+lambda:ListTags
+lambda:ResumeMicrovm
+lambda:RunMicrovm
+lambda:SuspendMicrovm
+lambda:TagResource
+lambda:TerminateMicrovm
+```
+
+The caller also needs `logs:DescribeLogGroups` and `logs:DeleteLogGroup` so the image-build log
+group does not outlive its test stack.
+
+Inspect the exact CloudFormation template without making AWS calls:
+
+```sh
+pnpm --filter eve-aws-lambda-microvms test:aws:plan
+```
+
+Run the suite:
+
+```sh
+AWS_PROFILE=eve-microvm-test \
+AWS_REGION=us-east-1 \
+EVE_AWS_E2E_ACCOUNT_ID=123456789012 \
+EVE_RUN_AWS_MICROVM_E2E=1 \
+pnpm --filter eve-aws-lambda-microvms test:aws
+```
+
+The account id is mandatory and must match `sts:GetCallerIdentity`; a stale or incorrect profile is
+rejected before CloudFormation is called.
+
+The generated stack name is printed before provisioning. If the process is killed in a way that
+prevents its `finally` cleanup from running, use that name to invoke the idempotent recovery path:
+
+```sh
+AWS_PROFILE=eve-microvm-test \
+pnpm --filter eve-aws-lambda-microvms test:aws:cleanup -- \
+  --stack eve-microvm-e2e-YYYYMMDDHHMMSS-xxxxxxxx \
+  --region us-east-1
+```
+
+The runner catches `SIGINT` and `SIGTERM` and finishes teardown before exiting. No process can
+guarantee teardown after `SIGKILL`, machine loss, or credential revocation; the recovery command,
+unique tags, 15-minute MicroVM maximum duration, and CloudFormation ownership are the backstops for
+those cases. The first run builds a unique image and can take several minutes.
+
 ## License
 
 `eve-aws-lambda-microvms` is licensed under the [Apache License 2.0](./LICENSE). The package includes code derived from `vercel/eve`; attribution and modification details are recorded in [NOTICE](./NOTICE).
