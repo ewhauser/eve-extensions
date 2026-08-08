@@ -1,0 +1,9 @@
+eve-aws-lambda-microvms
+Copyright 2026 Eric Hauser
+
+This product includes software derived from eve, developed at Vercel, Inc.
+(https://vercel.com/), and from the unmerged vercel/eve pull request #208
+authored by Andrew Barba.
+
+The extracted package changes module boundaries, dependency loading, stable
+key handling, and lifecycle integration for Eve 0.31.3.
