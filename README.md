@@ -9,6 +9,10 @@ its own installation requirements, operational constraints, and license.
 
 ## Packages
 
+- [`eve-openai-compaction`](packages/eve-openai-compaction) — replaces Eve's
+  built-in prose-summary compaction with OpenAI's remote encrypted checkpoint
+  strategy, using Codex's retained-user-message window. It is remote-only,
+  targets `eve@0.31.3`, and is licensed under MIT.
 - [`eve-openai-connectors`](packages/eve-openai-connectors) — exposes a user's
   authorized ChatGPT connectors through provider-native deferred tool search.
   It requires ChatGPT Enterprise or Business with Codex access and is licensed
@@ -58,5 +62,5 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-openai-connectors` is MIT-licensed and `eve-aws-lambda-microvms` is
-Apache-2.0-licensed.
+`eve-openai-compaction` and `eve-openai-connectors` are MIT-licensed, while
+`eve-aws-lambda-microvms` is Apache-2.0-licensed.
