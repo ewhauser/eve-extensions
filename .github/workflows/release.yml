@@ -23,6 +23,7 @@ jobs:
       pull-requests: write # Create and update release pull requests.
     outputs:
       aws-tag: ${{ steps.release.outputs['packages/eve-aws-lambda-microvms--tag_name'] }}
+      compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
       openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
       paths-released: ${{ steps.release.outputs.paths_released }}
       releases-created: ${{ steps.release.outputs.releases_created }}
@@ -93,6 +94,7 @@ jobs:
       id-token: write # Authenticate to npm through trusted publishing.
     env:
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
+      COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       NPM_CONFIG_PROVENANCE: "true"
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
     steps:
@@ -133,6 +135,9 @@ jobs:
             case "${package_name}" in
               eve-aws-lambda-microvms)
                 expected_tag="${AWS_TAG}"
+                ;;
+              eve-openai-compaction)
+                expected_tag="${COMPACTION_TAG}"
                 ;;
               eve-openai-connectors)
                 expected_tag="${OPENAI_TAG}"
@@ -181,6 +186,7 @@ jobs:
       contents: write # Attach assets and publish the draft GitHub releases.
     env:
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
+      COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       GH_TOKEN: ${{ github.token }}
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
     steps:
@@ -218,4 +224,5 @@ jobs:
           }
 
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
+          publish_release eve-openai-compaction "${COMPACTION_TAG}"
           publish_release eve-openai-connectors "${OPENAI_TAG}"

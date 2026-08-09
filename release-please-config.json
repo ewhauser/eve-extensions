@@ -10,6 +10,11 @@
       "package-name": "eve-aws-lambda-microvms",
       "release-type": "node"
     },
+    "packages/eve-openai-compaction": {
+      "component": "eve-openai-compaction",
+      "package-name": "eve-openai-compaction",
+      "release-type": "node"
+    },
     "packages/eve-openai-connectors": {
       "component": "eve-openai-connectors",
       "package-name": "eve-openai-connectors",

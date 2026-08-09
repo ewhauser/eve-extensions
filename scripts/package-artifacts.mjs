@@ -7,6 +7,20 @@ const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
 
 export const packages = new Map([
   [
+    "packages/eve-openai-compaction",
+    {
+      name: "eve-openai-compaction",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.js",
+        "patches/eve@0.31.3-source.patch",
+        "patches/eve@0.31.3.patch",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-openai-connectors",
     {
       name: "eve-openai-connectors",
