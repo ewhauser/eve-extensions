@@ -9,6 +9,11 @@ its own installation requirements, operational constraints, and license.
 
 ## Packages
 
+- [`eve-project-link`](packages/eve-project-link) — links an entire Eve context
+  channel to a durable external project hub, injects a compact project context
+  card on every turn, and provides a Notion template adapter behind a
+  provider-neutral contract designed to support systems such as Linear later.
+  It is licensed under MIT.
 - [`eve-openai-compaction`](packages/eve-openai-compaction) — replaces Eve's
   built-in prose-summary compaction with OpenAI's remote encrypted checkpoint
   strategy, using Codex's retained-user-message window. It is remote-only,
@@ -66,5 +71,6 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-openai-compaction`, `eve-openai-connectors`, and `eve-openai-imagegen` are
-MIT-licensed, while `eve-aws-lambda-microvms` is Apache-2.0-licensed.
+`eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`, and
+`eve-openai-imagegen` are MIT-licensed, while `eve-aws-lambda-microvms` is
+Apache-2.0-licensed.

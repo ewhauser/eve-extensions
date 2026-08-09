@@ -7,6 +7,28 @@ const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
 
 export const packages = new Map([
   [
+    "packages/eve-project-link",
+    {
+      name: "eve-project-link",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.mjs",
+        "dist/tools/index.d.ts",
+        "dist/tools/index.mjs",
+        "dist/extension/providers/notion.d.ts",
+        "dist/extension/providers/notion.mjs",
+        "dist/extension/stores/memory.d.ts",
+        "dist/extension/stores/memory.mjs",
+        "dist/extension/lib/types.d.ts",
+        "dist/extension/lib/types.mjs",
+        "dist/extension/skills/project-link/SKILL.md",
+        "NOTION_TEMPLATE.md",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-openai-compaction",
     {
       name: "eve-openai-compaction",

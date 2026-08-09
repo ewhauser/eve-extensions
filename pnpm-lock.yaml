@@ -138,6 +138,25 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.11)
 
+  packages/eve-project-link:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      eve:
+        specifier: 0.31.3
+        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(tsx@4.23.11)
+
 packages:
 
   '@ai-sdk/anthropic@4.0.34':
