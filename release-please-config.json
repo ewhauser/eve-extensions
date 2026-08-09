@@ -19,6 +19,11 @@
       "component": "eve-openai-connectors",
       "package-name": "eve-openai-connectors",
       "release-type": "node"
+    },
+    "packages/eve-openai-imagegen": {
+      "component": "eve-openai-imagegen",
+      "package-name": "eve-openai-imagegen",
+      "release-type": "node"
     }
   }
 }

@@ -1,0 +1,63 @@
+{
+  "name": "eve-openai-imagegen",
+  "version": "0.1.0",
+  "description": "A Codex-style GPT Image 2 generation and editing extension for Eve agents.",
+  "license": "MIT",
+  "type": "module",
+  "eve": {
+    "extension": {
+      "source": "./extension",
+      "dist": "./dist/extension"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "default": "./dist/tools/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "eve extension build",
+    "prepare": "eve extension build",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eve": "0.31.3",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": {
+    "eve": "0.31.3"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ewhauser/eve-extensions.git",
+    "directory": "packages/eve-openai-imagegen"
+  },
+  "bugs": {
+    "url": "https://github.com/ewhauser/eve-extensions/issues"
+  },
+  "homepage": "https://github.com/ewhauser/eve-extensions/tree/main/packages/eve-openai-imagegen#readme"
+}

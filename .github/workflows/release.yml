@@ -24,6 +24,7 @@ jobs:
     outputs:
       aws-tag: ${{ steps.release.outputs['packages/eve-aws-lambda-microvms--tag_name'] }}
       compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
+      imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
       openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
       paths-released: ${{ steps.release.outputs.paths_released }}
       releases-created: ${{ steps.release.outputs.releases_created }}
@@ -95,6 +96,7 @@ jobs:
     env:
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
+      IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       NPM_CONFIG_PROVENANCE: "true"
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
     steps:
@@ -142,6 +144,9 @@ jobs:
               eve-openai-connectors)
                 expected_tag="${OPENAI_TAG}"
                 ;;
+              eve-openai-imagegen)
+                expected_tag="${IMAGEGEN_TAG}"
+                ;;
               *)
                 echo "Refusing unexpected package: ${package_name}" >&2
                 exit 1
@@ -188,6 +193,7 @@ jobs:
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       GH_TOKEN: ${{ github.token }}
+      IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
     steps:
       - name: Download release artifacts
@@ -226,3 +232,4 @@ jobs:
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
           publish_release eve-openai-compaction "${COMPACTION_TAG}"
           publish_release eve-openai-connectors "${OPENAI_TAG}"
+          publish_release eve-openai-imagegen "${IMAGEGEN_TAG}"
