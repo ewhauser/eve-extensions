@@ -29,7 +29,9 @@ publish interactively with 2FA after running:
 ```sh
 pnpm install --frozen-lockfile
 pnpm check
-cd packages/eve-openai-connectors
+cd packages/eve-project-link
+npm publish --access public
+cd ../eve-openai-connectors
 npm publish --access public
 cd ../eve-openai-imagegen
 npm publish --access public
@@ -41,9 +43,11 @@ Create the matching initial draft GitHub releases and publish them only after
 the npm publishes succeed:
 
 ```sh
+gh release create eve-project-link-v0.1.0 --draft --generate-notes --target main
 gh release create eve-openai-connectors-v0.1.0 --draft --generate-notes --target main
 gh release create eve-openai-imagegen-v0.1.0 --draft --generate-notes --target main
 gh release create eve-aws-lambda-microvms-v0.1.0 --draft --generate-notes --target main
+gh release edit eve-project-link-v0.1.0 --draft=false
 gh release edit eve-openai-connectors-v0.1.0 --draft=false
 gh release edit eve-openai-imagegen-v0.1.0 --draft=false
 gh release edit eve-aws-lambda-microvms-v0.1.0 --draft=false
@@ -53,6 +57,11 @@ Then configure the `release.yml` workflow as the trusted publisher for each
 package. npm 11.17 or newer can do this from an authenticated maintainer shell:
 
 ```sh
+npm trust github eve-project-link \
+  --repo ewhauser/eve-extensions \
+  --file release.yml \
+  --env release \
+  --allow-publish
 npm trust github eve-openai-connectors \
   --repo ewhauser/eve-extensions \
   --file release.yml \

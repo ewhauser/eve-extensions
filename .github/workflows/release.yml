@@ -26,6 +26,7 @@ jobs:
       compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
       imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
       openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
+      project-link-tag: ${{ steps.release.outputs['packages/eve-project-link--tag_name'] }}
       paths-released: ${{ steps.release.outputs.paths_released }}
       releases-created: ${{ steps.release.outputs.releases_created }}
     steps:
@@ -99,6 +100,7 @@ jobs:
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       NPM_CONFIG_PROVENANCE: "true"
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+      PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
     steps:
       - name: Set up Node.js for trusted publishing
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -135,6 +137,9 @@ jobs:
             package_version="$(node -e 'const data = JSON.parse(process.argv[1]); console.log(data.version)' "${metadata}")"
 
             case "${package_name}" in
+              eve-project-link)
+                expected_tag="${PROJECT_LINK_TAG}"
+                ;;
               eve-aws-lambda-microvms)
                 expected_tag="${AWS_TAG}"
                 ;;
@@ -195,6 +200,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+      PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
     steps:
       - name: Download release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -229,6 +235,7 @@ jobs:
             gh release edit "${tag}" --draft=false
           }
 
+          publish_release eve-project-link "${PROJECT_LINK_TAG}"
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
           publish_release eve-openai-compaction "${COMPACTION_TAG}"
           publish_release eve-openai-connectors "${OPENAI_TAG}"
