@@ -1,0 +1,41 @@
+name: GitHub Actions security
+
+on:
+  pull_request:
+    paths:
+      - .github/**
+  push:
+    branches:
+      - main
+    paths:
+      - .github/**
+  schedule:
+    - cron: "23 15 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: actions-security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit GitHub Actions
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          advanced-security: false
+          annotations: true
+          persona: pedantic
+          version: 1.29.0

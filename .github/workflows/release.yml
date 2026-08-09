@@ -1,0 +1,221 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release-please:
+    name: Prepare releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # Create release commits, tags, and draft releases.
+      issues: write # Apply labels to release pull requests.
+      pull-requests: write # Create and update release pull requests.
+    outputs:
+      aws-tag: ${{ steps.release.outputs['packages/eve-aws-lambda-microvms--tag_name'] }}
+      openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
+      paths-released: ${{ steps.release.outputs.paths_released }}
+      releases-created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - name: Create or update release pull requests
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+
+  build:
+    name: Build release packages
+    needs: release-please
+    if: needs.release-please.outputs.releases-created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      COREPACK_DEFAULT_TO_LATEST: "0"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      RELEASE_PATHS: ${{ needs.release-please.outputs.paths-released }}
+    steps:
+      - name: Check out released source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Activate integrity-pinned pnpm
+        run: |
+          corepack enable pnpm
+          corepack install
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release source
+        run: pnpm check
+
+      - name: Pack release artifacts
+        run: node scripts/pack-release-artifacts.mjs
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-release-packages
+          path: release-artifacts/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish packages to npm
+    needs:
+      - release-please
+      - build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # Authenticate to npm through trusted publishing.
+    env:
+      AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
+      NPM_CONFIG_PROVENANCE: "true"
+      OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+    steps:
+      - name: Set up Node.js for trusted publishing
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-release-packages
+          path: release-artifacts
+
+      - name: Verify and publish packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          tarballs=(release-artifacts/*.tgz)
+          if [[ ${#tarballs[@]} -eq 0 ]]; then
+            echo "No npm tarballs were downloaded" >&2
+            exit 1
+          fi
+
+          for tarball in "${tarballs[@]}"; do
+            checksum="${tarball}.sha256"
+            test -f "${checksum}"
+            (cd release-artifacts && sha256sum --check "$(basename "${checksum}")")
+
+            metadata="$(tar -xOf "${tarball}" package/package.json)"
+            package_name="$(node -e 'const data = JSON.parse(process.argv[1]); console.log(data.name)' "${metadata}")"
+            package_version="$(node -e 'const data = JSON.parse(process.argv[1]); console.log(data.version)' "${metadata}")"
+
+            case "${package_name}" in
+              eve-aws-lambda-microvms)
+                expected_tag="${AWS_TAG}"
+                ;;
+              eve-openai-connectors)
+                expected_tag="${OPENAI_TAG}"
+                ;;
+              *)
+                echo "Refusing unexpected package: ${package_name}" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ ! "${package_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "Refusing invalid package version: ${package_version}" >&2
+              exit 1
+            fi
+            if [[ "${expected_tag}" != "${package_name}-v${package_version}" ]]; then
+              echo "Release tag ${expected_tag} does not match ${package_name}@${package_version}" >&2
+              exit 1
+            fi
+
+            local_integrity="$(node -e 'const { createHash } = require("node:crypto"); const { readFileSync } = require("node:fs"); console.log("sha512-" + createHash("sha512").update(readFileSync(process.argv[1])).digest("base64"))' "${tarball}")"
+            view_error="$(mktemp)"
+            if published_integrity="$(npm view "${package_name}@${package_version}" dist.integrity --json 2>"${view_error}")"; then
+              published_integrity="$(node -e 'console.log(JSON.parse(process.argv[1]))' "${published_integrity}")"
+              if [[ "${published_integrity}" != "${local_integrity}" ]]; then
+                echo "Published ${package_name}@${package_version} has a different integrity" >&2
+                exit 1
+              fi
+              echo "${package_name}@${package_version} is already published with matching integrity"
+            elif grep -q "E404" "${view_error}"; then
+              npm publish "${PWD}/${tarball}" --access public --ignore-scripts
+            else
+              cat "${view_error}" >&2
+              exit 1
+            fi
+            rm -f "${view_error}"
+          done
+
+  finalize:
+    name: Publish immutable GitHub releases
+    needs:
+      - release-please
+      - publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # Attach assets and publish the draft GitHub releases.
+    env:
+      AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
+      GH_TOKEN: ${{ github.token }}
+      OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-release-packages
+          path: release-artifacts
+
+      - name: Attach artifacts and publish releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          publish_release() {
+            local package_name="$1"
+            local tag="$2"
+            local tarballs=(release-artifacts/"${package_name}"-*.tgz)
+
+            if [[ -z "${tag}" ]]; then
+              if [[ ${#tarballs[@]} -ne 0 ]]; then
+                echo "Found an artifact for ${package_name} without a release tag" >&2
+                exit 1
+              fi
+              return
+            fi
+            if [[ ${#tarballs[@]} -ne 1 ]]; then
+              echo "Expected exactly one tarball for ${package_name}" >&2
+              exit 1
+            fi
+
+            gh release upload "${tag}" "${tarballs[0]}" "${tarballs[0]}.sha256" --clobber
+            gh release edit "${tag}" --draft=false
+          }
+
+          publish_release eve-aws-lambda-microvms "${AWS_TAG}"
+          publish_release eve-openai-connectors "${OPENAI_TAG}"

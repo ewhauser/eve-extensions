@@ -58,5 +58,9 @@
     "type": "git",
     "url": "git+https://github.com/ewhauser/eve-extensions.git",
     "directory": "packages/eve-aws-lambda-microvms"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/ewhauser/eve-extensions/issues"
+  },
+  "homepage": "https://github.com/ewhauser/eve-extensions/tree/main/packages/eve-aws-lambda-microvms#readme"
 }

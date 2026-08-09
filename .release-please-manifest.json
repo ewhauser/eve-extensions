@@ -1,0 +1,4 @@
+{
+  "packages/eve-aws-lambda-microvms": "0.1.0",
+  "packages/eve-openai-connectors": "0.1.0"
+}

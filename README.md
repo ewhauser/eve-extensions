@@ -48,6 +48,12 @@ Tests that require external credentials or cloud resources are opt-in. See the
 relevant package README for prerequisites and teardown behavior before running
 an integration or end-to-end suite.
 
+CI runs the same type checking, tests, builds, package-content checks, and a
+high-severity dependency audit on every pull request and push to `main`.
+Dependency changes and GitHub Actions workflows receive additional security
+review. See [`RELEASING.md`](RELEASING.md) for the npm trusted-publishing and
+release process.
+
 ## Licensing
 
 There is no single license covering every package in this repository. Refer to

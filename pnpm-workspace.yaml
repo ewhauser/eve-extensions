@@ -5,6 +5,11 @@ packages:
 allowBuilds:
   esbuild: true
 
+# Hold new direct and transitive releases for one day. Security updates can
+# still be selected explicitly, and Eve is exempt so this repository can track
+# the version it is validating against without waiting for the cooldown.
+minimumReleaseAge: 1440
+
 minimumReleaseAgeExclude:
   - eve@0.31.3
 

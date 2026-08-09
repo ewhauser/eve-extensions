@@ -1,0 +1,9 @@
+# Release and supply-chain changes need an explicit maintainer review.
+/.github/** @ewhauser
+/.release-please-manifest.json @ewhauser
+/package.json @ewhauser
+/pnpm-lock.yaml @ewhauser
+/pnpm-workspace.yaml @ewhauser
+/release-please-config.json @ewhauser
+/scripts/** @ewhauser
+/packages/*/package.json @ewhauser

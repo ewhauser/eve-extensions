@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "8d12bcc019ffe9762b1d1e085f06b37f5e6e4579",
+  "draft": true,
+  "force-tag-creation": true,
+  "include-component-in-tag": true,
+  "packages": {
+    "packages/eve-aws-lambda-microvms": {
+      "component": "eve-aws-lambda-microvms",
+      "package-name": "eve-aws-lambda-microvms",
+      "release-type": "node"
+    },
+    "packages/eve-openai-connectors": {
+      "component": "eve-openai-connectors",
+      "package-name": "eve-openai-connectors",
+      "release-type": "node"
+    }
+  }
+}
