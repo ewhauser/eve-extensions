@@ -18,6 +18,10 @@ its own installation requirements, operational constraints, and license.
   It requires ChatGPT Enterprise or Business with Codex access and is licensed
   under MIT. The extension depends on an undocumented OpenAI endpoint and
   should be treated as experimental.
+- [`eve-openai-imagegen`](packages/eve-openai-imagegen) — packages a Codex-style
+  imagegen skill and Eve tool backed by OpenAI's public `gpt-image-2` Image API.
+  It supports generation, reference-based edits, durable sandbox artifacts,
+  and iterative visual refinement, and is licensed under MIT.
 - [`eve-aws-lambda-microvms`](packages/eve-aws-lambda-microvms) — provides a
   durable Eve sandbox backend using AWS Lambda MicroVMs. It is an explicit
   opt-in backend, requires application-owned AWS infrastructure, and is
@@ -62,5 +66,5 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-openai-compaction` and `eve-openai-connectors` are MIT-licensed, while
-`eve-aws-lambda-microvms` is Apache-2.0-licensed.
+`eve-openai-compaction`, `eve-openai-connectors`, and `eve-openai-imagegen` are
+MIT-licensed, while `eve-aws-lambda-microvms` is Apache-2.0-licensed.

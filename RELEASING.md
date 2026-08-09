@@ -31,6 +31,8 @@ pnpm install --frozen-lockfile
 pnpm check
 cd packages/eve-openai-connectors
 npm publish --access public
+cd ../eve-openai-imagegen
+npm publish --access public
 cd ../eve-aws-lambda-microvms
 npm publish --access public
 ```
@@ -40,8 +42,10 @@ the npm publishes succeed:
 
 ```sh
 gh release create eve-openai-connectors-v0.1.0 --draft --generate-notes --target main
+gh release create eve-openai-imagegen-v0.1.0 --draft --generate-notes --target main
 gh release create eve-aws-lambda-microvms-v0.1.0 --draft --generate-notes --target main
 gh release edit eve-openai-connectors-v0.1.0 --draft=false
+gh release edit eve-openai-imagegen-v0.1.0 --draft=false
 gh release edit eve-aws-lambda-microvms-v0.1.0 --draft=false
 ```
 
@@ -50,6 +54,11 @@ package. npm 11.17 or newer can do this from an authenticated maintainer shell:
 
 ```sh
 npm trust github eve-openai-connectors \
+  --repo ewhauser/eve-extensions \
+  --file release.yml \
+  --env release \
+  --allow-publish
+npm trust github eve-openai-imagegen \
   --repo ewhauser/eve-extensions \
   --file release.yml \
   --env release \

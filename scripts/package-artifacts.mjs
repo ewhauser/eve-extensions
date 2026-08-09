@@ -35,6 +35,21 @@ export const packages = new Map([
     },
   ],
   [
+    "packages/eve-openai-imagegen",
+    {
+      name: "eve-openai-imagegen",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.mjs",
+        "dist/tools/index.d.ts",
+        "dist/tools/index.mjs",
+        "dist/extension/skills/imagegen/SKILL.md",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-aws-lambda-microvms",
     {
       name: "eve-aws-lambda-microvms",
