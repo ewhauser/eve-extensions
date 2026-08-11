@@ -26,6 +26,7 @@ jobs:
       compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
       imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
       openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
+      plugins-tag: ${{ steps.release.outputs['packages/eve-openai-plugins--tag_name'] }}
       project-link-tag: ${{ steps.release.outputs['packages/eve-project-link--tag_name'] }}
       paths-released: ${{ steps.release.outputs.paths_released }}
       releases-created: ${{ steps.release.outputs.releases_created }}
@@ -100,6 +101,7 @@ jobs:
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       NPM_CONFIG_PROVENANCE: "true"
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+      PLUGINS_TAG: ${{ needs.release-please.outputs.plugins-tag }}
       PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
     steps:
       - name: Set up Node.js for trusted publishing
@@ -148,6 +150,9 @@ jobs:
                 ;;
               eve-openai-connectors)
                 expected_tag="${OPENAI_TAG}"
+                ;;
+              eve-openai-plugins)
+                expected_tag="${PLUGINS_TAG}"
                 ;;
               eve-openai-imagegen)
                 expected_tag="${IMAGEGEN_TAG}"
@@ -200,6 +205,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
+      PLUGINS_TAG: ${{ needs.release-please.outputs.plugins-tag }}
       PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
     steps:
       - name: Download release artifacts
@@ -239,4 +245,5 @@ jobs:
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
           publish_release eve-openai-compaction "${COMPACTION_TAG}"
           publish_release eve-openai-connectors "${OPENAI_TAG}"
+          publish_release eve-openai-plugins "${PLUGINS_TAG}"
           publish_release eve-openai-imagegen "${IMAGEGEN_TAG}"

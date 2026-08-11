@@ -23,6 +23,10 @@ its own installation requirements, operational constraints, and license.
   It requires ChatGPT Enterprise or Business with Codex access and is licensed
   under MIT. The extension depends on an undocumented OpenAI endpoint and
   should be treated as experimental.
+- [`eve-openai-plugins`](packages/eve-openai-plugins) — safely compiles trusted
+  OpenAI Codex plugin skills, commands, agents, app requirements, and eligible
+  HTTP MCP definitions into an Eve agent, with lockfile ownership and dynamic
+  per-principal skill/subagent gates. It is licensed under MIT.
 - [`eve-openai-imagegen`](packages/eve-openai-imagegen) — packages a Codex-style
   imagegen skill and Eve tool backed by OpenAI's public `gpt-image-2` Image API.
   It supports generation, reference-based edits, durable sandbox artifacts,
@@ -71,6 +75,6 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`, and
-`eve-openai-imagegen` are MIT-licensed, while `eve-aws-lambda-microvms` is
-Apache-2.0-licensed.
+`eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`,
+`eve-openai-plugins`, and `eve-openai-imagegen` are MIT-licensed, while
+`eve-aws-lambda-microvms` is Apache-2.0-licensed.
