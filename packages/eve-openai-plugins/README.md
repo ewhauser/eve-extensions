@@ -31,8 +31,11 @@ Eve dynamic subagent availability without runtime code installation.
 Add both packages to the Eve application when the plugin uses ChatGPT apps:
 
 ```sh
-pnpm add eve-openai-plugins eve-openai-connectors
+pnpm add eve-openai-plugins 'eve-openai-connectors@^0.2.0'
 ```
+
+Connector 0.2.0 or newer is required because generated subagents pass the
+plugin's declared `.app.json` services as an enforced allowlist.
 
 Mount `eve-openai-connectors` in the root agent as `agent/extensions/openai.ts`.
 Then inspect and apply a local plugin:
