@@ -22,6 +22,7 @@ jobs:
       issues: write # Apply labels to release pull requests.
       pull-requests: write # Create and update release pull requests.
     outputs:
+      ambient-tag: ${{ steps.release.outputs['packages/eve-ambient--tag_name'] }}
       aws-tag: ${{ steps.release.outputs['packages/eve-aws-lambda-microvms--tag_name'] }}
       compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
       imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
@@ -96,6 +97,7 @@ jobs:
       contents: read
       id-token: write # Authenticate to npm through trusted publishing.
     env:
+      AMBIENT_TAG: ${{ needs.release-please.outputs.ambient-tag }}
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
@@ -139,6 +141,9 @@ jobs:
             package_version="$(node -e 'const data = JSON.parse(process.argv[1]); console.log(data.version)' "${metadata}")"
 
             case "${package_name}" in
+              eve-ambient)
+                expected_tag="${AMBIENT_TAG}"
+                ;;
               eve-project-link)
                 expected_tag="${PROJECT_LINK_TAG}"
                 ;;
@@ -200,6 +205,7 @@ jobs:
     permissions:
       contents: write # Attach assets and publish the draft GitHub releases.
     env:
+      AMBIENT_TAG: ${{ needs.release-please.outputs.ambient-tag }}
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       GH_REPO: ${{ github.repository }}
@@ -242,6 +248,7 @@ jobs:
             gh release edit "${tag}" --draft=false
           }
 
+          publish_release eve-ambient "${AMBIENT_TAG}"
           publish_release eve-project-link "${PROJECT_LINK_TAG}"
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
           publish_release eve-openai-compaction "${COMPACTION_TAG}"
