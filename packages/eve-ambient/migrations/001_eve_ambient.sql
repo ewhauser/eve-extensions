@@ -30,7 +30,14 @@ CREATE TABLE IF NOT EXISTS eve_ambient_subscriptions (
 );
 
 CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_due_idx
-  ON eve_ambient_subscriptions (status, available_at, lease_expires_at, ingress_sequence);
+  ON eve_ambient_subscriptions (
+    application_id,
+    status,
+    available_at,
+    lease_expires_at,
+    tenant_id,
+    ingress_sequence
+  );
 CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_event_idx
   ON eve_ambient_subscriptions (event_ref);
 
@@ -47,7 +54,7 @@ CREATE TABLE IF NOT EXISTS eve_ambient_instances (
 );
 
 CREATE INDEX IF NOT EXISTS eve_ambient_instances_due_idx
-  ON eve_ambient_instances (next_evaluation_at)
+  ON eve_ambient_instances (application_id, next_evaluation_at, tenant_id)
   WHERE active_run_id IS NULL AND next_evaluation_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS eve_ambient_instances_monitor_idx
   ON eve_ambient_instances (application_id, monitor_id);
@@ -67,7 +74,7 @@ CREATE TABLE IF NOT EXISTS eve_ambient_runs (
 );
 
 CREATE INDEX IF NOT EXISTS eve_ambient_runs_due_idx
-  ON eve_ambient_runs (status, available_at, lease_expires_at);
+  ON eve_ambient_runs (application_id, status, available_at, lease_expires_at, tenant_id);
 CREATE INDEX IF NOT EXISTS eve_ambient_runs_monitor_idx
   ON eve_ambient_runs (application_id, monitor_id, created_at DESC);
 

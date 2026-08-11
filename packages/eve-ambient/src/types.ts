@@ -253,6 +253,8 @@ export interface MonitorModelRequest {
   readonly instructions: string;
   readonly input: JsonValue;
   readonly timeoutMs: number;
+  /** Reserved per-attempt ceiling; invokers should enforce it when the provider permits. */
+  readonly maxInputTokens: number;
   readonly maxOutputTokens: number;
   readonly repairAttempt: 0 | 1;
   readonly previousInvalidOutput?: unknown;
@@ -457,7 +459,7 @@ export interface DirectDispatchReceipt {
 }
 
 export type ChatPublishResult = PublishResult & {
-  readonly directDispatch: "dispatched" | "undispatched" | "failed" | "duplicate";
+  readonly directDispatch: "dispatched" | "undispatched" | "failed" | "pending";
 };
 
 export interface MonitorClock {

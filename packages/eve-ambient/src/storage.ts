@@ -29,6 +29,17 @@ export interface StoredEvent {
   readonly acceptedAt: string;
   readonly payloadExpiresAt: string;
   readonly dedupeExpiresAt: string;
+  /** Durable coordination for chat direct-dispatch completion. */
+  readonly directDispatch?: StoredDirectDispatch | undefined;
+}
+
+export interface StoredDirectDispatch {
+  readonly status: "pending" | "processing" | "dispatched" | "undispatched" | "failed";
+  readonly attempt: number;
+  readonly availableAt: string;
+  readonly leaseExpiresAt?: string | undefined;
+  readonly error?: string | undefined;
+  readonly updatedAt: string;
 }
 
 export type SubscriptionStatus =
@@ -171,6 +182,8 @@ export interface StoredMonitorRun {
     readonly retryAt?: string | undefined;
   } | undefined;
   readonly error?: string | undefined;
+  /** The earliest raw event expiry; live/downstream replay requires this input. */
+  readonly replayExpiresAt: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly expiresAt: string;
@@ -261,6 +274,7 @@ export interface MonitorStore {
   transaction<T>(lockKey: string, callback: (tx: MonitorStoreTransaction) => Promise<T>): Promise<T>;
 
   listSubscriptions(input: {
+    readonly applicationId: string;
     readonly statuses: readonly SubscriptionStatus[];
     readonly availableBefore: string;
     readonly limit: number;
@@ -270,10 +284,12 @@ export interface MonitorStore {
     readonly monitorId: string;
   }): Promise<readonly StoredSubscription[]>;
   listDueInstances(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorInstance[]>;
   listDueRuns(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorRun[]>;

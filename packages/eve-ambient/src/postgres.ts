@@ -68,24 +68,34 @@ export class PostgresMonitorStore implements MonitorStore {
   }
 
   async listSubscriptions(input: {
+    readonly applicationId: string;
     readonly statuses: readonly SubscriptionStatus[];
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredSubscription[]> {
     const result = await postgresQuery<{ record: StoredSubscription }>(
       this.#pool,
-      `SELECT record
-         FROM ${this.#table("eve_ambient_subscriptions")}
-        WHERE status = ANY($1::text[])
-          AND available_at <= $2::timestamptz
-          AND (
-            status <> 'processing'
-            OR lease_expires_at IS NULL
-            OR lease_expires_at <= $2::timestamptz
-          )
-        ORDER BY available_at, ingress_sequence, id
-        LIMIT $3`,
-      [input.statuses, input.availableBefore, input.limit],
+      `WITH ranked AS (
+         SELECT record, tenant_id, available_at, ingress_sequence, id,
+                row_number() OVER (
+                  PARTITION BY tenant_id
+                  ORDER BY available_at, ingress_sequence, id
+                ) AS tenant_rank
+           FROM ${this.#table("eve_ambient_subscriptions")}
+          WHERE application_id = $1
+            AND status = ANY($2::text[])
+            AND available_at <= $3::timestamptz
+            AND (
+              status <> 'processing'
+              OR lease_expires_at IS NULL
+              OR lease_expires_at <= $3::timestamptz
+            )
+       )
+       SELECT record
+         FROM ranked
+        ORDER BY tenant_rank, available_at, tenant_id, ingress_sequence, id
+        LIMIT $4`,
+      [input.applicationId, input.statuses, input.availableBefore, input.limit],
     );
     return result.rows.map((row) => row.record);
   }
@@ -106,6 +116,7 @@ export class PostgresMonitorStore implements MonitorStore {
   }
 
   async listDueInstances(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorInstance[]> {
@@ -115,19 +126,21 @@ export class PostgresMonitorStore implements MonitorStore {
          SELECT record, tenant_id, id, next_evaluation_at,
                 row_number() OVER (PARTITION BY tenant_id ORDER BY next_evaluation_at, id) AS tenant_rank
            FROM ${this.#table("eve_ambient_instances")}
-          WHERE active_run_id IS NULL
-            AND next_evaluation_at <= $1::timestamptz
+          WHERE application_id = $1
+            AND active_run_id IS NULL
+            AND next_evaluation_at <= $2::timestamptz
        )
        SELECT record
          FROM ranked
         ORDER BY tenant_rank, next_evaluation_at, tenant_id, id
-        LIMIT $2`,
-      [input.availableBefore, input.limit],
+        LIMIT $3`,
+      [input.applicationId, input.availableBefore, input.limit],
     );
     return result.rows.map((row) => row.record);
   }
 
   async listDueRuns(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorRun[]> {
@@ -137,15 +150,16 @@ export class PostgresMonitorStore implements MonitorStore {
          SELECT record, tenant_id, id, available_at,
                 row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, id) AS tenant_rank
            FROM ${this.#table("eve_ambient_runs")}
-          WHERE status = ANY(ARRAY['pending','retry','processing']::text[])
-            AND available_at <= $1::timestamptz
-            AND (status <> 'processing' OR lease_expires_at IS NULL OR lease_expires_at <= $1::timestamptz)
+          WHERE application_id = $1
+            AND status = ANY(ARRAY['pending','retry','processing']::text[])
+            AND available_at <= $2::timestamptz
+            AND (status <> 'processing' OR lease_expires_at IS NULL OR lease_expires_at <= $2::timestamptz)
        )
        SELECT record
          FROM ranked
         ORDER BY tenant_rank, available_at, tenant_id, id
-        LIMIT $2`,
-      [input.availableBefore, input.limit],
+        LIMIT $3`,
+      [input.applicationId, input.availableBefore, input.limit],
     );
     return result.rows.map((row) => row.record);
   }

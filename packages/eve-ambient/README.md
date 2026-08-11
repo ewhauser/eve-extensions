@@ -236,7 +236,11 @@ const result = await monitors.publishChat(
 Provider acknowledgement must remain outside this completion path: acknowledge
 according to the channel's deadline, then let the direct-dispatch operation
 finish durably. A failed or unknown direct outcome is dead-lettered and never
-emits `undispatched`.
+emits `undispatched`. Direct handlers must deduplicate their turn command by the
+provider event ID: `publishChat()` durably leases the direct-dispatch attempt, and
+a duplicate resumes it after a worker crash or `TransientMonitorError`. The
+result reports `pending` while a lease or retry backoff is active and otherwise
+returns the persisted `dispatched`, `undispatched`, or `failed` outcome.
 
 ## Delivery adapter
 
@@ -265,6 +269,11 @@ places source data in an untrusted user payload and keeps classifier
 instructions separate. Unknown actions, invalid confidence, long reasons, and
 invalid action-specific metadata are rejected before policy or delivery.
 
+Each initial or repair attempt consumes a separate model-call reservation.
+Input-token budgets reserve the declared per-attempt `maxInputTokens` before the
+call, so the hard ceiling is conservative even when provider tokenization differs
+from the runtime's preflight estimate.
+
 For a different model stack, implement `MonitorModelInvoker`. That interface
 contains no tool, credential, session-history, or delivery capability.
 
@@ -290,7 +299,10 @@ contains no tool, credential, session-history, or delivery capability.
 Call `listRuns()`, `listDeadLetters()`, `replay()`, and `purgeExpired()` for
 operator tooling. Recorded replay never routes to production: delivery requires
 an explicit canary channel and target. Live replay is labeled separately and is
-not represented as deterministic.
+not represented as deterministic. Runs expose `replayExpiresAt`; recorded and
+live replay require the normalized source payloads and therefore share their
+shorter payload-retention lifetime even though decision records remain available
+for the configured decision retention.
 
 ## Definition identity and rollout
 

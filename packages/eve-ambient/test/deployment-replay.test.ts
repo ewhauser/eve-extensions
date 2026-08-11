@@ -266,6 +266,11 @@ describe("deployment identity, replay, and retention", () => {
     await runtime.purgeExpired();
     expect((await store.getEvent(accepted.eventId))?.event).toBeUndefined();
     expect(delivery.deliveries[0]?.evidence.projectedEvidence).toEqual({ values: ["secret"] });
+    const run = (await runtime.listRuns())[0]!;
+    expect(run.replayExpiresAt).toBe("2026-01-01T00:00:01.000Z");
+    await expect(runtime.replay(run.id, { decision: "recorded" })).rejects.toThrow(
+      "replay input expired at 2026-01-01T00:00:01.000Z",
+    );
     expect((await runtime.publish(source, "changed", event("one"))).status).toBe("duplicate");
     clock.advance(1_000);
     await runtime.purgeExpired();

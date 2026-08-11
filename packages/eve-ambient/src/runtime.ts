@@ -292,23 +292,24 @@ export class MonitorRuntime {
       throw new TypeError(`channel ${channel.id}:${type} is not a chat event`);
     }
     const accepted = await this.#acceptEvent(channel, type, input, "observed");
-    if (accepted.status === "duplicate") {
-      return { ...accepted, directDispatch: "duplicate" };
-    }
+    const directDispatch = await this.#runDirectDispatch(accepted.eventId, directHandlers);
+    return { ...accepted, directDispatch };
+  }
+
+  async #runDirectDispatch(
+    eventRef: string,
+    directHandlers: readonly (() => Promise<DirectDispatchReceipt | null>)[],
+  ): Promise<ChatPublishResult["directDispatch"]> {
+    const claim = await this.#claimDirectDispatch(eventRef);
+    if (claim.kind !== "claimed") return claim.outcome;
     try {
       const receipts = await Promise.all(directHandlers.map((handler) => handler()));
-      if (receipts.some((receipt) => receipt !== null)) {
-        return { ...accepted, directDispatch: "dispatched" };
-      }
-      await this.#addPhaseSubscriptions(accepted.eventId, "undispatched");
-      return { ...accepted, directDispatch: "undispatched" };
+      const outcome = receipts.some((receipt) => receipt !== null)
+        ? "dispatched" as const
+        : "undispatched" as const;
+      return this.#completeDirectDispatch(eventRef, claim.attempt, outcome);
     } catch (error) {
-      await this.#deadLetter({
-        eventRef: accepted.eventId,
-        stage: "direct-dispatch",
-        reason: `direct dispatch failed with unknown turn outcome: ${errorMessage(error)}`,
-      });
-      return { ...accepted, directDispatch: "failed" };
+      return this.#failDirectDispatch(eventRef, claim.attempt, error);
     }
   }
 
@@ -323,6 +324,7 @@ export class MonitorRuntime {
     while (progressed && iterations < this.#limits.maxDrainIterations) {
       progressed = false;
       const subscriptionBatch = await this.#store.listSubscriptions({
+        applicationId: this.#applicationId,
         statuses: ["pending", "processing"],
         availableBefore: this.#now(),
         limit: this.#limits.subscriptionConcurrency,
@@ -334,6 +336,7 @@ export class MonitorRuntime {
       }
 
       const readySubscriptions = await this.#store.listSubscriptions({
+        applicationId: this.#applicationId,
         statuses: ["ready"],
         availableBefore: this.#now(),
         limit: this.#limits.subscriptionConcurrency,
@@ -350,6 +353,7 @@ export class MonitorRuntime {
       }
 
       const dueInstances = await this.#store.listDueInstances({
+        applicationId: this.#applicationId,
         availableBefore: this.#now(),
         limit: this.#limits.evaluationConcurrency,
       });
@@ -361,6 +365,7 @@ export class MonitorRuntime {
       }
 
       const dueRuns = await this.#store.listDueRuns({
+        applicationId: this.#applicationId,
         availableBefore: this.#now(),
         limit: this.#limits.evaluationConcurrency,
       });
@@ -374,9 +379,14 @@ export class MonitorRuntime {
 
     const now = this.#now();
     const [pendingSubscriptions, pendingInstances, pendingRuns] = await Promise.all([
-      this.#store.listSubscriptions({ statuses: ["pending", "processing", "ready"], availableBefore: now, limit: 1 }),
-      this.#store.listDueInstances({ availableBefore: now, limit: 1 }),
-      this.#store.listDueRuns({ availableBefore: now, limit: 1 }),
+      this.#store.listSubscriptions({
+        applicationId: this.#applicationId,
+        statuses: ["pending", "processing", "ready"],
+        availableBefore: now,
+        limit: 1,
+      }),
+      this.#store.listDueInstances({ applicationId: this.#applicationId, availableBefore: now, limit: 1 }),
+      this.#store.listDueRuns({ applicationId: this.#applicationId, availableBefore: now, limit: 1 }),
     ]);
     return {
       subscriptions,
@@ -392,6 +402,12 @@ export class MonitorRuntime {
     const run = await this.#store.getRun(runId);
     if (run === null || run.applicationId !== this.#applicationId) {
       throw new Error(`unknown monitor run ${runId}`);
+    }
+    if (run.replayExpiresAt <= this.#now()) {
+      throw new Error(
+        `monitor run ${runId} replay input expired at ${run.replayExpiresAt}; ` +
+        `the decision record remains available until ${run.expiresAt}`,
+      );
     }
     const monitor = this.#definition(run.monitorId, run.definitionVersion);
     const events = await this.#loadRunEvents(run);
@@ -601,6 +617,16 @@ export class MonitorRuntime {
       acceptedAt: now,
       payloadExpiresAt: addMs(now, retentionMs),
       dedupeExpiresAt: addMs(now, dedupeMs),
+      ...(phase === undefined
+        ? {}
+        : {
+            directDispatch: {
+              status: "pending" as const,
+              attempt: 0,
+              availableAt: now,
+              updatedAt: now,
+            },
+          }),
     };
 
     const result = await this.#store.transaction(`ingress:${dedupeKey}`, async (tx) => {
@@ -625,16 +651,151 @@ export class MonitorRuntime {
     return result;
   }
 
-  async #addPhaseSubscriptions(eventRef: string, phase: "undispatched"): Promise<void> {
-    const event = await this.#store.getEvent(eventRef);
-    if (event === null) throw new Error(`accepted event ${eventRef} disappeared`);
-    const matching = this.#matchingMonitors(event.channelId, event.eventType, phase);
-    await this.#store.transaction(`event-phase:${eventRef}:${phase}`, async (tx) => {
-      for (const monitor of matching) {
-        const subscription = this.#newSubscription(event, monitor, phase);
-        if ((await tx.getSubscription(subscription.id)) === null) await tx.putSubscription(subscription);
+  async #claimDirectDispatch(eventRef: string): Promise<DirectDispatchClaim> {
+    return this.#store.transaction(`chat-dispatch:${eventRef}`, async (tx) => {
+      const event = await tx.getEvent(eventRef);
+      if (event === null) throw new Error(`accepted event ${eventRef} disappeared`);
+      const now = this.#now();
+      const state = event.directDispatch ?? {
+        status: "pending" as const,
+        attempt: 0,
+        availableAt: now,
+        updatedAt: now,
+      };
+      if (isSettledDirectDispatch(state.status)) {
+        return { kind: "settled", outcome: state.status };
       }
+      if (
+        state.availableAt > now ||
+        (state.status === "processing" &&
+          state.leaseExpiresAt !== undefined &&
+          state.leaseExpiresAt > now)
+      ) {
+        return { kind: "settled", outcome: "pending" };
+      }
+      if (state.attempt >= this.#retry.maxAttempts) {
+        const reason = "maximum direct-dispatch retry attempts exceeded";
+        await tx.putEvent({
+          ...event,
+          directDispatch: {
+            ...state,
+            status: "failed",
+            leaseExpiresAt: undefined,
+            error: reason,
+            updatedAt: now,
+          },
+        });
+        await tx.putDeadLetter(this.#directDispatchDeadLetter(event, reason, now));
+        return { kind: "settled", outcome: "failed" };
+      }
+      const attempt = state.attempt + 1;
+      await tx.putEvent({
+        ...event,
+        directDispatch: {
+          status: "processing",
+          attempt,
+          availableAt: now,
+          leaseExpiresAt: addMs(now, this.#retry.leaseMs),
+          updatedAt: now,
+        },
+      });
+      return { kind: "claimed", attempt };
     });
+  }
+
+  async #completeDirectDispatch(
+    eventRef: string,
+    attempt: number,
+    outcome: "dispatched" | "undispatched",
+  ): Promise<ChatPublishResult["directDispatch"]> {
+    return this.#store.transaction(`chat-dispatch:${eventRef}`, async (tx) => {
+      const event = await tx.getEvent(eventRef);
+      if (event === null) throw new Error(`accepted event ${eventRef} disappeared`);
+      const state = event.directDispatch;
+      if (state !== undefined && isSettledDirectDispatch(state.status)) return state.status;
+      if (state?.status !== "processing" || state.attempt !== attempt) return "pending";
+      const now = this.#now();
+      if (outcome === "undispatched") {
+        const matching = this.#matchingMonitors(event.channelId, event.eventType, outcome);
+        for (const monitor of matching) {
+          const subscription = this.#newSubscription(event, monitor, outcome);
+          if ((await tx.getSubscription(subscription.id)) === null) {
+            await tx.putSubscription(subscription);
+          }
+        }
+      }
+      await tx.putEvent({
+        ...event,
+        directDispatch: {
+          ...state,
+          status: outcome,
+          leaseExpiresAt: undefined,
+          updatedAt: now,
+        },
+      });
+      return outcome;
+    });
+  }
+
+  async #failDirectDispatch(
+    eventRef: string,
+    attempt: number,
+    error: unknown,
+  ): Promise<ChatPublishResult["directDispatch"]> {
+    const transient = error instanceof TransientMonitorError;
+    return this.#store.transaction(`chat-dispatch:${eventRef}`, async (tx) => {
+      const event = await tx.getEvent(eventRef);
+      if (event === null) throw new Error(`accepted event ${eventRef} disappeared`);
+      const state = event.directDispatch;
+      if (state !== undefined && isSettledDirectDispatch(state.status)) return state.status;
+      if (state?.status !== "processing" || state.attempt !== attempt) return "pending";
+      const now = this.#now();
+      const reason = boundedReason(
+        `direct dispatch failed with unknown turn outcome: ${errorMessage(error)}`,
+      );
+      if (transient && attempt < this.#retry.maxAttempts) {
+        const backoff = Math.min(
+          this.#retry.maxBackoffMs,
+          this.#retry.initialBackoffMs * 2 ** Math.max(0, attempt - 1),
+        );
+        await tx.putEvent({
+          ...event,
+          directDispatch: {
+            ...state,
+            status: "pending",
+            availableAt: addMs(now, backoff),
+            leaseExpiresAt: undefined,
+            error: reason,
+            updatedAt: now,
+          },
+        });
+        return "pending";
+      }
+      await tx.putEvent({
+        ...event,
+        directDispatch: {
+          ...state,
+          status: "failed",
+          leaseExpiresAt: undefined,
+          error: reason,
+          updatedAt: now,
+        },
+      });
+      await tx.putDeadLetter(this.#directDispatchDeadLetter(event, reason, now));
+      return "failed";
+    });
+  }
+
+  #directDispatchDeadLetter(event: StoredEvent, reason: string, now: string) {
+    return {
+      id: this.#id("dlq"),
+      tenantId: event.tenantId,
+      applicationId: event.applicationId,
+      eventRef: event.ref,
+      stage: "direct-dispatch",
+      reason,
+      createdAt: now,
+    };
   }
 
   #newSubscription(
@@ -1002,6 +1163,12 @@ export class MonitorRuntime {
       }
       const generation = instance.evaluationGeneration + 1;
       const runId = `run_${stableHash(scopedKey(instance.id, String(generation)))}`;
+      const replayExpiries: string[] = [];
+      for (const reference of selected.batch.events) {
+        const event = await tx.getEvent(reference.ref);
+        if (event !== null) replayExpiries.push(event.payloadExpiresAt);
+      }
+      const replayExpiresAt = replayExpiries.sort()[0] ?? now;
       const nextInstance: StoredMonitorInstance = {
         ...selected.instance,
         activeRunId: runId,
@@ -1024,6 +1191,7 @@ export class MonitorRuntime {
         stage: "decision",
         attempt: 0,
         availableAt: now,
+        replayExpiresAt,
         createdAt: now,
         updatedAt: now,
         expiresAt: addMs(now, durationMs((monitor.definition.retention ?? DEFAULT_RETENTION).decisions)),
@@ -1121,12 +1289,17 @@ export class MonitorRuntime {
             attributes: { stage: "classifier", fallback: true, error: inputError },
           });
         } else {
-          const limited = await this.#reserveModelLimits(run, monitor.definition, estimatedInputTokens);
-          if (!limited.allowed) {
+          const invocation = await this.#invokeModelDecisionWithUsage(
+            model,
+            input,
+            run,
+            monitor.definition,
+          );
+          if (invocation.initialLimit !== undefined) {
+            const limited = invocation.initialLimit;
             await this.#handleLimit(run, limited.cause, limited.scope, limited.retryAt);
             return;
           }
-          const invocation = await this.#invokeModelDecisionWithUsage(model, base, input);
           run = await this.#checkpointRun(run, {
             decision: invocation.decision,
             decisionSource: invocation.source,
@@ -1241,27 +1414,32 @@ export class MonitorRuntime {
     if (estimatedInputTokens > definition.maxInputTokens) {
       return this.#parseModelOutput(definition, definition.onError);
     }
-    const limited = await this.#reserveModelLimits(budgetRun, this.#definition(
-      budgetRun.monitorId,
-      budgetRun.definitionVersion,
-    ).definition, estimatedInputTokens);
-    if (!limited.allowed) {
+    const invocation = await this.#invokeModelDecisionWithUsage(
+      definition,
+      input,
+      budgetRun,
+      this.#definition(budgetRun.monitorId, budgetRun.definitionVersion).definition,
+    );
+    if (invocation.initialLimit !== undefined) {
+      const limited = invocation.initialLimit;
       throw new Error(
         `live replay denied by ${limited.scope} ${limited.cause} until ${limited.retryAt}`,
       );
     }
-    return (await this.#invokeModelDecisionWithUsage(definition, context, input)).decision;
+    return invocation.decision;
   }
 
   async #invokeModelDecisionWithUsage(
     definition: Exclude<MonitorDefinition<ChannelEvent>["decision"], Function>,
-    _context: unknown,
     input: JsonValue,
+    budgetRun: StoredMonitorRun,
+    monitorDefinition: MonitorDefinition<ChannelEvent>,
   ): Promise<{
     readonly decision: MonitorDecision;
     readonly source: "model" | "fallback";
     readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly estimatedCost?: number };
     readonly error?: string;
+    readonly initialLimit?: Exclude<LimitResult, { readonly allowed: true }>;
   }> {
     if (this.#modelInvoker === undefined) {
       return {
@@ -1279,6 +1457,26 @@ export class MonitorRuntime {
     };
     let lastError: unknown;
     for (let repairAttempt: 0 | 1 = 0; repairAttempt <= definition.repairAttempts; repairAttempt = 1) {
+      const limited = await this.#reserveModelLimits(
+        budgetRun,
+        monitorDefinition,
+        definition.maxInputTokens,
+        repairAttempt,
+      );
+      if (!limited.allowed) {
+        if (repairAttempt === 0) {
+          return {
+            decision: await this.#parseModelOutput(definition, definition.onError),
+            source: "fallback",
+            usage,
+            initialLimit: limited,
+          };
+        }
+        lastError = new Error(
+          `classifier repair denied by ${limited.scope} ${limited.cause} until ${limited.retryAt}`,
+        );
+        break;
+      }
       try {
         const result = await this.#modelInvoker({
           model: definition.model,
@@ -1286,6 +1484,7 @@ export class MonitorRuntime {
           instructions: definition.instructions,
           input,
           timeoutMs: durationMs(definition.timeout),
+          maxInputTokens: definition.maxInputTokens,
           maxOutputTokens: definition.maxOutputTokens,
           repairAttempt,
           ...(prior === undefined ? {} : { previousInvalidOutput: prior }),
@@ -1298,6 +1497,12 @@ export class MonitorRuntime {
             ? {}
             : { estimatedCost: (usage.estimatedCost ?? 0) + (result.usage.estimatedCost ?? 0) }),
         };
+        if (result.usage.inputTokens > definition.maxInputTokens) {
+          lastError = new TypeError(
+            `classifier used ${result.usage.inputTokens} input tokens; limit is ${definition.maxInputTokens}`,
+          );
+          break;
+        }
         try {
           const parsed = await this.#parseModelOutput(definition, result.output);
           return { decision: parsed, source: "model", usage };
@@ -1348,11 +1553,12 @@ export class MonitorRuntime {
     run: StoredMonitorRun,
     definition: MonitorDefinition<ChannelEvent>,
     inputTokens: number,
+    repairAttempt: 0 | 1,
   ): Promise<LimitResult> {
     const calls = definition.limits?.perMonitor?.maxModelCallsPerMinute;
     if (calls !== undefined || this.#hasBudget("model-calls", run.tenantId)) {
       const result = await this.#reserveBudget({
-        id: `model-call:${run.id}`,
+        id: `model-call:${run.id}:${repairAttempt}`,
         metric: "model-calls",
         amount: 1,
         windowMs: 60_000,
@@ -1364,7 +1570,7 @@ export class MonitorRuntime {
     const tokens = definition.limits?.perMonitor?.maxModelInputTokensPerHour;
     if (tokens !== undefined || this.#hasBudget("model-input-tokens", run.tenantId)) {
       const result = await this.#reserveBudget({
-        id: `model-input:${run.id}`,
+        id: `model-input:${run.id}:${repairAttempt}`,
         metric: "model-input-tokens",
         amount: inputTokens,
         windowMs: 3_600_000,
@@ -1839,22 +2045,6 @@ export class MonitorRuntime {
     });
   }
 
-  async #deadLetter(input: { readonly eventRef?: string; readonly stage: string; readonly reason: string }) {
-    const reason = boundedReason(input.reason);
-    const event = input.eventRef === undefined ? null : await this.#store.getEvent(input.eventRef);
-    await this.#store.transaction(`dead-letter:${input.eventRef ?? this.#id("event")}`, async (tx) => {
-      await tx.putDeadLetter({
-        id: this.#id("dlq"),
-        tenantId: event?.tenantId ?? "unknown",
-        applicationId: this.#applicationId,
-        ...(input.eventRef === undefined ? {} : { eventRef: input.eventRef }),
-        stage: input.stage,
-        reason,
-        createdAt: this.#now(),
-      });
-    });
-  }
-
   #snapshot(
     run: StoredMonitorRun,
     decisionValue: MonitorDecision,
@@ -2214,6 +2404,13 @@ type LimitResult =
       readonly scope: string;
     };
 
+type DirectDispatchClaim =
+  | { readonly kind: "claimed"; readonly attempt: number }
+  | {
+      readonly kind: "settled";
+      readonly outcome: ChatPublishResult["directDispatch"];
+    };
+
 type BudgetMetric = "events" | "model-calls" | "model-input-tokens" | "wakes";
 
 class BudgetDenied extends Error {
@@ -2255,6 +2452,12 @@ function validateModelUsage(usage: {
   ) {
     throw new TypeError("classifier usage estimatedCost must be a non-negative finite number");
   }
+}
+
+function isSettledDirectDispatch(
+  status: NonNullable<StoredEvent["directDispatch"]>["status"],
+): status is "dispatched" | "undispatched" | "failed" {
+  return status === "dispatched" || status === "undispatched" || status === "failed";
 }
 
 function budgetProperty(metric: BudgetMetric): keyof MonitorBudgetCeilings {

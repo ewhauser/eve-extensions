@@ -63,6 +63,7 @@ describe("subscription leases", () => {
 
     await expect(
       store.listSubscriptions({
+        applicationId: "app",
         statuses: ["processing"],
         availableBefore: "2026-01-01T00:00:29.999Z",
         limit: 10,
@@ -70,11 +71,89 @@ describe("subscription leases", () => {
     ).resolves.toEqual([]);
     await expect(
       store.listSubscriptions({
+        applicationId: "app",
         statuses: ["processing"],
         availableBefore: "2026-01-01T00:00:30.000Z",
         limit: 10,
       }),
     ).resolves.toHaveLength(1);
+  });
+
+  it("scopes and fairly interleaves subscription work by application and tenant", async () => {
+    const store = new MemoryMonitorStore();
+    for (const [id, applicationId, tenantId, sequence] of [
+      ["a-1", "app", "tenant-a", "1"],
+      ["a-2", "app", "tenant-a", "2"],
+      ["b-1", "app", "tenant-b", "3"],
+      ["other", "other-app", "tenant-c", "4"],
+    ] as const) {
+      await store.transaction(`subscription:${id}`, async (tx) => {
+        await tx.putSubscription({
+          id,
+          eventRef: `event:${id}`,
+          tenantId,
+          applicationId,
+          monitorId: "monitor",
+          definitionVersion: "v1",
+          ingressSequence: sequence,
+          status: "pending",
+          attempt: 0,
+          availableAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      });
+    }
+
+    await expect(
+      store.listSubscriptions({
+        applicationId: "app",
+        statuses: ["pending"],
+        availableBefore: "2026-01-01T00:00:00.000Z",
+        limit: 2,
+      }),
+    ).resolves.toMatchObject([
+      { id: "a-1", tenantId: "tenant-a" },
+      { id: "b-1", tenantId: "tenant-b" },
+    ]);
+  });
+});
+
+describe("PostgresMonitorStore due queries", () => {
+  it("scope every worker scan to one application and rank subscriptions by tenant", async () => {
+    const calls: Array<{ text: string; values: readonly unknown[] | undefined }> = [];
+    const pool: PostgresPool = {
+      connect: async () => client(async () => ({ rows: [] })),
+      query: async (text, values) => {
+        calls.push({ text, values });
+        return { rows: [] };
+      },
+    };
+    const store = new PostgresMonitorStore({ pool });
+
+    await store.listSubscriptions({
+      applicationId: "app",
+      statuses: ["pending"],
+      availableBefore: "2026-01-01T00:00:00.000Z",
+      limit: 10,
+    });
+    await store.listDueInstances({
+      applicationId: "app",
+      availableBefore: "2026-01-01T00:00:00.000Z",
+      limit: 10,
+    });
+    await store.listDueRuns({
+      applicationId: "app",
+      availableBefore: "2026-01-01T00:00:00.000Z",
+      limit: 10,
+    });
+
+    expect(calls).toHaveLength(3);
+    for (const call of calls) {
+      expect(call.text).toContain("application_id = $1");
+      expect(call.values?.[0]).toBe("app");
+    }
+    expect(calls[0]?.text).toContain("PARTITION BY tenant_id");
   });
 });
 

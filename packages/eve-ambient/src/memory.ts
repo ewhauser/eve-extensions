@@ -55,27 +55,28 @@ export class MemoryMonitorStore implements MonitorStore {
   }
 
   async listSubscriptions(input: {
+    readonly applicationId: string;
     readonly statuses: readonly SubscriptionStatus[];
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredSubscription[]> {
     const statuses = new Set(input.statuses);
-    return [...this.#subscriptions.values()]
-      .filter(
-        (value) =>
-          statuses.has(value.status) &&
-          value.availableAt <= input.availableBefore &&
-          (value.status !== "processing" ||
-            value.leaseExpiresAt === undefined ||
-            value.leaseExpiresAt <= input.availableBefore),
-      )
-      .sort((left, right) =>
+    const due = [...this.#subscriptions.values()].filter(
+      (value) =>
+        value.applicationId === input.applicationId &&
+        statuses.has(value.status) &&
+        value.availableAt <= input.availableBefore &&
+        (value.status !== "processing" ||
+          value.leaseExpiresAt === undefined ||
+          value.leaseExpiresAt <= input.availableBefore),
+    );
+    return fairByTenant(
+      due,
+      input.limit,
+      (left, right) =>
         left.availableAt.localeCompare(right.availableAt) ||
-        compareSequence(left.ingressSequence, right.ingressSequence) ||
-        left.id.localeCompare(right.id),
-      )
-      .slice(0, input.limit)
-      .map(clone);
+        compareSequence(left.ingressSequence, right.ingressSequence),
+    ).map(clone);
   }
 
   async listSubscriptionsForMonitor(input: {
@@ -91,28 +92,40 @@ export class MemoryMonitorStore implements MonitorStore {
   }
 
   async listDueInstances(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorInstance[]> {
     const due = [...this.#instances.values()].filter(
       (value) =>
+        value.applicationId === input.applicationId &&
         value.activeRunId === undefined &&
         value.nextEvaluationAt !== undefined &&
         value.nextEvaluationAt <= input.availableBefore,
     );
-    return fairByTenant(due, input.limit, (value) => value.nextEvaluationAt!).map(clone);
+    return fairByTenant(
+      due,
+      input.limit,
+      (left, right) => left.nextEvaluationAt!.localeCompare(right.nextEvaluationAt!),
+    ).map(clone);
   }
 
   async listDueRuns(input: {
+    readonly applicationId: string;
     readonly availableBefore: string;
     readonly limit: number;
   }): Promise<readonly StoredMonitorRun[]> {
     const due = [...this.#runs.values()].filter(
       (value) =>
+        value.applicationId === input.applicationId &&
         (value.status === "pending" || value.status === "retry" || value.status === "processing") &&
         (value.leaseExpiresAt ?? value.availableAt) <= input.availableBefore,
     );
-    return fairByTenant(due, input.limit, (value) => value.availableAt).map(clone);
+    return fairByTenant(
+      due,
+      input.limit,
+      (left, right) => left.availableAt.localeCompare(right.availableAt),
+    ).map(clone);
   }
 
   async listInstances(input: {
@@ -409,7 +422,7 @@ function clone<T>(value: T): T {
 function fairByTenant<T extends { readonly tenantId: string; readonly id: string }>(
   values: readonly T[],
   limit: number,
-  ordering: (value: T) => string,
+  compare: (left: T, right: T) => number,
 ): T[] {
   const queues = new Map<string, T[]>();
   for (const value of values) {
@@ -418,9 +431,7 @@ function fairByTenant<T extends { readonly tenantId: string; readonly id: string
     queues.set(value.tenantId, queue);
   }
   for (const queue of queues.values()) {
-    queue.sort((left, right) =>
-      ordering(left).localeCompare(ordering(right)) || left.id.localeCompare(right.id),
-    );
+    queue.sort((left, right) => compare(left, right) || left.id.localeCompare(right.id));
   }
   const tenants = [...queues.keys()].sort();
   const result: T[] = [];

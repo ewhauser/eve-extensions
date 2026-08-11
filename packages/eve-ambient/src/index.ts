@@ -27,6 +27,7 @@ export type {
   StoredDeadLetter,
   StoredDefinitionPin,
   StoredDeployment,
+  StoredDirectDispatch,
   StoredEvent,
   StoredMonitorBatch,
   StoredMonitorInstance,
