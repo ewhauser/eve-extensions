@@ -14,6 +14,23 @@ const resource: ProjectResource = {
   title: "Project Atlas",
 };
 
+function proposal(title = "Project Atlas") {
+  return {
+    title,
+    context: {
+      summary: "Ship Project Atlas for the product organization.",
+      status: "Planning",
+      principals: [{ name: "Ada", role: "DRI" }],
+      decisions: [],
+      milestones: [],
+      upcomingMeetings: [],
+      sources: [],
+      openQuestions: [],
+      nextSteps: ["Confirm the launch plan"],
+    },
+  };
+}
+
 const presets: readonly ProjectPreset[] = [
   preset(notionProjectHub, {
     id: "context-hub",
@@ -37,13 +54,17 @@ describe("ProjectLinkService", () => {
     });
 
     const linked = await service.link(channel, {
-      title: "Project Atlas",
+      proposal: proposal(),
       channelUrl: "https://slack.com/channel",
     });
     expect(linked).toMatchObject({
       created: true,
       binding: { status: "pending", presetId: "context-hub" },
       plan: {
+        context: {
+          summary: "Ship Project Atlas for the product organization.",
+          status: "Planning",
+        },
         systemName: "Notion",
         toolHints: {
           connectionNames: ["notion"],
@@ -52,7 +73,12 @@ describe("ProjectLinkService", () => {
       },
     });
 
-    const repeated = await service.link(channel, { title: "Ignored" });
+    expect(linked.binding.context).toMatchObject({
+      summary: "Ship Project Atlas for the product organization.",
+      status: "Planning",
+    });
+
+    const repeated = await service.link(channel, {});
     expect(repeated.created).toBe(false);
     expect(repeated.binding.id).toBe(linked.binding.id);
 
@@ -105,7 +131,7 @@ describe("ProjectLinkService", () => {
       defaultPreset: "product",
     });
 
-    const result = await service.link(channel, { title: "Atlas" });
+    const result = await service.link(channel, {});
     expect(result).toMatchObject({
       created: false,
       binding: {
@@ -123,7 +149,7 @@ describe("ProjectLinkService", () => {
       presets,
     });
     const linked = await service.link(channel, {
-      title: "Atlas",
+      proposal: proposal("Atlas"),
       preset: "product",
     });
     expect(linked.plan).toMatchObject({
@@ -134,7 +160,6 @@ describe("ProjectLinkService", () => {
 
     await expect(
       service.link(channel, {
-        title: "Atlas",
         preset: "context-hub",
       }),
     ).rejects.toThrow("unlink it before switching");
@@ -153,7 +178,7 @@ describe("ProjectLinkService", () => {
       store: createMemoryProjectLinkStore(),
       presets,
     });
-    await service.link(channel, { title: "Atlas" });
+    await service.link(channel, { proposal: proposal("Atlas") });
 
     await expect(
       service.saveContext(channel, {
@@ -167,5 +192,17 @@ describe("ProjectLinkService", () => {
         nextSteps: [],
       }),
     ).rejects.toThrow("pending");
+  });
+
+  it("requires a confirmed proposal before creating a new reservation", async () => {
+    const service = new ProjectLinkService({
+      store: createMemoryProjectLinkStore(),
+      presets,
+    });
+
+    await expect(service.link(channel, {})).rejects.toThrow(
+      "confirmed project proposal",
+    );
+    expect(await service.status(channel)).toBeNull();
   });
 });

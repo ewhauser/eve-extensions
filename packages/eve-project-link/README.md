@@ -96,7 +96,8 @@ See [PRESETS.md](PRESETS.md) for built-in and custom preset authoring.
 
 Mounting the extension as `project_link.ts` adds channel-scoped tools:
 
-- `project_link__link` reserves a stable binding and returns a tool-use plan.
+- `project_link__link` reserves a user-confirmed proposal and returns a tool-use
+  plan.
 - `project_link__complete` attaches the resource found or created by a mounted
   tool.
 - `project_link__status` reads cached binding metadata without external I/O.

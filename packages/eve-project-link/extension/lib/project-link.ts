@@ -22,7 +22,13 @@ export interface ProjectLinkServiceOptions {
 }
 
 export interface LinkProjectInput {
-  readonly title: string;
+  /** Required for a new binding; omitted only to resume an existing binding. */
+  readonly proposal?:
+    | {
+        readonly title: string;
+        readonly context: ProjectContextInput;
+      }
+    | undefined;
   readonly preset?: string | undefined;
   readonly channelUrl?: string | undefined;
 }
@@ -56,6 +62,7 @@ function provisioningInstructions(
   if (preset.operations.create) {
     lines.push(
       "Only when no match exists, create exactly one resource:",
+      "Use the confirmed title and context card in this plan to populate the resource; do not substitute a generic channel identifier.",
       guidance(preset.operations.create),
       "Persist the binding ID in the external resource wherever the mounted tool and provider support it.",
     );
@@ -142,15 +149,21 @@ export class ProjectLinkService {
 
     const configuredPreset = input.preset ?? this.#defaultPreset;
     this.#resolvePreset(configuredPreset);
+    if (!input.proposal) {
+      throw new Error(
+        "A confirmed project proposal is required before reserving a new link.",
+      );
+    }
 
     const now = this.#now().toISOString();
     binding = {
       id: randomUUID(),
       channel,
       presetId: configuredPreset,
-      title: input.title,
+      title: input.proposal.title,
       ...(input.channelUrl === undefined ? {} : { channelUrl: input.channelUrl }),
       status: "pending",
+      context: createProjectContextCard(input.proposal.context, now),
       createdAt: now,
       updatedAt: now,
       revision: 0,
@@ -221,6 +234,7 @@ export class ProjectLinkService {
       channel: binding.channel,
       ...(binding.channelUrl === undefined ? {} : { channelUrl: binding.channelUrl }),
       title: binding.title,
+      ...(binding.context === undefined ? {} : { context: binding.context }),
       presetId: preset.id,
       presetKey: preset.presetKey,
       presetName: preset.name,

@@ -52,6 +52,7 @@ const plan: ProjectLinkPlan = {
   bindingId: "binding",
   channel: binding.channel,
   title: binding.title,
+  context: card,
   presetId: "context-hub",
   presetKey: "notion/project-hub@1",
   presetName: "Context Hub",
@@ -86,6 +87,10 @@ describe("project context", () => {
   it("keeps incomplete links and active links without a card recoverable", () => {
     const pending = renderPendingProjectLink(plan, 2_000);
     expect(pending).toContain("Binding ID: binding");
+    expect(pending).toContain(
+      "Confirmed summary: Ship the new onboarding flow.",
+    );
+    expect(pending).toContain("Confirmed status: In progress");
     expect(pending).toContain("do not create a second");
     expect(pending).toContain("Find or create the page");
 

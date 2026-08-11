@@ -8,11 +8,18 @@ import {
   resolveProjectChannel,
 } from "../lib/runtime.js";
 
-const linkInputSchema = z.object({
+const projectProposalSchema = z.object({
   title: z.string().trim().min(1).max(200),
+  context: projectContextInputSchema,
+});
+
+const newLinkInputSchema = z.object({
+  proposal: projectProposalSchema,
   preset: z.string().trim().min(1).max(100).optional(),
   channelUrl: z.string().url().max(2_000).optional(),
 });
+
+const existingLinkInputSchema = z.object({});
 
 const resourceSchema = z.object({
   id: z.string().trim().min(1).max(500),
@@ -48,15 +55,19 @@ export default defineDynamic({
         description: binding
           ? "Return this channel's existing project-link plan. The tool is idempotent and never calls an external project API."
           : `Reserve a stable channel link and return a plan for using tools already mounted in this agent. This tool never calls an external project API or accepts credentials. Available configured presets: ${presets}.`,
-        inputSchema: linkInputSchema,
+        inputSchema: binding ? existingLinkInputSchema : newLinkInputSchema,
         ...(approval(config.approvals.link) === undefined
           ? {}
           : { approval: approval(config.approvals.link) }),
         execute: async (input) => {
           const result = await service.link(channel, {
-            title: input.title,
-            ...(input.preset === undefined ? {} : { preset: input.preset }),
-            ...(input.channelUrl === undefined ? {} : { channelUrl: input.channelUrl }),
+            ...("proposal" in input ? { proposal: input.proposal } : {}),
+            ...("preset" in input && input.preset !== undefined
+              ? { preset: input.preset }
+              : {}),
+            ...("channelUrl" in input && input.channelUrl !== undefined
+              ? { channelUrl: input.channelUrl }
+              : {}),
           });
           return {
             created: result.created,
@@ -68,7 +79,7 @@ export default defineDynamic({
             next:
               result.binding.status === "active"
                 ? "The channel is already linked. Use guide for deeper retrieval instructions."
-                : "Use the plan and mounted tools to find or create the external resource, then call complete with its id, URL, and title.",
+                : "Use the confirmed proposal, plan, and mounted tools to find or create the external resource, then call complete with its id, URL, and title.",
           };
         },
       });

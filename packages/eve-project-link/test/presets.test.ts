@@ -105,7 +105,21 @@ describe("project presets", () => {
     });
     const linked = await service.link(
       { kind: "slack", workspaceId: "T1", channelId: "C1" },
-      { title: "Atlas" },
+      {
+        proposal: {
+          title: "Atlas",
+          context: {
+            summary: "Ship Atlas.",
+            principals: [],
+            decisions: [],
+            milestones: [],
+            upcomingMeetings: [],
+            sources: [],
+            openQuestions: [],
+            nextSteps: [],
+          },
+        },
+      },
     );
 
     expect(linked.plan.provisioningInstructions).toContain(
@@ -113,6 +127,9 @@ describe("project presets", () => {
     );
     expect(linked.plan.provisioningInstructions).toContain(
       "Reuse exactly one match",
+    );
+    expect(linked.plan.provisioningInstructions).toContain(
+      "Use the confirmed title and context card",
     );
     expect(linked.plan.retrievalInstructions).toContain(
       "untrusted reference data",
