@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -171,6 +171,21 @@ describe("plan and apply", () => {
     );
     expect(childExtension).toContain('from "eve-openai-connectors"');
     expect(childExtension).toContain("getOpenAIPluginConnectorToken");
+    expect(childExtension).toContain('allowedServices: ["figma"]');
+    const rootCommand = await readFile(
+      resolve(project, "agent/skills/openai-plugin--design-suite--command-review.ts"),
+      "utf8",
+    );
+    expect(rootCommand).toContain('the Eve skill \\"openai-plugin--design-suite--inspect-design\\"');
+    const childCommand = await readFile(
+      resolve(
+        project,
+        "agent/subagents/openai-plugin--design-suite--design-reviewer/skills/command-review.ts",
+      ),
+      "utf8",
+    );
+    expect(childCommand).toContain('the Eve skill \\"inspect-design\\"');
+    expect(childCommand).not.toContain("openai-plugin--design-suite--inspect-design");
     expect(await checkPluginInstallation(project)).toEqual({ ok: true, problems: [] });
 
     const lock = await readPluginLockfile(project);
@@ -179,6 +194,44 @@ describe("plan and apply", () => {
     expect(secondPlan.accessPolicy.willCreate).toBe(false);
     expect(secondPlan.lockfileChanged).toBe(false);
     expect(secondPlan.changes.every((change) => change.kind === "unchanged")).toBe(true);
+  });
+
+  it("inherits the literal model from the exported root agent only", async () => {
+    const { plugin, project } = await fixture();
+    await put(
+      project,
+      "agent/agent.ts",
+      `import { defineAgent } from "eve";
+const compaction = { model: "openai/gpt-5-mini" };
+// model: "openai/gpt-commented"
+export default defineAgent({ model: "openai/gpt-5.5", compaction });
+`,
+    );
+    await applyPluginImport({ projectRoot: project, source: { kind: "local", path: plugin } });
+    expect((await readPluginLockfile(project)).plugins["design-suite"]?.model).toBe(
+      "openai/gpt-5.5",
+    );
+  });
+
+  it("rewrites long plugin command references to the final hashed skill name", async () => {
+    const { plugin, project } = await fixture();
+    const manifestPath = resolve(plugin, ".codex-plugin/plugin.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.name = "design-suite-with-an-intentionally-long-name-that-requires-stable-hashing-across-references";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await applyPluginImport({ projectRoot: project, source: { kind: "local", path: plugin } });
+
+    const skillDirectory = resolve(project, "agent/skills");
+    const generated = await Promise.all(
+      (await readdir(skillDirectory)).map(async (file) => ({
+        file,
+        source: await readFile(resolve(skillDirectory, file), "utf8"),
+      })),
+    );
+    const skill = generated.find((entry) => entry.source.includes("# Inspect design"));
+    const command = generated.find((entry) => entry.source.includes("# Imported command:"));
+    expect(skill).toBeDefined();
+    expect(command?.source).toContain(`the Eve skill \\"${skill?.file.replace(/\.ts$/, "")}\\"`);
   });
 
   it("refuses to overwrite a user-modified generated file", async () => {
@@ -289,5 +342,22 @@ describe("parsers", () => {
     } finally {
       await source.cleanup();
     }
+  });
+
+  it("rejects npm archives whose decompressed tar exceeds the safety bound", { timeout: 30_000 }, async () => {
+    const { plugin } = await fixture();
+    await put(
+      plugin,
+      "package.json",
+      JSON.stringify({
+        name: "design-suite-oversized-fixture",
+        version: "1.2.3",
+        files: [".codex-plugin", "oversized.bin"],
+      }),
+    );
+    await put(plugin, "oversized.bin", Buffer.alloc(34 * 1024 * 1024));
+    await expect(resolvePluginSource({ kind: "npm", spec: `file:${plugin}` })).rejects.toThrow(
+      /archive expands beyond the safe size limit/,
+    );
   });
 });

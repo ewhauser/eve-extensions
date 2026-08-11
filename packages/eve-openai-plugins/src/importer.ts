@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import ts from "typescript";
 
 import { accessPolicySource, generatePlugin } from "./generator.js";
 import { inspectPlugin } from "./manifest.js";
@@ -47,11 +48,74 @@ export async function readPluginLockfile(projectRoot: string): Promise<PluginLoc
   return candidate as PluginLockfile;
 }
 
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function defineAgentCall(expression: ts.Expression): ts.CallExpression | undefined {
+  const candidate = unwrapExpression(expression);
+  if (!ts.isCallExpression(candidate)) return undefined;
+  const callee = unwrapExpression(candidate.expression);
+  return ts.isIdentifier(callee) && callee.text === "defineAgent" ? candidate : undefined;
+}
+
+function exportedRootAgent(sourceFile: ts.SourceFile): ts.CallExpression | undefined {
+  const variables = new Map<string, ts.Expression>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+        variables.set(declaration.name.text, declaration.initializer);
+      }
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportAssignment(statement) || statement.isExportEquals) continue;
+    const exported = unwrapExpression(statement.expression);
+    const expression = ts.isIdentifier(exported) ? variables.get(exported.text) : exported;
+    return expression ? defineAgentCall(expression) : undefined;
+  }
+  return undefined;
+}
+
+function propertyName(property: ts.PropertyName): string | undefined {
+  return ts.isIdentifier(property) || ts.isStringLiteralLike(property) ? property.text : undefined;
+}
+
+function literalModel(call: ts.CallExpression): string | undefined {
+  const firstArgument = call.arguments[0] ? unwrapExpression(call.arguments[0]) : undefined;
+  if (!firstArgument || !ts.isObjectLiteralExpression(firstArgument)) return undefined;
+
+  let model: string | undefined;
+  for (const property of firstArgument.properties) {
+    // A spread can override a preceding literal or hide the effective value.
+    if (ts.isSpreadAssignment(property)) return undefined;
+    if (!ts.isPropertyAssignment(property) || propertyName(property.name) !== "model") continue;
+    if (model !== undefined) return undefined;
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value)) return undefined;
+    model = value.text;
+  }
+  return model;
+}
+
 async function literalRootModel(projectRoot: string): Promise<string | undefined> {
   const path = resolve(projectRoot, "agent/agent.ts");
   if (!(await pathExists(path))) return undefined;
   const source = await readFile(path, "utf8");
-  return /\bmodel\s*:\s*["']([^"']+)["']/.exec(source)?.[1];
+  const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const root = exportedRootAgent(sourceFile);
+  return root ? literalModel(root) : undefined;
 }
 
 async function connectorExists(projectRoot: string, mount: string): Promise<boolean> {

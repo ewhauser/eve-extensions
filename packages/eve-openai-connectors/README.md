@@ -120,6 +120,7 @@ The extension never logs or persists the token. It holds the value only for the 
 | `getToken(ctx)` | required | Return the current user's ChatGPT workspace bearer token, or `null`. |
 | `getPrincipal(ctx)` | derived from Eve auth | Return a stable per-user cache key. Useful for auth-less local development. |
 | `enabled` | `true` | Disable all connector contributions when false. |
+| `allowedServices` | all authorized services | Restrict discovery and calls to service names such as `github` or `google_drive`. |
 | `discovery` | `"deferred"` | Use provider-native deferred tool search. Set to `"search"` for progressive extension search. |
 | `baseUrl` | OpenAI connector service | Override the connector endpoint. |
 | `inventoryTtlMs` | `300000` | Per-user connector catalog cache lifetime in milliseconds. |

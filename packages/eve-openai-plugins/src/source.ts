@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { gunzip } from "node:zlib";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
+import { gunzip } from "node:zlib";
 
 import type { PluginSource } from "./types.js";
 import {
@@ -16,6 +16,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 const gunzipAsync = promisify(gunzip);
+/** Allow bounded tar framing overhead above the extracted plugin payload. */
+const MAX_NPM_ARCHIVE_BYTES = MAX_PLUGIN_BYTES + 8 * 1024 * 1024;
 
 export interface ResolvedPluginSource {
   root: string;
@@ -150,7 +152,19 @@ function parsePax(content: Uint8Array): Record<string, string> {
 }
 
 async function extractNpmArchive(archive: string, destination: string): Promise<void> {
-  const tar = await gunzipAsync(await readFile(archive));
+  if ((await stat(archive)).size > MAX_NPM_ARCHIVE_BYTES) {
+    throw new Error("npm plugin archive is too large before decompression.");
+  }
+  const compressed = await readFile(archive);
+  let tar: Buffer;
+  try {
+    tar = await gunzipAsync(compressed, { maxOutputLength: MAX_NPM_ARCHIVE_BYTES });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error("npm plugin archive expands beyond the safe size limit.", { cause: error });
+    }
+    throw error;
+  }
   let offset = 0;
   let total = 0;
   let nextPax: Record<string, string> = {};

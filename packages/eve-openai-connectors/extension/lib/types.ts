@@ -118,6 +118,11 @@ export interface CreateConnectorsOptions {
   getToken(ctx: ConnectorContext): Promise<string | null> | string | null;
   /** Master switch. When `false`, `begin()` always returns `null`. */
   enabled?: boolean;
+  /**
+   * Restrict discovery and execution to these connector service names, such
+   * as `github` or `google_drive`. Omit to expose every authorized service.
+   */
+  allowedServices?: readonly string[];
   /** Endpoint override. */
   baseUrl?: string;
   /** Prefix on generated tool names. May be empty; otherwise must contain only API-legal name characters. */

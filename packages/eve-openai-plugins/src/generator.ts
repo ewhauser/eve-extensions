@@ -67,16 +67,17 @@ export default defineSkill(${definitionBody(skill)});
 `;
 }
 
-function commandAsSkill(plugin: NormalizedPlugin, command: NormalizedPlugin["commands"][number]): NormalizedSkill {
-  const skillNames = new Map(plugin.skills.map((skill) => [skill.sourcePath.match(/skills\/([^/]+)/)?.[1], skill.id]));
+function commandAsSkill(
+  plugin: NormalizedPlugin,
+  command: NormalizedPlugin["commands"][number],
+  skillNames: ReadonlyMap<string, string>,
+): NormalizedSkill {
   const rewritten = command.markdown
     .replace(
       /(?:\.\.\/)*skills\/([^/\s`]+)\/SKILL\.md/g,
       (original, name: string) => {
         const skill = skillNames.get(name);
-        return skill
-          ? `the Eve skill \"${qualifySlug(["openai-plugin", toSlug(plugin.manifest.name), skill])}\"`
-          : original;
+        return skill ? `the Eve skill \"${skill}\"` : original;
       },
     )
     .replaceAll("$ARGUMENTS", "the arguments supplied by the user for this command");
@@ -87,6 +88,18 @@ function commandAsSkill(plugin: NormalizedPlugin, command: NormalizedPlugin["com
     markdown: `# Imported command: /${plugin.manifest.name}:${command.id}\n\n${rewritten}`,
     files: {},
   };
+}
+
+function skillNames(
+  skills: readonly NormalizedSkill[],
+  generatedName: (skill: NormalizedSkill) => string,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  for (const skill of skills) {
+    const sourceName = skill.sourcePath.match(/skills\/([^/]+)/)?.[1];
+    if (sourceName) names.set(sourceName, generatedName(skill));
+  }
+  return names;
 }
 
 function subagentSource(pluginId: string, agent: NormalizedPlugin["agents"][number], model: string): string {
@@ -163,9 +176,15 @@ export function generatePlugin(plugin: NormalizedPlugin, options: GenerateOption
   const warnings = [...plugin.warnings];
   const pluginId = toSlug(plugin.manifest.name);
   const rootPrefix = qualifySlug(["openai-plugin", pluginId]);
-  const capabilities: NormalizedSkill[] = [
+  const rootSkillNames = skillNames(plugin.skills, (skill) => qualifySlug([rootPrefix, skill.id]));
+  const childSkillNames = skillNames(plugin.skills, (skill) => skill.id);
+  const rootCapabilities: NormalizedSkill[] = [
     ...plugin.skills,
-    ...plugin.commands.map((command) => commandAsSkill(plugin, command)),
+    ...plugin.commands.map((command) => commandAsSkill(plugin, command, rootSkillNames)),
+  ];
+  const childCapabilities: NormalizedSkill[] = [
+    ...plugin.skills,
+    ...plugin.commands.map((command) => commandAsSkill(plugin, command, childSkillNames)),
   ];
   if (plugin.apps.length > 0 && !options.connectorAvailable) {
     warnings.push(
@@ -173,7 +192,7 @@ export function generatePlugin(plugin: NormalizedPlugin, options: GenerateOption
     );
   }
 
-  for (const skill of capabilities) {
+  for (const skill of rootCapabilities) {
     files.set(
       `agent/skills/${qualifySlug([rootPrefix, skill.id])}.ts`,
       dynamicSkillSource(pluginId, skill.id, skill),
@@ -192,7 +211,7 @@ export function generatePlugin(plugin: NormalizedPlugin, options: GenerateOption
     const child = `agent/subagents/${qualifySlug([rootPrefix, agent.id])}`;
     files.set(`${child}/agent.ts`, subagentSource(pluginId, agent, model));
     files.set(`${child}/instructions.md`, agent.instructions);
-    for (const skill of capabilities) {
+    for (const skill of childCapabilities) {
       files.set(`${child}/skills/${skill.id}.ts`, staticSkillSource(skill));
     }
     if (plugin.apps.length > 0) {
@@ -203,6 +222,7 @@ import { getOpenAIPluginConnectorToken } from "../../../lib/openai-plugin-access
 
 export default openaiConnectors({
   getToken: getOpenAIPluginConnectorToken,
+  allowedServices: ${JSON.stringify(plugin.apps.map((app) => app.name))},
 });
 `,
       );
