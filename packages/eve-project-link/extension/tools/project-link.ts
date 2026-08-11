@@ -1,7 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
-import extension from "../extension.js";
+import { getProjectLinkConfig } from "../extension.js";
 import { projectContextInputSchema } from "../lib/context.js";
 import {
   getProjectLinkService,
@@ -35,6 +35,7 @@ function approval(enabled: boolean) {
 export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
+      const config = getProjectLinkConfig();
       const channel = await resolveProjectChannel(ctx);
       if (!channel) return null;
 
@@ -48,9 +49,9 @@ export default defineDynamic({
           ? "Return this channel's existing project-link plan. The tool is idempotent and never calls an external project API."
           : `Reserve a stable channel link and return a plan for using tools already mounted in this agent. This tool never calls an external project API or accepts credentials. Available configured presets: ${presets}.`,
         inputSchema: linkInputSchema,
-        ...(approval(extension.config.approvals.link) === undefined
+        ...(approval(config.approvals.link) === undefined
           ? {}
-          : { approval: approval(extension.config.approvals.link) }),
+          : { approval: approval(config.approvals.link) }),
         execute: async (input) => {
           const result = await service.link(channel, {
             title: input.title,
@@ -111,9 +112,9 @@ export default defineDynamic({
         description:
           "Remove this channel's project binding. This retains the external resource and all of its content.",
         inputSchema: emptyInputSchema,
-        ...(approval(extension.config.approvals.unlink) === undefined
+        ...(approval(config.approvals.unlink) === undefined
           ? {}
-          : { approval: approval(extension.config.approvals.unlink) }),
+          : { approval: approval(config.approvals.unlink) }),
         execute: async () => {
           const removed = await service.unlink(channel);
           return {
@@ -146,9 +147,9 @@ export default defineDynamic({
         description:
           "Save a newly curated structured context card to this channel's durable prompt cache. This tool does not write to the external system; use the mounted system tools separately when external synchronization is requested.",
         inputSchema: projectContextInputSchema,
-        ...(approval(extension.config.approvals.saveContext) === undefined
+        ...(approval(config.approvals.saveContext) === undefined
           ? {}
-          : { approval: approval(extension.config.approvals.saveContext) }),
+          : { approval: approval(config.approvals.saveContext) }),
         execute: async (input) => {
           const updated = await service.saveContext(channel, input);
           return {

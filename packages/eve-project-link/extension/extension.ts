@@ -6,6 +6,7 @@ import type {
   ProjectChannel,
   ProjectChannelResolver,
   ProjectLinkStore,
+  ProjectPreset,
 } from "./lib/types.js";
 import { projectPresetSchema } from "./presets/preset.js";
 
@@ -31,10 +32,15 @@ const resolveChannel = z.custom<ProjectChannelResolver>(
   { message: "resolveChannel must be a function." },
 );
 
+const configuredPreset = z.custom<ProjectPreset>(
+  (value) => projectPresetSchema.safeParse(value).success,
+  { message: "preset must be a configured ProjectPreset." },
+);
+
 const config = z
   .object({
     store,
-    presets: z.array(projectPresetSchema).min(1),
+    presets: z.array(configuredPreset).min(1),
     defaultPreset: z.string().trim().min(1).max(100).optional(),
     resolveChannel: resolveChannel.optional(),
     maxPromptCharacters: z.number().int().min(1_000).max(30_000).default(7_000),
@@ -67,7 +73,49 @@ const config = z
     }
   });
 
+export type ProjectLinkConfig = z.output<typeof config>;
+
+const PROJECT_LINK_CONFIG = Symbol.for("eve-project-link.installation-config");
+
+function installedConfig(): ProjectLinkConfig | undefined {
+  return (
+    globalThis as typeof globalThis & {
+      [PROJECT_LINK_CONFIG]?: ProjectLinkConfig;
+    }
+  )[PROJECT_LINK_CONFIG];
+}
+
+function installConfig(value: ProjectLinkConfig): void {
+  (
+    globalThis as typeof globalThis & {
+      [PROJECT_LINK_CONFIG]?: ProjectLinkConfig;
+    }
+  )[PROJECT_LINK_CONFIG] = value;
+}
+
+const extension = defineExtension({ config });
+
+/**
+ * Read the installed configuration even when Eve loads an extension-owned
+ * dynamic module outside the configured mount module's instance graph.
+ */
+export function getProjectLinkConfig(): ProjectLinkConfig {
+  return installedConfig() ?? extension.config;
+}
+
+const projectLink = ((values: z.input<typeof config>) => {
+  const parsed = config.parse(values);
+  const mounted = extension(values);
+  installConfig(parsed);
+  return mounted;
+}) as typeof extension;
+
+Object.defineProperties(projectLink, {
+  config: { enumerable: true, get: getProjectLinkConfig },
+  schema: { enumerable: true, value: extension.schema },
+});
+
 export type ProjectLinkExtensionContext = DynamicResolveContext;
 export type ResolvedProjectChannel = ProjectChannel;
 
-export default defineExtension({ config });
+export default projectLink;

@@ -1,7 +1,7 @@
 import { defineInstructions } from "eve/instructions";
 import { defineDynamic } from "eve/tools";
 
-import extension from "../extension.js";
+import { getProjectLinkConfig } from "../extension.js";
 import {
   renderPendingProjectLink,
   renderProjectContext,
@@ -14,6 +14,7 @@ import {
 export default defineDynamic({
   events: {
     "turn.started": async (_event, ctx) => {
+      const config = getProjectLinkConfig();
       const channel = await resolveProjectChannel(ctx);
       if (!channel) return null;
       const service = getProjectLinkService();
@@ -25,13 +26,13 @@ export default defineDynamic({
         return defineInstructions({
           markdown: renderPendingProjectLink(
             plan,
-            extension.config.maxPromptCharacters,
+            config.maxPromptCharacters,
           ),
         });
       }
 
       return defineInstructions({
-        markdown: `${renderProjectContext(binding, extension.config.maxPromptCharacters, plan)}\n\nUse this compact card for routine orientation. When freshness or omitted detail matters, follow the configured retrieval guidance with mounted tools, then save a newly curated card. Synchronize the external system only when the user requests it. Cite source URLs when they support a claim.`,
+        markdown: `${renderProjectContext(binding, config.maxPromptCharacters, plan)}\n\nUse this compact card for routine orientation. When freshness or omitted detail matters, follow the configured retrieval guidance with mounted tools, then save a newly curated card. Synchronize the external system only when the user requests it. Cite source URLs when they support a claim.`,
       });
     },
   },
