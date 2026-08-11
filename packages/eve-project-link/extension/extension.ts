@@ -6,6 +6,7 @@ import type {
   ProjectChannel,
   ProjectChannelResolver,
   ProjectLinkStore,
+  ProjectPreset,
 } from "./lib/types.js";
 import { projectPresetSchema } from "./presets/preset.js";
 
@@ -31,10 +32,15 @@ const resolveChannel = z.custom<ProjectChannelResolver>(
   { message: "resolveChannel must be a function." },
 );
 
+const configuredPreset = z.custom<ProjectPreset>(
+  (value) => projectPresetSchema.safeParse(value).success,
+  { message: "preset must be a configured ProjectPreset." },
+);
+
 const config = z
   .object({
     store,
-    presets: z.array(projectPresetSchema).min(1),
+    presets: z.array(configuredPreset).min(1),
     defaultPreset: z.string().trim().min(1).max(100).optional(),
     resolveChannel: resolveChannel.optional(),
     maxPromptCharacters: z.number().int().min(1_000).max(30_000).default(7_000),
@@ -67,7 +73,22 @@ const config = z
     }
   });
 
+export type ProjectLinkConfig = z.output<typeof config>;
+
+// Distribution entry points can be evaluated in separate authored-module
+// graphs. Pin the same namespace Eve derives from this package name so every
+// handle resolves through Eve's shared, scoped configuration registry.
+const extension = defineExtension({ config }, "eve-project-link");
+
+/**
+ * Read the installed configuration even when Eve loads an extension-owned
+ * dynamic module outside the configured mount module's instance graph.
+ */
+export function getProjectLinkConfig(): ProjectLinkConfig {
+  return extension.config;
+}
+
 export type ProjectLinkExtensionContext = DynamicResolveContext;
 export type ResolvedProjectChannel = ProjectChannel;
 
-export default defineExtension({ config });
+export default extension;

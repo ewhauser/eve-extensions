@@ -1,4 +1,4 @@
-import extension from "../extension.js";
+import { getProjectLinkConfig } from "../extension.js";
 import { defaultProjectChannelResolver } from "./channel.js";
 import { ProjectLinkService } from "./project-link.js";
 import type { DynamicResolveContext } from "eve/tools";
@@ -8,7 +8,7 @@ let configuredFor: object | undefined;
 let configuredService: ProjectLinkService | undefined;
 
 export function getProjectLinkService(): ProjectLinkService {
-  const config = extension.config;
+  const config = getProjectLinkConfig();
   if (configuredService && configuredFor === config) return configuredService;
 
   configuredFor = config;
@@ -25,5 +25,7 @@ export function getProjectLinkService(): ProjectLinkService {
 export async function resolveProjectChannel(
   ctx: DynamicResolveContext,
 ): Promise<ProjectChannel | null> {
-  return (extension.config.resolveChannel ?? defaultProjectChannelResolver)(ctx);
+  return (getProjectLinkConfig().resolveChannel ?? defaultProjectChannelResolver)(
+    ctx,
+  );
 }
