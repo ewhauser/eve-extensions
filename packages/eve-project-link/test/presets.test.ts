@@ -16,7 +16,11 @@ describe("project presets", () => {
       id: "context-hub",
       parameters: {
         container: "Projects database",
-        template: "Linked channel project",
+        template: {
+          kind: "database-template",
+          reference: "Linked channel project",
+          expectedStructure: ["Decisions", "Milestones"],
+        },
         contextDestination: "Eve context",
       },
       tools: { add: { toolNames: ["workspace__notion_create"] } },
@@ -34,13 +38,80 @@ describe("project presets", () => {
         toolNames: ["workspace__notion_create"],
       },
     });
-    expect(configured.operations.create).toContain(
-      "Apply the Linked channel project template when the mounted tool supports template selection.",
+    expect(configured.toolHints?.discoveryQueries).toContain(
+      "Create a Notion database page using a registered database template, then fetch the created page",
     );
+    expect(configured.operations.create?.join(" ")).toContain(
+      "selected directly while creating",
+    );
+    expect(configured.operations.create?.join(" ")).toContain(
+      "verify Decisions, Milestones before completion",
+    );
+    expect(configured.completionRequirements).toEqual([
+      expect.objectContaining({
+        id: "notion-template-structure",
+        description: expect.stringContaining(
+          "selected directly during database-page creation",
+        ),
+      }),
+    ]);
+    expect(configured.metadata).toMatchObject({
+      "notion.template": "Linked channel project",
+      "notion.templateKind": "database-template",
+      "notion.templateReference": "Linked channel project",
+      "notion.templateExpectedStructure": "Decisions, Milestones",
+    });
     expect(configured.operations.retrieve.at(-1)).toBe(
       "Read the Launches relation.",
     );
     expect(JSON.stringify(configured).toLowerCase()).not.toContain("api key");
+  });
+
+  it("orchestrates ordinary page templates through asynchronous duplication", () => {
+    const configured = preset(notionProjectHub, {
+      id: "context-hub",
+      parameters: {
+        container: "Projects database",
+        template: {
+          kind: "page",
+          reference: "https://notion.so/template-page",
+          expectedStructure: ["Project sources"],
+        },
+      },
+    });
+
+    expect(configured.toolHints?.discoveryQueries).toContain(
+      "Duplicate a Notion page into another location, wait for asynchronous completion, and fetch the duplicated page",
+    );
+    expect(configured.operations.create?.join(" ")).toContain(
+      "Duplicate the ordinary Notion page",
+    );
+    expect(configured.operations.create?.join(" ")).toContain(
+      "wait or poll until it succeeds",
+    );
+    expect(configured.operations.create?.join(" ")).toContain(
+      "Only after that fetch succeeds",
+    );
+    expect(configured.completionRequirements?.[0]?.description).toContain(
+      "duplicated as an ordinary page",
+    );
+  });
+
+  it("keeps legacy template references executable by requiring type detection", () => {
+    const configured = preset(notionProjectHub, {
+      id: "context-hub",
+      parameters: { template: "https://notion.so/template" },
+    });
+
+    expect(configured.operations.create?.join(" ")).toContain(
+      "first determine whether it is a registered database template or an ordinary Notion page",
+    );
+    expect(configured.toolHints?.discoveryQueries).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("registered database template"),
+        expect.stringContaining("Duplicate a Notion page"),
+      ]),
+    );
   });
 
   it("uses the same configured-preset model for Linear", () => {
@@ -81,6 +152,12 @@ describe("project presets", () => {
           create: [`Create one project in ${registry}.`],
           retrieve: ["Read owners, decisions, milestones, and sources."],
         },
+        completionRequirements: [
+          {
+            id: "acme-standard-shape",
+            description: "Fetch and verify the standard project sections.",
+          },
+        ],
       }),
     });
     const configured = preset(acmeProject, {
@@ -95,6 +172,9 @@ describe("project presets", () => {
       "acme__find",
       "acme__create",
     ]);
+    expect(configured.completionRequirements?.[0]?.id).toBe(
+      "acme-standard-shape",
+    );
   });
 
   it("keeps core lifecycle and safety rules outside provider presets", async () => {
@@ -146,5 +226,81 @@ describe("project presets", () => {
         guidance: { locate: { replace: [] } },
       }),
     ).toThrow("retain locate and retrieve guidance");
+  });
+
+  it("keeps a templated link pending when template verification is unavailable", async () => {
+    const configured = preset(notionProjectHub, {
+      id: "context-hub",
+      parameters: {
+        template: {
+          kind: "page",
+          reference: "https://notion.so/template-page",
+          expectedStructure: ["Decisions"],
+        },
+      },
+    });
+    const store = createMemoryProjectLinkStore();
+    const service = new ProjectLinkService({ store, presets: [configured] });
+    const channel = {
+      kind: "slack",
+      workspaceId: "T1",
+      channelId: "C1",
+    };
+    const linked = await service.link(channel, {
+      proposal: {
+        title: "Atlas",
+        context: {
+          summary: "Ship Atlas.",
+          principals: [],
+          decisions: [],
+          milestones: [],
+          upcomingMeetings: [],
+          sources: [],
+          openQuestions: [],
+          nextSteps: [],
+        },
+      },
+    });
+    const resource = {
+      id: "page",
+      url: "https://notion.so/page",
+      title: "Atlas",
+    };
+
+    expect(linked.plan.provisioningInstructions).toContain(
+      "keep the binding pending",
+    );
+    expect(linked.plan.provisioningInstructions).toContain(
+      "Never substitute fallback content",
+    );
+    await expect(
+      service.complete(channel, { bindingId: linked.binding.id, resource }),
+    ).rejects.toThrow("notion-template-structure");
+    expect(await service.status(channel)).toMatchObject({ status: "pending" });
+
+    const completed = await service.complete(channel, {
+      bindingId: linked.binding.id,
+      resource,
+      verification: {
+        resolution: "created",
+        evidence: [
+          {
+            requirementId: "notion-template-structure",
+            evidence:
+              "Duplication completed; fetched the new page and found Decisions.",
+            sourceUrl: resource.url,
+          },
+        ],
+      },
+    });
+    expect(completed).toMatchObject({
+      status: "active",
+      completionVerification: {
+        resolution: "created",
+        evidence: [
+          { requirementId: "notion-template-structure" },
+        ],
+      },
+    });
   });
 });

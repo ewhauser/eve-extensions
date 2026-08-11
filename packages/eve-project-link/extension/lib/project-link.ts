@@ -7,6 +7,8 @@ import {
 import type {
   ProjectBinding,
   ProjectChannel,
+  ProjectCompletionEvidence,
+  ProjectCompletionVerification,
   ProjectContextCard,
   ProjectLinkPlan,
   ProjectLinkStore,
@@ -42,6 +44,8 @@ export interface LinkProjectResult {
 export interface CompleteProjectLinkInput {
   readonly bindingId: string;
   readonly resource: ProjectResource;
+  /** Required when the configured preset declares completion requirements. */
+  readonly verification?: ProjectCompletionVerification | undefined;
 }
 
 function guidance(lines: readonly string[]): string {
@@ -71,10 +75,78 @@ function provisioningInstructions(
       "If no matching resource exists, stop. This preset does not authorize creating one.",
     );
   }
+  if (preset.completionRequirements) {
+    lines.push(
+      "Before calling project_link__complete, satisfy every verification requirement through mounted tools:",
+      ...preset.completionRequirements.map(
+        (requirement) => `${requirement.id}: ${requirement.description}`,
+      ),
+      "Pass a verification receipt with one evidence item per requirement.",
+      "If a required capability is unavailable or verification fails, stop, keep the binding pending, and tell the user what is unsupported or missing. Never substitute fallback content.",
+    );
+  }
   lines.push(
     "Return the resource ID, canonical URL, and title to project_link__complete.",
   );
   return lines.join("\n");
+}
+
+function validateCompletionVerification(
+  preset: ProjectPreset,
+  verification: ProjectCompletionVerification | undefined,
+): ProjectCompletionVerification | undefined {
+  const requirements = preset.completionRequirements ?? [];
+  if (!verification) {
+    if (requirements.length > 0) {
+      throw new Error(
+        `Completion requires verified evidence for: ${requirements.map((requirement) => requirement.id).join(", ")}. Keep the binding pending until verification succeeds.`,
+      );
+    }
+    return undefined;
+  }
+
+  if (verification.resolution !== "created" && verification.resolution !== "reused") {
+    throw new Error("Completion verification resolution must be created or reused.");
+  }
+
+  const requiredIds = new Set(requirements.map((requirement) => requirement.id));
+  const seen = new Set<string>();
+  const evidence: ProjectCompletionEvidence[] = [];
+  for (const item of verification.evidence) {
+    if (!requiredIds.has(item.requirementId)) {
+      throw new Error(
+        `Completion evidence references unknown requirement: ${item.requirementId}.`,
+      );
+    }
+    if (seen.has(item.requirementId)) {
+      throw new Error(
+        `Completion evidence repeats requirement: ${item.requirementId}.`,
+      );
+    }
+    const description = item.evidence.trim();
+    if (!description) {
+      throw new Error(
+        `Completion evidence for ${item.requirementId} must describe the mounted-tool result.`,
+      );
+    }
+    seen.add(item.requirementId);
+    evidence.push({
+      requirementId: item.requirementId,
+      evidence: description,
+      ...(item.sourceUrl === undefined ? {} : { sourceUrl: item.sourceUrl }),
+    });
+  }
+
+  const missing = requirements
+    .map((requirement) => requirement.id)
+    .filter((id) => !seen.has(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `Completion requires verified evidence for: ${missing.join(", ")}. Keep the binding pending until verification succeeds.`,
+    );
+  }
+
+  return { resolution: verification.resolution, evidence };
 }
 
 function retrievalInstructions(preset: ProjectPreset): string {
@@ -198,10 +270,19 @@ export class ProjectLinkService {
       );
     }
 
+    const preset = this.#resolvePreset(current.presetId);
+    const completionVerification = validateCompletionVerification(
+      preset,
+      input.verification,
+    );
+
     const active: ProjectBinding = {
       ...current,
       status: "active",
       resource: input.resource,
+      ...(completionVerification === undefined
+        ? {}
+        : { completionVerification }),
       updatedAt: this.#now().toISOString(),
       revision: current.revision + 1,
     };
@@ -246,6 +327,9 @@ export class ProjectLinkService {
       systemDescription: preset.system.description,
       resourceLabel: preset.resourceLabel,
       ...(preset.toolHints === undefined ? {} : { toolHints: preset.toolHints }),
+      ...(preset.completionRequirements === undefined
+        ? {}
+        : { completionRequirements: preset.completionRequirements }),
       provisioningInstructions: provisioningInstructions(preset, binding.id),
       retrievalInstructions: retrievalInstructions(preset),
       ...(update === undefined ? {} : { updateInstructions: update }),

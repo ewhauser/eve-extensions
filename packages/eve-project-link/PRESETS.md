@@ -8,7 +8,8 @@ contains credentials, a provider client, or executable tool callbacks.
 
 1. The core owns reservation, idempotency, ambiguity handling, trust boundaries,
    external-write policy, and completion.
-2. A preset definition owns provider-specific tool hints and operation guidance.
+2. A preset definition owns provider-specific tool hints, operation guidance,
+   and completion requirements.
 3. A configured preset instance supplies installation parameters and narrow
    overrides.
 
@@ -36,16 +37,35 @@ const contextHub = preset(notionProjectHub, {
   id: "context-hub",
   parameters: {
     container: "https://www.notion.so/acme/projects",
-    template: "Linked channel project",
+    template: {
+      kind: "page",
+      reference: "https://www.notion.so/acme/linked-channel-template",
+      expectedStructure: ["Decisions", "Milestones", "Project sources"],
+    },
     linkProperty: "Eve Link ID",
     contextDestination: "Eve context",
   },
 });
 ```
 
-The preset instructs the agent to use mounted Notion tools, scope retrieval to
-the linked page and its relations, and use the optional template only when the
-mounted tool supports template selection.
+The preset instructs the agent to use mounted Notion tools and scope retrieval
+to the linked page and its relations. Templates are executable contracts:
+
+- `kind: "database-template"` requires direct selection of a registered
+  database template while creating the page.
+- `kind: "page"` requires duplication of an ordinary page, including waiting
+  for asynchronous duplication before fetching and updating the copy.
+
+In both cases, `expectedStructure` names the properties, headings, or related
+databases that must be found in the fetched result. The binding remains pending
+until `complete` receives evidence for that verification. If the necessary
+mounted tool is unavailable, the workflow stops and reports the unsupported
+operation instead of creating fallback content.
+
+A legacy string `template` remains accepted. It instructs the agent to inspect
+the reference, distinguish a registered database template from an ordinary
+page, and then follow the corresponding workflow. Prefer the explicit object
+form for new installations.
 
 ## Linear
 
@@ -165,3 +185,21 @@ export const acmeProject = defineProjectPreset({
 Preset parameters and metadata are model-visible and must not contain secrets.
 Tenant routing and access-control decisions belong in mounted tools or
 connections.
+
+## Completion requirements
+
+Any preset can add provider-neutral verification requirements:
+
+```ts
+completionRequirements: [
+  {
+    id: "standard-structure",
+    description:
+      "Fetch the resulting resource and verify its Owners and Milestones sections.",
+  },
+],
+```
+
+The core includes these requirements in the plan and rejects `complete` until
+the caller supplies one mounted-tool evidence item for each ID. Accepted
+evidence is stored on the binding as a provisioning receipt.
