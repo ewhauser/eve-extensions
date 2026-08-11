@@ -32,10 +32,12 @@ const resolveChannel = z.custom<ProjectChannelResolver>(
   { message: "resolveChannel must be a function." },
 );
 
-const configuredPreset = z.custom<ProjectPreset>(
-  (value) => projectPresetSchema.safeParse(value).success,
-  { message: "preset must be a configured ProjectPreset." },
-);
+const configuredPreset = z
+  .custom<ProjectPreset>(
+    (value) => projectPresetSchema.safeParse(value).success,
+    { message: "preset must be a configured ProjectPreset." },
+  )
+  .transform((value) => projectPresetSchema.parse(value) as ProjectPreset);
 
 const config = z
   .object({
@@ -44,6 +46,12 @@ const config = z
     defaultPreset: z.string().trim().min(1).max(100).optional(),
     resolveChannel: resolveChannel.optional(),
     maxPromptCharacters: z.number().int().min(1_000).max(30_000).default(7_000),
+    maxPointerPromptCharacters: z
+      .number()
+      .int()
+      .min(3_000)
+      .max(30_000)
+      .default(3_000),
     approvals: z
       .object({
         link: z.boolean().default(true),

@@ -66,6 +66,7 @@ describe("ProjectLinkService", () => {
           status: "Planning",
         },
         systemName: "Notion",
+        activeContextMode: "pointer",
         toolHints: {
           connectionNames: ["notion"],
           toolNames: ["notion__fetch_page"],

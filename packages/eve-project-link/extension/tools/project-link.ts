@@ -179,7 +179,7 @@ export default defineDynamic({
 
       tools.save_context = defineTool({
         description:
-          "Save a newly curated structured context card to this channel's durable prompt cache. This tool does not write to the external system; use the mounted system tools separately when external synchronization is requested.",
+          "Save a newly curated structured context card with this channel's durable binding. Pointer-mode prompts do not inject the card. This tool does not write to the external system; use mounted system tools separately when external synchronization is requested.",
         inputSchema: projectContextInputSchema,
         ...(approval(config.approvals.saveContext) === undefined
           ? {}

@@ -42,7 +42,10 @@ export interface ProjectSource {
   readonly description?: string | undefined;
 }
 
-/** Compact, system-neutral context injected into every linked-channel turn. */
+/**
+ * Compact, system-neutral context retained with the binding. It is injected
+ * only when the configured preset opts into detailed `card` mode.
+ */
 export interface ProjectContextCard {
   readonly summary: string;
   readonly status?: string | undefined;
@@ -85,6 +88,9 @@ export interface ProjectPresetSystem {
   readonly description: string;
 }
 
+/** Active-turn context rendered after an external resource is attached. */
+export type ProjectActiveContextMode = "pointer" | "card";
+
 /** Evidence that must be collected through mounted tools before completion. */
 export interface ProjectCompletionRequirement {
   /** Stable preset-local identifier included in completion evidence. */
@@ -106,6 +112,11 @@ export interface ProjectPreset {
   readonly description?: string | undefined;
   readonly system: ProjectPresetSystem;
   readonly resourceLabel: string;
+  /**
+   * `pointer` injects stable identity and retrieval guidance only. `card`
+   * retains the detailed cached-card prompt for compatibility.
+   */
+  readonly activeContextMode: ProjectActiveContextMode;
   readonly toolHints?: ProjectToolHints | undefined;
   readonly operations: ProjectOperationGuidance;
   readonly completionRequirements?:
@@ -175,6 +186,7 @@ export interface ProjectLinkPlan {
   readonly systemName: string;
   readonly systemDescription: string;
   readonly resourceLabel: string;
+  readonly activeContextMode: ProjectActiveContextMode;
   readonly toolHints?: ProjectToolHints | undefined;
   readonly completionRequirements?:
     | readonly ProjectCompletionRequirement[]

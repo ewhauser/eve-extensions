@@ -326,6 +326,7 @@ export class ProjectLinkService {
       systemName: preset.system.name,
       systemDescription: preset.system.description,
       resourceLabel: preset.resourceLabel,
+      activeContextMode: preset.activeContextMode,
       ...(preset.toolHints === undefined ? {} : { toolHints: preset.toolHints }),
       ...(preset.completionRequirements === undefined
         ? {}

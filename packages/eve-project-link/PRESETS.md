@@ -9,7 +9,7 @@ contains credentials, a provider client, or executable tool callbacks.
 1. The core owns reservation, idempotency, ambiguity handling, trust boundaries,
    external-write policy, and completion.
 2. A preset definition owns provider-specific tool hints, operation guidance,
-   and completion requirements.
+   completion requirements, and the active-context mode.
 3. A configured preset instance supplies installation parameters and narrow
    overrides.
 
@@ -25,6 +25,7 @@ and profile hierarchy.
 | Scope parameters | Container, template | Workspace, team, initiative |
 | Stable identity | Page property | Description or metadata marker |
 | Retrieval | Page plus related records | Project plus issues, milestones, updates, docs |
+| Active prompt | Canonical resource pointer | Canonical resource pointer |
 | Authentication | Mounted Notion tools | Mounted Linear tools |
 
 ## Notion
@@ -90,11 +91,14 @@ updates, milestones, issues, cycles, documents, ownership, status, and dates.
 ## Installation overrides
 
 Use `tools.add` for exact authored tool names and `guidance` for local project
-conventions:
+conventions. Presets default to a canonical resource pointer; set
+`activeContextMode: "card"` only for consumers that intentionally require the
+detailed cached context card:
 
 ```ts
 const contextHub = preset(notionProjectHub, {
   id: "context-hub",
+  activeContextMode: "card",
   tools: {
     add: {
       toolNames: ["acme_notion__find_project", "acme_notion__create_project"],
