@@ -75,47 +75,20 @@ const config = z
 
 export type ProjectLinkConfig = z.output<typeof config>;
 
-const PROJECT_LINK_CONFIG = Symbol.for("eve-project-link.installation-config");
-
-function installedConfig(): ProjectLinkConfig | undefined {
-  return (
-    globalThis as typeof globalThis & {
-      [PROJECT_LINK_CONFIG]?: ProjectLinkConfig;
-    }
-  )[PROJECT_LINK_CONFIG];
-}
-
-function installConfig(value: ProjectLinkConfig): void {
-  (
-    globalThis as typeof globalThis & {
-      [PROJECT_LINK_CONFIG]?: ProjectLinkConfig;
-    }
-  )[PROJECT_LINK_CONFIG] = value;
-}
-
-const extension = defineExtension({ config });
+// Distribution entry points can be evaluated in separate authored-module
+// graphs. Pin the same namespace Eve derives from this package name so every
+// handle resolves through Eve's shared, scoped configuration registry.
+const extension = defineExtension({ config }, "eve-project-link");
 
 /**
  * Read the installed configuration even when Eve loads an extension-owned
  * dynamic module outside the configured mount module's instance graph.
  */
 export function getProjectLinkConfig(): ProjectLinkConfig {
-  return installedConfig() ?? extension.config;
+  return extension.config;
 }
-
-const projectLink = ((values: z.input<typeof config>) => {
-  const parsed = config.parse(values);
-  const mounted = extension(values);
-  installConfig(parsed);
-  return mounted;
-}) as typeof extension;
-
-Object.defineProperties(projectLink, {
-  config: { enumerable: true, get: getProjectLinkConfig },
-  schema: { enumerable: true, value: extension.schema },
-});
 
 export type ProjectLinkExtensionContext = DynamicResolveContext;
 export type ResolvedProjectChannel = ProjectChannel;
 
-export default projectLink;
+export default extension;
