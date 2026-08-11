@@ -34,11 +34,12 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "eve": "0.31.3",
+    "eve-openai-connectors": "workspace:*",
     "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "eve": "0.31.3",
-    "eve-openai-connectors": "^0.1.0"
+    "eve-openai-connectors": "^0.2.0"
   },
   "peerDependenciesMeta": {
     "eve-openai-connectors": {

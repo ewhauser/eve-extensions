@@ -140,9 +140,6 @@ importers:
 
   packages/eve-openai-plugins:
     dependencies:
-      eve-openai-connectors:
-        specifier: ^0.1.0
-        version: 0.1.0(eve@0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -153,6 +150,9 @@ importers:
       eve:
         specifier: 0.31.3
         version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      eve-openai-connectors:
+        specifier: workspace:*
+        version: link:../eve-openai-connectors
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.11)
@@ -910,12 +910,6 @@ packages:
 
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
-
-  eve-openai-connectors@0.1.0:
-    resolution: {integrity: sha512-LHdzNiFXlOiWymMbdVwy+/dlFqxWVGxtZ3MUNufAWK6n2aFYPLIGO5EPpkT1Oo5AnvxjDJN4PAMQd0HwfY1pEA==}
-    engines: {node: '>=24'}
-    peerDependencies:
-      eve: 0.31.3
 
   eve@0.31.3:
     resolution: {integrity: sha512-/ae8kfsVLGoy68BU+7uNEkXeEQzOHWaXi0Q+Fj5oA2On5POcU0DGR9AnZlOaDQoFLoEtMxRnR1urTw4H0U2O7Q==}
@@ -1995,11 +1989,6 @@ snapshots:
   estree-walker@3.0.3:
     dependencies:
       '@types/estree': 1.0.9
-
-  eve-openai-connectors@0.1.0(eve@0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))):
-    dependencies:
-      eve: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
-      zod: 4.4.3
 
   eve@0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
