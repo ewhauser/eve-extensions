@@ -160,6 +160,14 @@ export function renderPendingProjectLink(
       `Preset: ${plan.presetId} (${plan.presetKey})`,
       `System: ${plan.systemName}`,
       `Binding ID: ${plan.bindingId}`,
+      ...(plan.context === undefined
+        ? []
+        : [
+            `Confirmed summary: ${plan.context.summary}`,
+            ...(plan.context.status === undefined
+              ? []
+              : [`Confirmed status: ${plan.context.status}`]),
+          ]),
       "Continue this reservation; do not create a second link or external resource for the channel.",
       "Provisioning:",
       ...toolHintLines(plan),

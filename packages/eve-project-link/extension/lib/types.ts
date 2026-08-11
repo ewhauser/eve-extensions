@@ -138,6 +138,8 @@ export interface ProjectLinkPlan {
   readonly channel: ProjectChannel;
   readonly channelUrl?: string | undefined;
   readonly title: string;
+  /** Confirmed or subsequently curated context used to orient provisioning. */
+  readonly context?: ProjectContextCard | undefined;
   readonly presetId: string;
   readonly presetKey: string;
   readonly presetName: string;
