@@ -7,6 +7,27 @@ const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
 
 export const packages = new Map([
   [
+    "packages/eve-ambient",
+    {
+      name: "eve-ambient",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.js",
+        "dist/ai-sdk.d.ts",
+        "dist/ai-sdk.js",
+        "dist/memory.d.ts",
+        "dist/memory.js",
+        "dist/postgres.d.ts",
+        "dist/postgres.js",
+        "dist/testing.d.ts",
+        "dist/testing.js",
+        "migrations/001_eve_ambient.sql",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-project-link",
     {
       name: "eve-project-link",
