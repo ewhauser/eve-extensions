@@ -4,6 +4,7 @@ export {
   defineStaticProjectPreset,
   preset,
   type ConfigureProjectPresetOptions,
+  type ProjectActiveContextMode,
   type ProjectPresetDefinition,
   type ProjectPresetTemplate,
 } from "./preset.js";

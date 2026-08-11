@@ -39,7 +39,13 @@ describe("configured extension runtime", () => {
     const store = createMemoryProjectLinkStore([pending]);
     projectLink({
       store,
-      presets: [preset(notionProjectHub, { id: "context-hub" })],
+      presets: [
+        preset(notionProjectHub, { id: "context-hub" }),
+        preset(notionProjectHub, {
+          id: "detailed",
+          activeContextMode: "card",
+        }),
+      ],
       approvals: { link: false, saveContext: false, unlink: false },
     });
 
@@ -56,7 +62,17 @@ describe("configured extension runtime", () => {
     expect(getProjectLinkConfig()).toMatchObject({
       store,
       maxPromptCharacters: 7_000,
+      maxPointerPromptCharacters: 3_000,
     });
+    expect(getProjectLinkConfig().presets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "context-hub",
+          activeContextMode: "pointer",
+        }),
+        expect.objectContaining({ id: "detailed", activeContextMode: "card" }),
+      ]),
+    );
 
     const tools = await projectLinkTools.events["step.started"]?.(
       {} as never,
@@ -76,5 +92,56 @@ describe("configured extension runtime", () => {
     expect(instructions).toMatchObject({
       markdown: expect.stringContaining("# Pending project link"),
     });
+
+    const active: ProjectBinding = {
+      ...pending,
+      status: "active",
+      resource: {
+        id: "notion-page",
+        url: "https://notion.so/atlas",
+        title: "Atlas",
+      },
+      context: {
+        summary: "Detailed cached summary.",
+        principals: [{ name: "Ada", role: "DRI" }],
+        decisions: [],
+        milestones: [],
+        upcomingMeetings: [],
+        sources: [],
+        openQuestions: [],
+        nextSteps: [],
+        generatedAt: "2026-08-11T12:00:00.000Z",
+      },
+      revision: 1,
+    };
+    expect(await store.replace(active, 0)).toBe(true);
+
+    const activeInstructions = await projectContext.events["turn.started"]?.(
+      {} as never,
+      resolveContext,
+    );
+    expect(activeInstructions).toMatchObject({
+      markdown: expect.stringContaining("# Linked project"),
+    });
+    expect(activeInstructions?.markdown).toContain(
+      "Canonical resource: https://notion.so/atlas",
+    );
+    expect(activeInstructions?.markdown).not.toContain("# Pending project link");
+
+    expect(
+      await store.replace(
+        { ...active, presetId: "detailed", revision: 2 },
+        1,
+      ),
+    ).toBe(true);
+    const detailedInstructions = await projectContext.events["turn.started"]?.(
+      {} as never,
+      resolveContext,
+    );
+    expect(detailedInstructions?.markdown).toContain("# Linked project context");
+    expect(detailedInstructions?.markdown).toContain(
+      "Summary: Detailed cached summary.",
+    );
+    expect(detailedInstructions?.markdown).toContain("Principals:\n- Ada — DRI");
   });
 });

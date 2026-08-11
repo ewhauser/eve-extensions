@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  ProjectActiveContextMode,
   ProjectCompletionRequirement,
   ProjectOperation,
   ProjectOperationGuidance,
@@ -12,6 +13,7 @@ import type {
 const identifier = z.string().trim().min(1).max(100);
 const text = z.string().trim().min(1);
 const stringList = z.array(z.string().trim().min(1).max(4_000)).min(1).max(30);
+const projectActiveContextModeSchema = z.enum(["pointer", "card"]);
 
 export const projectToolHintsSchema = z
   .object({
@@ -62,6 +64,7 @@ const projectPresetTemplateSchema = z
     description: text.max(2_000).optional(),
     system: projectPresetSystemSchema,
     resourceLabel: z.string().trim().min(1).max(100),
+    activeContextMode: projectActiveContextModeSchema.default("pointer"),
     toolHints: projectToolHintsSchema.optional(),
     operations: projectOperationGuidanceSchema,
     completionRequirements: projectCompletionRequirementsSchema.optional(),
@@ -76,7 +79,7 @@ export const projectPresetSchema = projectPresetTemplateSchema
   })
   .strict();
 
-export type ProjectPresetTemplate = z.infer<typeof projectPresetTemplateSchema>;
+export type ProjectPresetTemplate = z.input<typeof projectPresetTemplateSchema>;
 
 export interface ProjectPresetDefinition<TSchema extends z.ZodType = z.ZodType> {
   readonly key: string;
@@ -106,6 +109,8 @@ export interface ConfigureProjectPresetOptions<TSchema extends z.ZodType> {
   readonly name?: string | undefined;
   readonly description?: string | undefined;
   readonly resourceLabel?: string | undefined;
+  /** Override the definition's active-turn context mode. Defaults to pointer. */
+  readonly activeContextMode?: ProjectActiveContextMode | undefined;
   readonly tools?: ProjectToolHintOverrides | undefined;
   readonly guidance?:
     | Partial<Record<ProjectOperation, ProjectGuidanceOverride>>
@@ -215,6 +220,7 @@ export function preset<TSchema extends z.ZodType>(
     ...(options.resourceLabel === undefined
       ? {}
       : { resourceLabel: options.resourceLabel }),
+    activeContextMode: options.activeContextMode ?? template.activeContextMode,
     operations: mergeOperations(template.operations, options.guidance),
     ...(toolHints === undefined ? {} : { toolHints }),
     metadata: { ...(template.metadata ?? {}), ...(options.metadata ?? {}) },
@@ -223,6 +229,7 @@ export function preset<TSchema extends z.ZodType>(
 }
 
 export type {
+  ProjectActiveContextMode,
   ProjectCompletionRequirement,
   ProjectOperationGuidance,
   ProjectPreset,

@@ -5,6 +5,7 @@ import { getProjectLinkConfig } from "../extension.js";
 import {
   renderPendingProjectLink,
   renderProjectContext,
+  renderProjectPointer,
 } from "../lib/context.js";
 import {
   getProjectLinkService,
@@ -27,6 +28,15 @@ export default defineDynamic({
           markdown: renderPendingProjectLink(
             plan,
             config.maxPromptCharacters,
+          ),
+        });
+      }
+
+      if (plan.activeContextMode === "pointer") {
+        return defineInstructions({
+          markdown: renderProjectPointer(
+            binding,
+            config.maxPointerPromptCharacters,
           ),
         });
       }

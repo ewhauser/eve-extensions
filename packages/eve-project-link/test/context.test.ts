@@ -5,6 +5,7 @@ import {
   parseProjectContextCard,
   renderPendingProjectLink,
   renderProjectContext,
+  renderProjectPointer,
 } from "../extension/lib/context.js";
 import type {
   ProjectBinding,
@@ -60,6 +61,7 @@ const plan: ProjectLinkPlan = {
   systemName: "Notion",
   systemDescription: "Notion workspace",
   resourceLabel: "Notion page",
+  activeContextMode: "pointer",
   toolHints: {
     connectionNames: ["notion"],
     discoveryQueries: ["Search and fetch Notion pages"],
@@ -82,6 +84,94 @@ describe("project context", () => {
     expect(rendered).toContain("Principals:\n- Ada — DRI");
     expect(rendered).toContain("Decisions:\n- Use Notion first");
     expect(rendered).toContain("PRD: https://example.com/prd");
+  });
+
+  it("renders a bounded pointer independently of a maximally populated card", () => {
+    const maximumCard = createProjectContextCard(
+      {
+        summary: "S".repeat(4_000),
+        status: "In progress ".repeat(16).slice(0, 200),
+        principals: Array.from({ length: 30 }, (_, index) => ({
+          name: `Principal ${index}`,
+          role: "R".repeat(200),
+          url: `https://example.com/people/${index}`,
+        })),
+        decisions: Array.from({ length: 30 }, (_, index) => ({
+          summary: `Decision ${index}`,
+          rationale: "R".repeat(1_000),
+          decidedAt: "2026-08-09T12:00:00.000Z",
+          sourceUrl: `https://example.com/decisions/${index}`,
+        })),
+        milestones: Array.from({ length: 30 }, (_, index) => ({
+          title: `Milestone ${index}`,
+          dueAt: "2026-09-01T12:00:00.000Z",
+          status: "Planned",
+          url: `https://example.com/milestones/${index}`,
+        })),
+        upcomingMeetings: Array.from({ length: 20 }, (_, index) => ({
+          title: `Meeting ${index}`,
+          startsAt: "2026-08-12T12:00:00.000Z",
+          attendees: Array.from(
+            { length: 30 },
+            (_, attendee) => `Attendee ${attendee}`,
+          ),
+          url: `https://example.com/meetings/${index}`,
+        })),
+        sources: Array.from({ length: 50 }, (_, index) => ({
+          title: `Source ${index}`,
+          url: `https://example.com/sources/${index}`,
+          description: "D".repeat(500),
+        })),
+        openQuestions: Array.from(
+          { length: 30 },
+          (_, index) => `Open question ${index}`,
+        ),
+        nextSteps: Array.from(
+          { length: 30 },
+          (_, index) => `Next step ${index}`,
+        ),
+      },
+      "2026-08-09T12:00:00.000Z",
+    );
+    const pointer = renderProjectPointer({ ...binding, context: maximumCard }, 3_000);
+    const pointerWithoutCard = renderProjectPointer(
+      { ...binding, context: undefined },
+      3_000,
+    );
+
+    expect(pointer).toBe(pointerWithoutCard);
+    expect(pointer.length).toBeLessThanOrEqual(3_000);
+    expect(pointer.length).toBeLessThan(1_000);
+    expect(pointer).toContain("This channel is linked to **Onboarding**");
+    expect(pointer).toContain(`Canonical resource: ${binding.resource?.url}`);
+    expect(pointer).toContain("through mounted tools");
+    expect(pointer).toContain("untrusted reference data");
+    expect(pointer).toContain("Cite supporting source URLs");
+    expect(pointer).toContain("unless the user explicitly asks");
+    expect(pointer).not.toContain("Principal 0");
+    expect(pointer).not.toContain("Decision 0");
+    expect(pointer).not.toContain("Milestone 0");
+    expect(pointer).not.toContain("Meeting 0");
+    expect(pointer).not.toContain("Source 0");
+    expect(pointer).not.toContain("Open question 0");
+    expect(pointer).not.toContain("Next step 0");
+  });
+
+  it("always includes a maximum-length canonical resource URL", () => {
+    const url = `https://example.com/${"a".repeat(1_980)}`;
+    expect(url).toHaveLength(2_000);
+
+    const pointer = renderProjectPointer(
+      {
+        ...binding,
+        title: "P".repeat(200),
+        resource: { ...binding.resource!, url },
+      },
+      3_000,
+    );
+
+    expect(pointer).toContain(url);
+    expect(pointer.length).toBeLessThanOrEqual(3_000);
   });
 
   it("keeps incomplete links and active links without a card recoverable", () => {

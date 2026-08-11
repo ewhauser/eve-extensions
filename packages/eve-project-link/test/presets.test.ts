@@ -33,6 +33,7 @@ describe("project presets", () => {
       id: "context-hub",
       presetKey: "notion/project-hub@1",
       system: { kind: "notion" },
+      activeContextMode: "pointer",
       toolHints: {
         connectionNames: ["notion"],
         toolNames: ["workspace__notion_create"],
@@ -128,6 +129,7 @@ describe("project presets", () => {
       presetKey: "linear/project@1",
       system: { kind: "linear" },
       resourceLabel: "Linear project",
+      activeContextMode: "pointer",
     });
     expect(configured.operations.locate[0]).toContain("Product Engineering");
     expect(configured.operations.create?.join(" ")).toContain("Roadmap");
@@ -163,6 +165,7 @@ describe("project presets", () => {
     const configured = preset(acmeProject, {
       id: "standard",
       parameters: { registry: "Product registry" },
+      activeContextMode: "card",
     });
 
     expect(configured.operations.locate).toEqual([
@@ -175,6 +178,7 @@ describe("project presets", () => {
     expect(configured.completionRequirements?.[0]?.id).toBe(
       "acme-standard-shape",
     );
+    expect(configured.activeContextMode).toBe("card");
   });
 
   it("keeps core lifecycle and safety rules outside provider presets", async () => {
@@ -214,6 +218,7 @@ describe("project presets", () => {
     expect(linked.plan.retrievalInstructions).toContain(
       "untrusted reference data",
     );
+    expect(linked.plan.activeContextMode).toBe("pointer");
     expect(linked.plan.updateInstructions).toContain(
       "only when the user explicitly requests synchronization",
     );

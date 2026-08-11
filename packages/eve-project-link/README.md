@@ -1,8 +1,9 @@
 # eve-project-link
 
 An [Eve](https://eve.dev) extension that links an entire context channel to an
-external project resource. Every turn in a linked channel receives a compact,
-durable context card plus bounded guidance for retrieving deeper context.
+external project resource. Every active linked-channel turn receives a compact,
+bounded pointer to the canonical resource plus guidance for retrieving current
+context only when it is relevant.
 
 The extension does not contain a Notion or Linear client, accept provider API
 keys, or register connections. It guides the agent to use Notion, Linear, or
@@ -89,6 +90,8 @@ Overrides are deliberately narrow:
 - `tools.add` or `tools.replace` changes discovery hints;
 - `guidance.<operation>.append` or `replace` changes provider-specific guidance;
 - `name`, `description`, `resourceLabel`, and `metadata` change presentation.
+- `activeContextMode` selects the default pointer prompt or the detailed cached
+  card compatibility mode.
 
 There is no arbitrary deep merge. Overrides cannot remove the core
 idempotency, trust, approval, or preservation rules. Required `locate` and
@@ -106,7 +109,7 @@ Mounting the extension as `project_link.ts` adds channel-scoped tools:
   tool. Presets can require mounted-tool evidence before completion.
 - `project_link__status` reads cached binding metadata without external I/O.
 - `project_link__guide` returns the configured preset and full operation plan.
-- `project_link__save_context` replaces the durable prompt context card.
+- `project_link__save_context` replaces the optional durable context card.
 - `project_link__unlink` removes only the binding and retains the resource.
 
 The included skill orchestrates the multi-tool flow. No plugin tool proxies a
@@ -120,28 +123,47 @@ flowchart LR
   B --> C["Core plan + configured preset"]
   C --> D["Mounted tools locate or create resource"]
   D --> E["complete attaches resource"]
-  E --> F["Mounted tools gather context"]
-  F --> G["save_context caches bounded card"]
-  G --> H["Small context + retrieval guidance each turn"]
+  E --> F["Resource pointer + retrieval guidance each turn"]
+  F --> G["Mounted tools retrieve current context on demand"]
+  G --> H["Optional save_context retains a curated card"]
 ```
 
 The reservation exists before any external write. A retry receives the same
 binding ID and plan, allowing the external resource to be recovered rather
 than duplicated. `complete` is idempotent for the same resource ID.
 
-## Context refresh and synchronization
+## Active context, refresh, and synchronization
 
-There is no provider-owned `refresh` operation. To refresh:
+Configured presets use `activeContextMode: "pointer"` by default. Active turns
+receive only the project title, canonical resource URL, on-demand retrieval
+guidance, and framework-owned trust, citation, and write-safety rules. The
+saved `ProjectContextCard` remains available through status and guide flows but
+is not copied into the prompt.
+
+Use the compatibility mode only when a consumer intentionally depends on the
+detailed cached card:
+
+```ts
+preset(notionProjectHub, {
+  id: "context-hub",
+  activeContextMode: "card",
+});
+```
+
+There is no provider-owned `refresh` operation, and pointer mode needs no
+routine cache refresh. To refresh an intentionally retained card:
 
 1. Call `guide` for the current preset and tool hints.
 2. Use mounted read tools to gather current project data.
 3. Curate a replacement `ProjectContextCard`.
-4. Call `save_context` to atomically replace the prompt cache.
+4. Call `save_context` to atomically replace the durable card.
 
 Writing back to the external system is separate and occurs only when requested
-by the user. Provider content is marked as untrusted reference material. The
-default prompt budget is 7,000 characters and can be changed with
-`maxPromptCharacters`.
+by the user. Provider content is marked as untrusted reference material.
+`maxPointerPromptCharacters` independently bounds the active pointer and
+defaults to 3,000 characters; valid links normally render far below that
+ceiling. `maxPromptCharacters` continues to bound pending provisioning prompts
+and detailed-card compatibility prompts, defaulting to 7,000 characters.
 
 ## Binding store
 
