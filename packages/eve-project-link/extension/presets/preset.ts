@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  ProjectCompletionRequirement,
   ProjectOperation,
   ProjectOperationGuidance,
   ProjectPreset,
@@ -37,6 +38,24 @@ const projectPresetSystemSchema = z
   })
   .strict();
 
+const projectCompletionRequirementSchema = z
+  .object({
+    id: identifier,
+    description: text.max(4_000),
+  })
+  .strict();
+
+const projectCompletionRequirementsSchema = z
+  .array(projectCompletionRequirementSchema)
+  .min(1)
+  .max(30)
+  .refine(
+    (requirements) =>
+      new Set(requirements.map((requirement) => requirement.id)).size ===
+      requirements.length,
+    "Project completion requirement ids must be unique.",
+  );
+
 const projectPresetTemplateSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -45,6 +64,7 @@ const projectPresetTemplateSchema = z
     resourceLabel: z.string().trim().min(1).max(100),
     toolHints: projectToolHintsSchema.optional(),
     operations: projectOperationGuidanceSchema,
+    completionRequirements: projectCompletionRequirementsSchema.optional(),
     metadata: z.record(z.string(), z.string().max(4_000)).optional(),
   })
   .strict();
@@ -203,6 +223,7 @@ export function preset<TSchema extends z.ZodType>(
 }
 
 export type {
+  ProjectCompletionRequirement,
   ProjectOperationGuidance,
   ProjectPreset,
   ProjectPresetSystem,

@@ -85,6 +85,14 @@ export interface ProjectPresetSystem {
   readonly description: string;
 }
 
+/** Evidence that must be collected through mounted tools before completion. */
+export interface ProjectCompletionRequirement {
+  /** Stable preset-local identifier included in completion evidence. */
+  readonly id: string;
+  /** Model-facing description of the condition that must be verified. */
+  readonly description: string;
+}
+
 /**
  * A configured instance of a reusable project preset. This is plain data: it
  * contains no credentials, provider client, or executable tool callback.
@@ -100,6 +108,9 @@ export interface ProjectPreset {
   readonly resourceLabel: string;
   readonly toolHints?: ProjectToolHints | undefined;
   readonly operations: ProjectOperationGuidance;
+  readonly completionRequirements?:
+    | readonly ProjectCompletionRequirement[]
+    | undefined;
   /** Non-secret, model-visible identifiers or references used by this preset. */
   readonly metadata?: Readonly<Record<string, string>> | undefined;
 }
@@ -111,6 +122,21 @@ export interface ProjectResource {
   readonly title: string;
   /** System-private, JSON-safe data carried with the binding. */
   readonly metadata?: Readonly<Record<string, string>> | undefined;
+}
+
+export type ProjectResourceResolution = "created" | "reused";
+
+export interface ProjectCompletionEvidence {
+  readonly requirementId: string;
+  /** Concise description of the mounted-tool result that satisfied the requirement. */
+  readonly evidence: string;
+  readonly sourceUrl?: string | undefined;
+}
+
+/** Durable receipt for the external provisioning work accepted at completion. */
+export interface ProjectCompletionVerification {
+  readonly resolution: ProjectResourceResolution;
+  readonly evidence: readonly ProjectCompletionEvidence[];
 }
 
 export type ProjectBindingStatus = "pending" | "active";
@@ -125,6 +151,7 @@ export interface ProjectBinding {
   readonly channelUrl?: string | undefined;
   readonly status: ProjectBindingStatus;
   readonly resource?: ProjectResource | undefined;
+  readonly completionVerification?: ProjectCompletionVerification | undefined;
   readonly context?: ProjectContextCard | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -149,6 +176,9 @@ export interface ProjectLinkPlan {
   readonly systemDescription: string;
   readonly resourceLabel: string;
   readonly toolHints?: ProjectToolHints | undefined;
+  readonly completionRequirements?:
+    | readonly ProjectCompletionRequirement[]
+    | undefined;
   readonly provisioningInstructions: string;
   readonly retrievalInstructions: string;
   readonly updateInstructions?: string | undefined;

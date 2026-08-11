@@ -28,9 +28,26 @@ const resourceSchema = z.object({
   metadata: z.record(z.string(), z.string().max(4_000)).optional(),
 });
 
+const completionVerificationSchema = z.object({
+  resolution: z.enum(["created", "reused"]),
+  evidence: z
+    .array(
+      z.object({
+        requirementId: z.string().trim().min(1).max(100),
+        evidence: z.string().trim().min(1).max(4_000),
+        sourceUrl: z.string().url().max(2_000).optional(),
+      }),
+    )
+    .max(30),
+});
+
 const completeInputSchema = z.object({
   bindingId: z.string().uuid(),
   resource: resourceSchema,
+});
+
+const verifiedCompleteInputSchema = completeInputSchema.extend({
+  verification: completionVerificationSchema,
 });
 
 const emptyInputSchema = z.object({});
@@ -98,6 +115,7 @@ export default defineDynamic({
             preset: current.presetId,
             projectTitle: current.title,
             resource: current.resource,
+            completionVerification: current.completionVerification,
             contextGeneratedAt: current.context?.generatedAt,
           };
         },
@@ -136,10 +154,14 @@ export default defineDynamic({
       });
 
       if (binding.status === "pending") {
+        const completionRequirements = service.plan(binding).completionRequirements;
         tools.complete = defineTool({
-          description:
-            "Attach the external resource returned by an already-mounted tool and activate this channel link. This tool does not contact the external system.",
-          inputSchema: completeInputSchema,
+          description: completionRequirements
+            ? "Attach the externally verified resource and activate this channel link. Include evidence for every completion requirement in the plan. This tool does not contact the external system."
+            : "Attach the external resource returned by an already-mounted tool and activate this channel link. This tool does not contact the external system.",
+          inputSchema: completionRequirements
+            ? verifiedCompleteInputSchema
+            : completeInputSchema,
           execute: async (input) => {
             const completed = await service.complete(channel, input);
             return {
@@ -148,6 +170,7 @@ export default defineDynamic({
               status: completed.status,
               preset: completed.presetId,
               resource: completed.resource,
+              completionVerification: completed.completionVerification,
             };
           },
         });

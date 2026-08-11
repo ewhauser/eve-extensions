@@ -12,6 +12,7 @@ export {
   type ProjectToolHintOverrides,
 } from "./preset.js";
 export type {
+  ProjectCompletionRequirement,
   ProjectOperationGuidance,
   ProjectPreset,
   ProjectPresetSystem,

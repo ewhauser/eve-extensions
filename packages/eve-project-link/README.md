@@ -46,7 +46,11 @@ export default projectLink({
       id: "context-hub",
       parameters: {
         container: "https://www.notion.so/acme/projects",
-        template: "Linked channel project",
+        template: {
+          kind: "page",
+          reference: "https://www.notion.so/acme/linked-channel-template",
+          expectedStructure: ["Decisions", "Milestones", "Project sources"],
+        },
         contextDestination: "Eve context",
       },
       tools: {
@@ -69,8 +73,8 @@ export default projectLink({
 ```
 
 Separately mount the relevant Eve MCP/OpenAPI connection or authored tools.
-Presets only provide discovery and operation guidance; they do not authenticate
-or call an external system.
+Presets only provide discovery, operation, and completion-verification guidance;
+they do not authenticate or call an external system.
 
 ## Preset model
 
@@ -99,7 +103,7 @@ Mounting the extension as `project_link.ts` adds channel-scoped tools:
 - `project_link__link` reserves a user-confirmed proposal and returns a tool-use
   plan.
 - `project_link__complete` attaches the resource found or created by a mounted
-  tool.
+  tool. Presets can require mounted-tool evidence before completion.
 - `project_link__status` reads cached binding metadata without external I/O.
 - `project_link__guide` returns the configured preset and full operation plan.
 - `project_link__save_context` replaces the durable prompt context card.
