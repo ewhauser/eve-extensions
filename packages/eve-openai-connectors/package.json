@@ -47,7 +47,7 @@
     "ai": "^7.0.38",
     "eve": "0.31.3",
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "eve": "0.31.3"
