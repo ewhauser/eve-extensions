@@ -11,8 +11,8 @@ its own installation requirements, operational constraints, and license.
 
 - [`eve-project-link`](packages/eve-project-link) — links an entire Eve context
   channel to a durable external project hub, injects a compact project context
-  card on every turn, and provides a Notion template adapter behind a
-  provider-neutral contract designed to support systems such as Linear later.
+  card on every turn, and guides the agent to use already-mounted Notion,
+  Linear, or custom tools without owning provider credentials.
   It is licensed under MIT.
 - [`eve-openai-compaction`](packages/eve-openai-compaction) — replaces Eve's
   built-in prose-summary compaction with OpenAI's remote encrypted checkpoint

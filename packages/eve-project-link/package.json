@@ -1,7 +1,7 @@
 {
   "name": "eve-project-link",
   "version": "0.1.0",
-  "description": "Channel-scoped project context for Eve, with a Notion template adapter and provider-neutral core.",
+  "description": "Channel-scoped project context for Eve using the Notion, Linear, or custom tools already mounted by the host agent.",
   "license": "MIT",
   "type": "module",
   "eve": {
@@ -13,7 +13,7 @@
   "files": [
     "dist",
     "README.md",
-    "NOTION_TEMPLATE.md",
+    "PRESETS.md",
     "LICENSE"
   ],
   "exports": {
@@ -22,8 +22,20 @@
       "default": "./dist/index.mjs"
     },
     "./notion": {
-      "types": "./dist/extension/providers/notion.d.ts",
-      "default": "./dist/extension/providers/notion.mjs"
+      "types": "./dist/extension/presets/notion.d.ts",
+      "default": "./dist/extension/presets/notion.mjs"
+    },
+    "./linear": {
+      "types": "./dist/extension/presets/linear.d.ts",
+      "default": "./dist/extension/presets/linear.mjs"
+    },
+    "./custom": {
+      "types": "./dist/extension/presets/custom.d.ts",
+      "default": "./dist/extension/presets/custom.mjs"
+    },
+    "./presets": {
+      "types": "./dist/extension/presets/index.d.ts",
+      "default": "./dist/extension/presets/index.mjs"
     },
     "./stores/memory": {
       "types": "./dist/extension/stores/memory.d.ts",

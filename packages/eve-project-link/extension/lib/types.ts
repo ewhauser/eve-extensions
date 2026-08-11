@@ -3,13 +3,11 @@ import type { DynamicResolveContext } from "eve/tools";
 export interface ProjectChannel {
   /** Eve channel kind, for example `slack`. */
   readonly kind: string;
-  /** Provider-owned workspace or tenant identifier, for example a Slack team ID. */
+  /** Channel-provider workspace or tenant identifier, for example a Slack team ID. */
   readonly workspaceId: string;
-  /** Provider-owned channel identifier. Threads intentionally share this identity. */
+  /** Channel-provider channel identifier. Threads intentionally share this identity. */
   readonly channelId: string;
 }
-
-export type ProjectLinkContext = Pick<DynamicResolveContext, "session">;
 
 export interface ProjectPerson {
   readonly name: string;
@@ -44,7 +42,7 @@ export interface ProjectSource {
   readonly description?: string | undefined;
 }
 
-/** Compact, provider-neutral context injected into every linked-channel turn. */
+/** Compact, system-neutral context injected into every linked-channel turn. */
 export interface ProjectContextCard {
   readonly summary: string;
   readonly status?: string | undefined;
@@ -58,30 +56,101 @@ export interface ProjectContextCard {
   readonly generatedAt: string;
 }
 
-export interface ExternalProject {
+/**
+ * Non-authoritative hints that help the model find tools already mounted by
+ * the consuming agent. They never register a connection or carry credentials.
+ */
+export interface ProjectToolHints {
+  /** Likely Eve connection names, for example `notion` or `linear`. */
+  readonly connectionNames?: readonly string[] | undefined;
+  /** Exact custom or already-known qualified tool names, when stable. */
+  readonly toolNames?: readonly string[] | undefined;
+  /** Semantic queries to use with the agent's tool-discovery mechanism. */
+  readonly discoveryQueries?: readonly string[] | undefined;
+}
+
+export type ProjectOperation = "locate" | "create" | "retrieve" | "update";
+
+/** Provider-specific guidance. Core lifecycle and safety rules are added later. */
+export interface ProjectOperationGuidance {
+  readonly locate: readonly string[];
+  readonly create?: readonly string[] | undefined;
+  readonly retrieve: readonly string[];
+  readonly update?: readonly string[] | undefined;
+}
+
+export interface ProjectPresetSystem {
+  readonly kind: string;
+  readonly name: string;
+  readonly description: string;
+}
+
+/**
+ * A configured instance of a reusable project preset. This is plain data: it
+ * contains no credentials, provider client, or executable tool callback.
+ */
+export interface ProjectPreset {
+  /** Installation-local id selected by project_link__link. */
   readonly id: string;
-  readonly url: string;
-  readonly title: string;
-  /** Provider-private, JSON-safe data carried with the binding. */
+  /** Versioned reusable definition, for example `notion/project-hub@1`. */
+  readonly presetKey: string;
+  readonly name: string;
+  readonly description?: string | undefined;
+  readonly system: ProjectPresetSystem;
+  readonly resourceLabel: string;
+  readonly toolHints?: ProjectToolHints | undefined;
+  readonly operations: ProjectOperationGuidance;
+  /** Non-secret, model-visible identifiers or references used by this preset. */
   readonly metadata?: Readonly<Record<string, string>> | undefined;
 }
 
-export type ProjectBindingStatus = "provisioning" | "active" | "error";
+/** A resource created or selected through tools already available to the agent. */
+export interface ProjectResource {
+  readonly id: string;
+  readonly url: string;
+  readonly title: string;
+  /** System-private, JSON-safe data carried with the binding. */
+  readonly metadata?: Readonly<Record<string, string>> | undefined;
+}
+
+export type ProjectBindingStatus = "pending" | "active";
 
 export interface ProjectBinding {
-  /** Stable idempotency key shared with the external provider. */
+  /** Stable idempotency key to place in the external resource when possible. */
   readonly id: string;
   readonly channel: ProjectChannel;
-  readonly provider: string;
+  /** Configured preset instance used to operate on the external resource. */
+  readonly presetId: string;
   readonly title: string;
+  readonly channelUrl?: string | undefined;
   readonly status: ProjectBindingStatus;
-  readonly externalProject?: ExternalProject | undefined;
+  readonly resource?: ProjectResource | undefined;
   readonly context?: ProjectContextCard | undefined;
-  readonly lastError?: string | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** Monotonic revision used for compare-and-swap updates. */
   readonly revision: number;
+}
+
+/** Model-facing plan for performing external work with already-mounted tools. */
+export interface ProjectLinkPlan {
+  readonly bindingId: string;
+  readonly channel: ProjectChannel;
+  readonly channelUrl?: string | undefined;
+  readonly title: string;
+  readonly presetId: string;
+  readonly presetKey: string;
+  readonly presetName: string;
+  readonly presetDescription?: string | undefined;
+  readonly system: string;
+  readonly systemName: string;
+  readonly systemDescription: string;
+  readonly resourceLabel: string;
+  readonly toolHints?: ProjectToolHints | undefined;
+  readonly provisioningInstructions: string;
+  readonly retrievalInstructions: string;
+  readonly updateInstructions?: string | undefined;
+  readonly metadata?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -95,45 +164,15 @@ export interface ProjectLinkStore {
   delete(channel: ProjectChannel, expectedRevision: number): Promise<boolean>;
 }
 
-export interface CreateExternalProjectInput {
-  readonly bindingId: string;
-  readonly channel: ProjectChannel;
-  readonly title: string;
-  readonly channelUrl?: string | undefined;
-}
-
-export interface ProjectProvider {
-  readonly kind: string;
-  /** Must be idempotent for a stable `bindingId`. */
-  createProject(
-    input: CreateExternalProjectInput,
-    ctx: ProjectLinkContext,
-  ): Promise<ExternalProject>;
-  readContext(
-    project: ExternalProject,
-    ctx: ProjectLinkContext,
-  ): Promise<ProjectContextCard | null>;
-  writeContext(
-    project: ExternalProject,
-    context: ProjectContextCard,
-    ctx: ProjectLinkContext,
-  ): Promise<void>;
-}
-
 export type ProjectChannelResolver = (
   ctx: DynamicResolveContext,
 ) => ProjectChannel | null | Promise<ProjectChannel | null>;
 
-export interface ProjectLinkLogger {
-  warn(message: string): void;
-  error(message: string): void;
-}
-
 export interface ProjectLinkApprovals {
-  /** Creating an external project page. Defaults to true. */
+  /** Reserving a new channel link. Defaults to true. */
   readonly link?: boolean | undefined;
-  /** Writing a curated context card. Defaults to false. */
+  /** Updating the channel's cached context card. Defaults to false. */
   readonly saveContext?: boolean | undefined;
-  /** Removing the channel binding (the external project is retained). Defaults to true. */
+  /** Removing the binding (the external resource is retained). Defaults to true. */
   readonly unlink?: boolean | undefined;
 }

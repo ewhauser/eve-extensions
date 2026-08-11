@@ -5,10 +5,9 @@ import { z } from "zod";
 import type {
   ProjectChannel,
   ProjectChannelResolver,
-  ProjectLinkLogger,
   ProjectLinkStore,
-  ProjectProvider,
 } from "./lib/types.js";
+import { projectPresetSchema } from "./presets/preset.js";
 
 function hasMethod(value: unknown, name: string): boolean {
   return (
@@ -27,35 +26,18 @@ const store = z.custom<ProjectLinkStore>(
   { message: "store must implement ProjectLinkStore." },
 );
 
-const provider = z.custom<ProjectProvider>(
-  (value) =>
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as ProjectProvider).kind === "string" &&
-    hasMethod(value, "createProject") &&
-    hasMethod(value, "readContext") &&
-    hasMethod(value, "writeContext"),
-  { message: "Each provider must implement ProjectProvider." },
-);
-
 const resolveChannel = z.custom<ProjectChannelResolver>(
   (value) => typeof value === "function",
   { message: "resolveChannel must be a function." },
 );
 
-const logger = z.custom<ProjectLinkLogger>(
-  (value) => hasMethod(value, "warn") && hasMethod(value, "error"),
-  { message: "logger must provide warn(message) and error(message)." },
-);
-
 const config = z
   .object({
     store,
-    providers: z.array(provider).min(1),
-    defaultProvider: z.string().trim().min(1).default("notion"),
+    presets: z.array(projectPresetSchema).min(1),
+    defaultPreset: z.string().trim().min(1).max(100).optional(),
     resolveChannel: resolveChannel.optional(),
-    maxContextCharacters: z.number().int().min(1_000).max(30_000).default(6_000),
-    provisioningTimeoutMs: z.number().int().min(1_000).default(120_000),
+    maxPromptCharacters: z.number().int().min(1_000).max(30_000).default(7_000),
     approvals: z
       .object({
         link: z.boolean().default(true),
@@ -63,25 +45,24 @@ const config = z
         unlink: z.boolean().default(true),
       })
       .default({ link: true, saveContext: false, unlink: true }),
-    logger: logger.optional(),
   })
   .superRefine((value, ctx) => {
-    const kinds = new Set<string>();
-    for (const item of value.providers) {
-      if (kinds.has(item.kind)) {
+    const ids = new Set<string>();
+    for (const preset of value.presets) {
+      if (ids.has(preset.id)) {
         ctx.addIssue({
           code: "custom",
-          message: `Duplicate project provider kind: ${item.kind}`,
-          path: ["providers"],
+          message: `Duplicate configured project preset id: ${preset.id}`,
+          path: ["presets"],
         });
       }
-      kinds.add(item.kind);
+      ids.add(preset.id);
     }
-    if (!kinds.has(value.defaultProvider)) {
+    if (value.defaultPreset && !ids.has(value.defaultPreset)) {
       ctx.addIssue({
         code: "custom",
-        message: `defaultProvider ${value.defaultProvider} is not present in providers.`,
-        path: ["defaultProvider"],
+        message: `Default project preset ${value.defaultPreset} is not configured.`,
+        path: ["defaultPreset"],
       });
     }
   });
