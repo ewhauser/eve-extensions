@@ -24,6 +24,7 @@ function getConnectors(): Connectors {
     toolPrefix: "",
     maxToolNameLength: 56,
   };
+  if (config.allowedServices !== undefined) options.allowedServices = config.allowedServices;
   if (config.getPrincipal !== undefined) options.getPrincipal = config.getPrincipal;
   if (config.baseUrl !== undefined) options.baseUrl = config.baseUrl;
   if (config.inventoryTtlMs !== undefined) options.inventoryTtlMs = config.inventoryTtlMs;

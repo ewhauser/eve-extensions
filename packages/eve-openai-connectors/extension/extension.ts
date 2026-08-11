@@ -30,6 +30,7 @@ const config = z
       })
       .optional(),
     enabled: z.boolean().default(true),
+    allowedServices: z.array(z.string().trim().min(1)).optional(),
     discovery: z.enum(["search", "deferred"]).default("deferred"),
     baseUrl: z.string().url().optional(),
     inventoryTtlMs: z.number().int().positive().optional(),

@@ -69,11 +69,29 @@ function firstErrorLine(error: unknown): string {
   return message.split("\n", 1)[0] ?? message;
 }
 
+function normalizeAllowedServices(services: readonly string[] | undefined): ReadonlySet<string> | undefined {
+  if (services === undefined) return undefined;
+  const normalized = new Set<string>();
+  for (const service of services) {
+    const value = service.trim().toLowerCase();
+    if (!value) {
+      throw new Error("eve-openai-connectors: allowedServices entries must be non-empty strings.");
+    }
+    normalized.add(value);
+  }
+  return normalized;
+}
+
+function serviceFromUpstream(upstream: string): string {
+  return upstream.split(".", 1)[0]?.toLowerCase() ?? "";
+}
+
 export function createConnectors(options: CreateConnectorsOptions): Connectors {
   if (typeof options?.getToken !== "function") {
     throw new Error("eve-openai-connectors: createConnectors requires a getToken(ctx) function.");
   }
   const enabled = options.enabled ?? true;
+  const allowedServices = normalizeAllowedServices(options.allowedServices);
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const toolPrefix = options.toolPrefix ?? "apps_";
   validateToolPrefix(toolPrefix);
@@ -140,6 +158,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
         toolPrefix,
         (message) => logger.warn(message),
         maxToolNameLength,
+        allowedServices,
       );
       loggedFailures.delete(`catalog:${principal}`);
       return inventory;
@@ -223,7 +242,10 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
         const discovered = searchResultsFromMessages(ctx.messages ?? [], {
           searchToolName,
           max: maxMaterializedTools,
-        });
+        }).filter(
+          (item) =>
+            allowedServices === undefined || allowedServices.has(serviceFromUpstream(item.upstream)),
+        );
         const deferred =
           discovery === "deferred" && inventory ? [...inventory.items] : [];
 
@@ -268,6 +290,10 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       if (!principal) throw new Error("Connector call is unavailable: no authenticated user.");
       const token = await tokenFor(ctx, principal);
       if (!token) throw new Error("Connector call is unavailable: the current user has no access token.");
+      const service = serviceFromUpstream(upstream);
+      if (allowedServices !== undefined && !allowedServices.has(service)) {
+        throw new Error(`Connector service ${JSON.stringify(service)} is not allowed by this extension.`);
+      }
 
       const signal = (ctx as { abortSignal?: AbortSignal }).abortSignal;
       const startedAt = Date.now();

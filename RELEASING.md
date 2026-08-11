@@ -33,6 +33,8 @@ cd packages/eve-project-link
 npm publish --access public
 cd ../eve-openai-connectors
 npm publish --access public
+cd ../eve-openai-plugins
+npm publish --access public
 cd ../eve-openai-imagegen
 npm publish --access public
 cd ../eve-aws-lambda-microvms
@@ -45,10 +47,12 @@ the npm publishes succeed:
 ```sh
 gh release create eve-project-link-v0.1.0 --draft --generate-notes --target main
 gh release create eve-openai-connectors-v0.1.0 --draft --generate-notes --target main
+gh release create eve-openai-plugins-v0.1.0 --draft --generate-notes --target main
 gh release create eve-openai-imagegen-v0.1.0 --draft --generate-notes --target main
 gh release create eve-aws-lambda-microvms-v0.1.0 --draft --generate-notes --target main
 gh release edit eve-project-link-v0.1.0 --draft=false
 gh release edit eve-openai-connectors-v0.1.0 --draft=false
+gh release edit eve-openai-plugins-v0.1.0 --draft=false
 gh release edit eve-openai-imagegen-v0.1.0 --draft=false
 gh release edit eve-aws-lambda-microvms-v0.1.0 --draft=false
 ```
@@ -63,6 +67,11 @@ npm trust github eve-project-link \
   --env release \
   --allow-publish
 npm trust github eve-openai-connectors \
+  --repo ewhauser/eve-extensions \
+  --file release.yml \
+  --env release \
+  --allow-publish
+npm trust github eve-openai-plugins \
   --repo ewhauser/eve-extensions \
   --file release.yml \
   --env release \

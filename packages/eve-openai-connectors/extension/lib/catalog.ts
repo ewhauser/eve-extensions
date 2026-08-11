@@ -39,10 +39,13 @@ export function buildInventory(
   prefix: string,
   warn?: (message: string) => void,
   maxToolNameLength = 64,
+  allowedServices?: ReadonlySet<string>,
 ): Inventory {
   const named = tools.filter(
     (tool): tool is UpstreamTool & { name: string } =>
-      typeof tool?.name === "string" && tool.name.length > 0,
+      typeof tool?.name === "string" &&
+      tool.name.length > 0 &&
+      (allowedServices === undefined || allowedServices.has(serviceOf(tool.name).toLowerCase())),
   );
   const nameMap = buildNameMap(
     named.map((tool) => tool.name),

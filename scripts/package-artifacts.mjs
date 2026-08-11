@@ -72,6 +72,20 @@ export const packages = new Map([
     },
   ],
   [
+    "packages/eve-openai-plugins",
+    {
+      name: "eve-openai-plugins",
+      requiredFiles: [
+        "dist/cli.d.ts",
+        "dist/cli.js",
+        "dist/index.d.ts",
+        "dist/index.js",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-aws-lambda-microvms",
     {
       name: "eve-aws-lambda-microvms",

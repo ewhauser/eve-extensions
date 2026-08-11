@@ -226,6 +226,47 @@ describe("search / call / status against a live (fake) catalog", () => {
     ).rejects.toThrow(/Available services: .*github/);
   });
 
+  test("allowedServices restricts discovery, status, and direct calls", async () => {
+    server = await startFakeMcpServer({ tools: CATALOG });
+    const connectors = createConnectors({
+      getToken: () => "tok",
+      baseUrl: server.url,
+      discovery: "deferred",
+      allowedServices: [" GitHub "],
+      logger: silentLogger,
+    });
+
+    const session = await connectors.begin(makeCtx());
+    expect(session?.deferred.length).toBeGreaterThan(0);
+    expect(session?.deferred.every((item) => item.service === "github")).toBe(true);
+    expect(session?.searchToolDescription).not.toContain("google_drive");
+
+    const results = await connectors.search(makeCtx(), { keywords: "" });
+    expect(results.every((item) => item.service === "github")).toBe(true);
+    const replayed = await connectors.begin(
+      makeCtx([
+        discoveredMessage([
+          {
+            ...searchItem,
+            name: "apps_google_drive_search_files",
+            upstream: "google_drive.search_files",
+            service: "google_drive",
+          },
+        ]),
+      ]),
+    );
+    expect(replayed?.discovered).toEqual([]);
+    expect(await connectors.status(makeCtx())).toMatchObject({
+      catalog: { ok: true, services: [{ service: "github", tools: 4 }] },
+    });
+
+    const callsBefore = server.requests.filter((request) => request.method === "tools/call").length;
+    await expect(connectors.call(makeCtx(), "google_drive.search_files", {})).rejects.toThrow(
+      /not allowed/,
+    );
+    expect(server.requests.filter((request) => request.method === "tools/call")).toHaveLength(callsBefore);
+  });
+
   test("missing annotations surface as destructive and require approval", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
     const connectors = createConnectors({
