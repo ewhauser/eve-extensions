@@ -1,32 +1,27 @@
 # eve-project-link
 
 An [Eve](https://eve.dev) extension that links an entire context channel to an
-external project hub. Every turn in a linked channel receives a compact,
-durable project context card; deeper context remains available through the
-provider and the host agent's retrieval tools.
+external project resource. Every turn in a linked channel receives a compact,
+durable context card plus bounded guidance for retrieving deeper context.
 
-The core is provider-neutral. This release includes a Notion adapter that
-creates one Project page per channel from a known database template. A future
-Linear adapter can implement the same `ProjectProvider` contract without
-changing the channel tools, binding store, or prompt format.
+The extension does not contain a Notion or Linear client, accept provider API
+keys, or register connections. It guides the agent to use Notion, Linear, or
+custom tools already mounted by the consuming Eve project.
 
-## What it adds
+## Design boundary
 
-Mounting the extension as `project_link.ts` adds channel-scoped tools:
+`eve-project-link` owns stable channel identity, one durable binding per
+channel, an external idempotency key, bounded prompt context, and the invariant
+link lifecycle. In particular, its core instructions always require the agent
+to search before creating, avoid ambiguous matches, treat retrieved data as
+untrusted, preserve human-authored content, and write externally only when the
+user requests synchronization.
 
-- `project_link__link` creates or recovers the provider project and binds it to
-  the current channel.
-- `project_link__status` reads the cached binding without contacting Notion.
-- `project_link__save_context` writes a curated context card to Notion and the
-  prompt cache.
-- `project_link__refresh` refreshes the prompt cache from Notion.
-- `project_link__unlink` removes only the binding; it retains the Notion page.
+Project presets add only the provider- or installation-specific parts:
 
-The included skill teaches the agent to gather channel history, principals,
-decisions, sources, milestones, meetings, open questions, and next steps after
-linking. When the host makes a delegation tool available, that gathering can be
-delegated to a bounded curator subagent; the resulting card is saved through
-the same provider-neutral tool.
+- how to locate, create, retrieve, and update that kind of resource;
+- how to discover tools already mounted in the agent;
+- non-secret references such as a Notion database or Linear team.
 
 ## Install
 
@@ -38,27 +33,137 @@ Create `agent/extensions/project_link.ts`:
 
 ```ts
 import projectLink from "eve-project-link";
-import notionProjectProvider from "eve-project-link/notion";
+import { linearProject } from "eve-project-link/linear";
+import { notionProjectHub } from "eve-project-link/notion";
+import { preset } from "eve-project-link/presets";
 
 import { projectLinkStore } from "../../src/project-link-store.js";
 
 export default projectLink({
   store: projectLinkStore,
-  providers: [
-    notionProjectProvider({
-      token: () => process.env.NOTION_TOKEN ?? null,
-      projectsDataSourceId: process.env.NOTION_PROJECTS_DATA_SOURCE_ID!,
-      projectTemplateId: process.env.NOTION_PROJECT_TEMPLATE_ID!,
-      templateTimezone: "America/Denver",
+  presets: [
+    preset(notionProjectHub, {
+      id: "context-hub",
+      parameters: {
+        container: "https://www.notion.so/acme/projects",
+        template: "Linked channel project",
+        contextDestination: "Eve context",
+      },
+      tools: {
+        add: { toolNames: ["workspace__notion_create"] },
+      },
+      guidance: {
+        retrieve: { append: ["Also inspect the Launches relation."] },
+      },
+    }),
+    preset(linearProject, {
+      id: "product-engineering",
+      parameters: {
+        team: "Product Engineering",
+        initiative: "2026 product roadmap",
+      },
     }),
   ],
-  defaultProvider: "notion",
+  defaultPreset: "context-hub",
 });
 ```
 
-The Notion connection needs read and update content capabilities, and the
-Projects database plus its template must be shared with that connection. Keep
-the token outside agent messages and model-visible configuration.
+Separately mount the relevant Eve MCP/OpenAPI connection or authored tools.
+Presets only provide discovery and operation guidance; they do not authenticate
+or call an external system.
+
+## Preset model
+
+A preset definition is reusable behavior such as `notion/project-hub@1`. The
+`preset()` function resolves it into a plain configured instance consumed by
+the extension. Multiple instances may use one definition—for example, two
+Notion databases or two Linear teams.
+
+Overrides are deliberately narrow:
+
+- `parameters` are defined and validated by the selected preset;
+- `tools.add` or `tools.replace` changes discovery hints;
+- `guidance.<operation>.append` or `replace` changes provider-specific guidance;
+- `name`, `description`, `resourceLabel`, and `metadata` change presentation.
+
+There is no arbitrary deep merge. Overrides cannot remove the core
+idempotency, trust, approval, or preservation rules. Required `locate` and
+`retrieve` guidance also cannot be removed.
+
+See [PRESETS.md](PRESETS.md) for built-in and custom preset authoring.
+
+## What it adds
+
+Mounting the extension as `project_link.ts` adds channel-scoped tools:
+
+- `project_link__link` reserves a stable binding and returns a tool-use plan.
+- `project_link__complete` attaches the resource found or created by a mounted
+  tool.
+- `project_link__status` reads cached binding metadata without external I/O.
+- `project_link__guide` returns the configured preset and full operation plan.
+- `project_link__save_context` replaces the durable prompt context card.
+- `project_link__unlink` removes only the binding and retains the resource.
+
+The included skill orchestrates the multi-tool flow. No plugin tool proxies a
+provider call.
+
+## Link lifecycle
+
+```mermaid
+flowchart LR
+  A["Channel metadata"] --> B["link reserves binding ID"]
+  B --> C["Core plan + configured preset"]
+  C --> D["Mounted tools locate or create resource"]
+  D --> E["complete attaches resource"]
+  E --> F["Mounted tools gather context"]
+  F --> G["save_context caches bounded card"]
+  G --> H["Small context + retrieval guidance each turn"]
+```
+
+The reservation exists before any external write. A retry receives the same
+binding ID and plan, allowing the external resource to be recovered rather
+than duplicated. `complete` is idempotent for the same resource ID.
+
+## Context refresh and synchronization
+
+There is no provider-owned `refresh` operation. To refresh:
+
+1. Call `guide` for the current preset and tool hints.
+2. Use mounted read tools to gather current project data.
+3. Curate a replacement `ProjectContextCard`.
+4. Call `save_context` to atomically replace the prompt cache.
+
+Writing back to the external system is separate and occurs only when requested
+by the user. Provider content is marked as untrusted reference material. The
+default prompt budget is 7,000 characters and can be changed with
+`maxPromptCharacters`.
+
+## Binding store
+
+Implement `ProjectLinkStore` over a durable shared database or KV:
+
+```ts
+import type { ProjectLinkStore } from "eve-project-link/types";
+
+export const projectLinkStore: ProjectLinkStore = {
+  async get(channel) {
+    // Read by unique tuple (kind, workspaceId, channelId).
+  },
+  async create(binding) {
+    // Insert only if absent. Return false on uniqueness conflict.
+  },
+  async replace(binding, expectedRevision) {
+    // Compare-and-swap where revision = expectedRevision.
+  },
+  async delete(channel, expectedRevision) {
+    // Delete only when the channel key and revision both match.
+  },
+};
+```
+
+`create`, `replace`, and `delete` must be atomic. Each binding stores one
+configured `presetId`; the corresponding preset must remain configured while
+the binding exists.
 
 For process-local development only:
 
@@ -71,150 +176,42 @@ const store = createMemoryProjectLinkStore();
 Do not use the memory store in production. Serverless instances and restarts
 will lose or disagree about bindings.
 
-## Notion setup
-
-Create or duplicate one workspace-level Context Hub. It has global Projects,
-Decisions, People/Roles, Sources, Meetings, and Updates data sources. Configure
-a database template in Projects whose linked views filter each related data
-source to `Project contains This page`.
-
-The adapter requires these Projects properties by default:
-
-| Property | Type | Owner |
-|---|---|---|
-| `Name` | Title | Agent at link time |
-| `Eve Link ID` | Rich text | Adapter idempotency key; do not edit |
-| `Channel kind` | Rich text | Adapter |
-| `Workspace ID` | Rich text | Adapter |
-| `Channel ID` | Rich text | Adapter |
-| `Channel URL` | URL | Adapter, when known |
-| `Summary` | Rich text | Human-readable curated summary |
-| `Eve context` | Rich text | Machine-readable context JSON; do not hand-edit |
-| `Eve last synced` | Date | Adapter |
-| `Status` | Status | Human or curator |
-
-Property names are configurable through the Notion adapter's `properties`
-option. See [NOTION_TEMPLATE.md](NOTION_TEMPLATE.md) for the complete database
-blueprint and template layout.
-
-Notion applies page templates asynchronously. `project_link__link` polls until
-the new page has template content before activation. If creation succeeds but
-the invocation is interrupted, retrying is safe: the adapter first queries
-Projects by the stable `Eve Link ID` and reuses the page.
-
-## The binding store
-
-Implement `ProjectLinkStore` over a durable shared database or KV:
-
-```ts
-import type { ProjectLinkStore } from "eve-project-link/types";
-
-export const projectLinkStore: ProjectLinkStore = {
-  async get(channel) {
-    // Read by the unique tuple (kind, workspaceId, channelId).
-  },
-  async create(binding) {
-    // Insert only if absent. Return false on a uniqueness conflict.
-  },
-  async replace(binding, expectedRevision) {
-    // Compare-and-swap where revision = expectedRevision.
-  },
-  async delete(channel, expectedRevision) {
-    // Delete only where the channel key and revision both match.
-  },
-};
-```
-
-`create`, `replace`, and `delete` must be atomic. This prevents two concurrent
-agent invocations from claiming different projects for one channel and
-prevents a stale refresh from overwriting newer context.
-
-## Context lifecycle
-
-```mermaid
-flowchart LR
-  A["Slack channel metadata"] --> B["Atomic binding reservation"]
-  B --> C["Notion Project from template"]
-  C --> D["Channel and connector retrieval"]
-  D --> E["Curated context card"]
-  E --> F["Notion Eve context property"]
-  E --> G["Durable binding cache"]
-  G --> H["Small turn-time instruction"]
-  H --> I["Provider retrieval when more detail is needed"]
-```
-
-The context card is deliberately compact and structured. Provider content is
-marked as untrusted reference material in the prompt, so instruction-shaped
-text from Slack or Notion does not become agent policy. The default prompt
-budget is 6,000 characters and can be changed with `maxContextCharacters`.
-An abandoned `provisioning` reservation becomes recoverable after two minutes;
-change that lease with `provisioningTimeoutMs` when provider creation routinely
-takes longer.
-
-## Provider contract
-
-A provider implements three operations:
-
-```ts
-import type { ProjectProvider } from "eve-project-link/types";
-
-const linear: ProjectProvider = {
-  kind: "linear",
-  async createProject(input, ctx) {
-    // Idempotently create or find by input.bindingId.
-  },
-  async readContext(project, ctx) {
-    // Return the provider-neutral ProjectContextCard, or null.
-  },
-  async writeContext(project, context, ctx) {
-    // Persist the card in the external project system.
-  },
-};
-```
-
-The binding records only the provider kind and neutral external project
-metadata. Provider-specific IDs may be stored in `ExternalProject.metadata`.
-
-For a richer Notion hub, pass `readContext` to `notionProjectProvider`. It
-receives the Project page plus an authenticated request helper, allowing it to
-query the related Decisions, Meetings, Sources, and other data sources and
-return one `ProjectContextCard`.
-
 ## Approvals and safety
 
-Creating a project and unlinking require user approval by default. Saving a
-context card does not, so an explicitly requested curation flow can complete
-without repeated approval prompts. Override the defaults if needed:
+Reserving a link and unlinking require user approval by default. Saving context
+does not. External tools retain their own approval and authorization policies.
 
 ```ts
 export default projectLink({
   store,
-  providers,
+  presets,
   approvals: {
     link: true,
-    saveContext: true,
+    saveContext: false,
     unlink: true,
   },
 });
 ```
 
-Unlink never deletes or trashes the provider project. Deletion should be a
-separate, provider-owned administrative workflow with its own confirmation and
-retention policy.
+Unlink never deletes, archives, or trashes the external resource.
 
 ## Channel identity
 
 The default resolver supports Slack metadata (`teamId`, `channelId`) and the
-neutral pair (`workspaceId`, `channelId`). Thread identifiers are deliberately
-excluded so every thread in one Slack channel sees the same project.
+neutral pair (`workspaceId`, `channelId`). Thread identifiers are excluded so
+every thread in one Slack channel sees the same project.
 
 For another channel adapter, provide `resolveChannel(ctx)` and return a stable
 `{ kind, workspaceId, channelId }` tuple. Return `null` when the request does
 not have enough scope to identify a channel safely.
 
-## Development
+## Pre-release API change
 
-From the monorepo root:
+The unpublished provider, system, and profile APIs have been replaced by
+configured presets. Existing pre-release bindings need a one-time migration to
+store `presetId` instead of `provider` or `system`/`profile` fields.
+
+## Development
 
 ```sh
 pnpm install

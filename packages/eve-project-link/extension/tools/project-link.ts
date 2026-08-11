@@ -10,8 +10,20 @@ import {
 
 const linkInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  provider: z.string().trim().min(1).max(100).optional(),
+  preset: z.string().trim().min(1).max(100).optional(),
   channelUrl: z.string().url().max(2_000).optional(),
+});
+
+const resourceSchema = z.object({
+  id: z.string().trim().min(1).max(500),
+  url: z.string().url().max(2_000),
+  title: z.string().trim().min(1).max(300),
+  metadata: z.record(z.string(), z.string().max(4_000)).optional(),
+});
+
+const completeInputSchema = z.object({
+  bindingId: z.string().uuid(),
+  resource: resourceSchema,
 });
 
 const emptyInputSchema = z.object({});
@@ -28,46 +40,41 @@ export default defineDynamic({
 
       const service = getProjectLinkService();
       const binding = await service.status(channel);
+      const presets = service.availablePresets().join(", ");
       const tools: Record<string, any> = {};
 
       tools.link = defineTool({
-        description:
-          binding?.status === "error"
-            ? "Retry this channel's failed external project link using its stable idempotency key."
-            : "Link this entire channel to a new external project created from the configured provider template. If it is already linked, return the existing binding.",
+        description: binding
+          ? "Return this channel's existing project-link plan. The tool is idempotent and never calls an external project API."
+          : `Reserve a stable channel link and return a plan for using tools already mounted in this agent. This tool never calls an external project API or accepts credentials. Available configured presets: ${presets}.`,
         inputSchema: linkInputSchema,
         ...(approval(extension.config.approvals.link) === undefined
           ? {}
           : { approval: approval(extension.config.approvals.link) }),
-        execute: async (input, toolCtx) => {
-          const result = await service.link(
-            channel,
-            {
-              title: input.title,
-              ...(input.provider === undefined ? {} : { provider: input.provider }),
-              ...(input.channelUrl === undefined ? {} : { channelUrl: input.channelUrl }),
-            },
-            toolCtx,
-          );
+        execute: async (input) => {
+          const result = await service.link(channel, {
+            title: input.title,
+            ...(input.preset === undefined ? {} : { preset: input.preset }),
+            ...(input.channelUrl === undefined ? {} : { channelUrl: input.channelUrl }),
+          });
           return {
             created: result.created,
-            pending: result.pending,
+            bindingId: result.binding.id,
             status: result.binding.status,
-            provider: result.binding.provider,
-            projectTitle: result.binding.title,
-            projectUrl: result.binding.externalProject?.url,
-            message: result.pending
-              ? "Another invocation is still provisioning this channel's project."
-              : result.created
-                ? "The project page was created from the configured template and linked to this channel. Curate the channel, then save its context card."
-                : "This channel is already linked to the returned project.",
+            preset: result.binding.presetId,
+            resource: result.binding.resource,
+            plan: result.plan,
+            next:
+              result.binding.status === "active"
+                ? "The channel is already linked. Use guide for deeper retrieval instructions."
+                : "Use the plan and mounted tools to find or create the external resource, then call complete with its id, URL, and title.",
           };
         },
       });
 
       tools.status = defineTool({
         description:
-          "Read this channel's cached project-link status and external project URL without contacting the provider.",
+          "Read this channel's cached project-link status without contacting an external system.",
         inputSchema: emptyInputSchema,
         execute: async () => {
           const current = await service.status(channel);
@@ -76,20 +83,33 @@ export default defineDynamic({
             linked: true,
             bindingId: current.id,
             status: current.status,
-            provider: current.provider,
+            preset: current.presetId,
             projectTitle: current.title,
-            projectUrl: current.externalProject?.url,
+            resource: current.resource,
             contextGeneratedAt: current.context?.generatedAt,
-            lastError: current.lastError,
           };
         },
       });
 
       if (!binding) return tools;
 
+      tools.guide = defineTool({
+        description:
+            "Return the configured preset's tool-discovery, provisioning, retrieval, and update guidance for this channel. This does not call the external system.",
+        inputSchema: emptyInputSchema,
+        execute: async () => {
+          const current = await service.status(channel);
+          return {
+            status: current?.status,
+            resource: current?.resource,
+            plan: await service.guide(channel),
+          };
+        },
+      });
+
       tools.unlink = defineTool({
         description:
-          "Remove this channel's project binding. This retains the external project page and all of its content.",
+          "Remove this channel's project binding. This retains the external resource and all of its content.",
         inputSchema: emptyInputSchema,
         ...(approval(extension.config.approvals.unlink) === undefined
           ? {}
@@ -98,40 +118,42 @@ export default defineDynamic({
           const removed = await service.unlink(channel);
           return {
             unlinked: removed !== null,
-            retainedProjectUrl: removed?.externalProject?.url,
+            retainedResourceUrl: removed?.resource?.url,
           };
         },
       });
 
-      if (binding.status !== "active") return tools;
+      if (binding.status === "pending") {
+        tools.complete = defineTool({
+          description:
+            "Attach the external resource returned by an already-mounted tool and activate this channel link. This tool does not contact the external system.",
+          inputSchema: completeInputSchema,
+          execute: async (input) => {
+            const completed = await service.complete(channel, input);
+            return {
+              completed: true,
+              bindingId: completed.id,
+              status: completed.status,
+              preset: completed.presetId,
+              resource: completed.resource,
+            };
+          },
+        });
+        return tools;
+      }
 
       tools.save_context = defineTool({
         description:
-          "Save a newly curated, structured context card to both the external project and this channel's prompt cache. Use after gathering channel history, people, decisions, sources, milestones, and meetings.",
+          "Save a newly curated structured context card to this channel's durable prompt cache. This tool does not write to the external system; use the mounted system tools separately when external synchronization is requested.",
         inputSchema: projectContextInputSchema,
         ...(approval(extension.config.approvals.saveContext) === undefined
           ? {}
           : { approval: approval(extension.config.approvals.saveContext) }),
-        execute: async (input, toolCtx) => {
-          const updated = await service.saveContext(channel, input, toolCtx);
+        execute: async (input) => {
+          const updated = await service.saveContext(channel, input);
           return {
             saved: true,
-            projectUrl: updated.externalProject?.url,
-            generatedAt: updated.context?.generatedAt,
-            revision: updated.revision,
-          };
-        },
-      });
-
-      tools.refresh = defineTool({
-        description:
-          "Refresh this channel's prompt cache from the linked external project. This is read-only at the provider; it does not re-curate Slack history.",
-        inputSchema: emptyInputSchema,
-        execute: async (_input, toolCtx) => {
-          const updated = await service.refresh(channel, toolCtx);
-          return {
-            refreshed: true,
-            projectUrl: updated.externalProject?.url,
+            resourceUrl: updated.resource?.url,
             generatedAt: updated.context?.generatedAt,
             revision: updated.revision,
           };

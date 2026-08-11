@@ -14,10 +14,10 @@ export function getProjectLinkService(): ProjectLinkService {
   configuredFor = config;
   configuredService = new ProjectLinkService({
     store: config.store,
-    providers: config.providers,
-    defaultProvider: config.defaultProvider,
-    provisioningTimeoutMs: config.provisioningTimeoutMs,
-    ...(config.logger === undefined ? {} : { logger: config.logger }),
+    presets: config.presets,
+    ...(config.defaultPreset === undefined
+      ? {}
+      : { defaultPreset: config.defaultPreset }),
   });
   return configuredService;
 }
