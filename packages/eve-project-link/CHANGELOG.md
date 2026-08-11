@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.3.0...eve-project-link-v0.4.0) (2026-08-11)
+
+
+### Features
+
+* **eve-project-link:** add pointer context mode ([#28](https://github.com/ewhauser/eve-extensions/issues/28)) ([c738ae2](https://github.com/ewhauser/eve-extensions/commit/c738ae21616d608297a29788b650abf116112cae))
+
 ## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.2.0...eve-project-link-v0.3.0) (2026-08-11)
 
 

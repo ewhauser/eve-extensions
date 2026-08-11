@@ -1,6 +1,6 @@
 {
   "packages/eve-ambient": "0.1.0",
-  "packages/eve-project-link": "0.3.0",
+  "packages/eve-project-link": "0.4.0",
   "packages/eve-aws-lambda-microvms": "0.1.0",
   "packages/eve-openai-compaction": "0.1.0",
   "packages/eve-openai-connectors": "0.2.0",
