@@ -1,6 +1,6 @@
 {
   "name": "eve-project-link",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Channel-scoped project context for Eve using the Notion, Linear, or custom tools already mounted by the host agent.",
   "license": "MIT",
   "type": "module",
