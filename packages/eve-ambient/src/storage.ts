@@ -92,9 +92,6 @@ export interface StoredMonitorBatch {
   readonly openedAt: string;
   readonly closedAt: string;
   readonly closedBy: MonitorBatchClosedBy;
-  /** A decision retained when wake/model quota overflow is configured to buffer. */
-  readonly recordedDecision?: MonitorDecision | undefined;
-  readonly retryAt?: string | undefined;
 }
 
 export interface StoredLastDecision {
@@ -164,7 +161,7 @@ export interface StoredMonitorRun {
   readonly availableAt: string;
   readonly leaseExpiresAt?: string | undefined;
   readonly decision?: MonitorDecision | undefined;
-  readonly decisionSource?: "rule" | "model" | "fallback" | "recorded" | undefined;
+  readonly decisionSource?: "rule" | "model" | "fallback" | undefined;
   readonly modelUsage?: {
     readonly inputTokens: number;
     readonly outputTokens: number;
@@ -230,6 +227,7 @@ export interface UsageReservation {
 export interface MonitorStoreTransaction {
   getEventByDedupeKey(key: string): Promise<StoredEvent | null>;
   getEvent(ref: string): Promise<StoredEvent | null>;
+  releaseEventDedupe(ref: string): Promise<void>;
   putEvent(event: StoredEvent): Promise<void>;
 
   getSubscription(id: string): Promise<StoredSubscription | null>;
@@ -237,6 +235,10 @@ export interface MonitorStoreTransaction {
   deleteSubscription(id: string): Promise<void>;
 
   getInstance(id: string): Promise<StoredMonitorInstance | null>;
+  countInstances(input: {
+    readonly tenantId: string;
+    readonly applicationId: string;
+  }): Promise<number>;
   putInstance(instance: StoredMonitorInstance): Promise<void>;
   deleteInstance(id: string): Promise<void>;
 
@@ -254,6 +256,7 @@ export interface MonitorStoreTransaction {
     readonly applicationId: string;
     readonly monitorId: string;
     readonly definitionVersion: string;
+    readonly correlationKeyHash: string;
     readonly ingressSequence: string;
   }): Promise<boolean>;
 
@@ -310,6 +313,7 @@ export interface MonitorStore {
   listDefinitionPins(applicationId: string): Promise<readonly StoredDefinitionPin[]>;
   getRun(id: string): Promise<StoredMonitorRun | null>;
   getEvent(ref: string): Promise<StoredEvent | null>;
+  getInstance(id: string): Promise<StoredMonitorInstance | null>;
   purgeExpired(now: string): Promise<{
     readonly events: number;
     readonly runs: number;

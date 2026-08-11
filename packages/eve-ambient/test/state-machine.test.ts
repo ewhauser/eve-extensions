@@ -118,7 +118,7 @@ describe("buffering, cooldown, quotas, and failures", () => {
     expect(delivery.deliveries[1]?.evidence.completeness.closedBy).toBe("cooldown-expired");
   });
 
-  it("buffers a wake suppressed by a per-key quota and reuses its recorded decision", async () => {
+  it("buffers a wake suppressed by a per-key quota and retains its in-flight decision", async () => {
     const clock = new VirtualMonitorClock();
     const delivery = new MemoryConversationChannel({ id: "delivery", clock });
     const decision = vi.fn(() => wake({ reason: "useful" }));
@@ -243,6 +243,44 @@ describe("buffering, cooldown, quotas, and failures", () => {
     const accepted = delivery.deliveries.map((request) => request.evidence.sourceEventRefs[0]);
     expect((await store.getEvent(accepted[0]!))?.eventId).toBe("first");
     expect((await store.getEvent(accepted[1]!))?.eventId).toBe("second");
+  });
+
+  it("does not let a cardinality-blocked key stall an existing mailbox", async () => {
+    const clock = new VirtualMonitorClock();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const monitor = baseMonitor(delivery, {
+      id: "cross-key-ordering",
+      correlate: ({ event }) => event.data.key,
+      limits: { overflow: "buffer" },
+    });
+    const runtime = await createRuntime(clock, delivery, monitor, {
+      limits: { maxActiveKeysPerTenant: 1 },
+    });
+    await runtime.publishChat(channel, "message", input("existing-1", "existing"), []);
+    await runtime.drain();
+
+    await runtime.publishChat(channel, "message", input("blocked", "new-key"), []);
+    await runtime.publishChat(channel, "message", input("existing-2", "existing"), []);
+    await runtime.drain();
+
+    expect(delivery.deliveries).toHaveLength(2);
+    expect(delivery.deliveries[1]?.evidence.projectedEvidence).toEqual({ keys: ["existing"] });
+  });
+
+  it("does not scan every application instance while appending or delivering", async () => {
+    const clock = new VirtualMonitorClock();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const store = new MemoryMonitorStore();
+    const runtime = await createRuntime(clock, delivery, baseMonitor(delivery, { id: "point-reads" }), {
+      store,
+    });
+    const listInstances = vi.spyOn(store, "listInstances");
+
+    await runtime.publishChat(channel, "message", input("point-read"), []);
+    await runtime.drain();
+
+    expect(delivery.deliveries).toHaveLength(1);
+    expect(listInstances).not.toHaveBeenCalled();
   });
 
   it("isolates poison callbacks by key and applies same-application loop prevention", async () => {

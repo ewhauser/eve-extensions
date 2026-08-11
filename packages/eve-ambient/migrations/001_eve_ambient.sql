@@ -22,12 +22,18 @@ CREATE TABLE IF NOT EXISTS eve_ambient_subscriptions (
   application_id text NOT NULL,
   monitor_id text NOT NULL,
   definition_version text NOT NULL,
+  correlation_key_hash text,
   ingress_sequence bigint NOT NULL,
   status text NOT NULL,
   available_at timestamptz NOT NULL,
   lease_expires_at timestamptz,
   record jsonb NOT NULL
 );
+
+-- Keep the bootstrap migration re-runnable for pre-release installations that
+-- applied an earlier draft before correlation hashes became relational.
+ALTER TABLE eve_ambient_subscriptions
+  ADD COLUMN IF NOT EXISTS correlation_key_hash text;
 
 CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_due_idx
   ON eve_ambient_subscriptions (
@@ -40,6 +46,16 @@ CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_due_idx
   );
 CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_event_idx
   ON eve_ambient_subscriptions (event_ref);
+CREATE INDEX IF NOT EXISTS eve_ambient_subscriptions_ordering_idx
+  ON eve_ambient_subscriptions (
+    application_id,
+    tenant_id,
+    monitor_id,
+    definition_version,
+    correlation_key_hash,
+    ingress_sequence
+  )
+  WHERE status IN ('pending', 'processing', 'ready');
 
 CREATE TABLE IF NOT EXISTS eve_ambient_instances (
   id text PRIMARY KEY,
@@ -58,6 +74,8 @@ CREATE INDEX IF NOT EXISTS eve_ambient_instances_due_idx
   WHERE active_run_id IS NULL AND next_evaluation_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS eve_ambient_instances_monitor_idx
   ON eve_ambient_instances (application_id, monitor_id);
+CREATE INDEX IF NOT EXISTS eve_ambient_instances_tenant_count_idx
+  ON eve_ambient_instances (application_id, tenant_id);
 
 CREATE TABLE IF NOT EXISTS eve_ambient_runs (
   id text PRIMARY KEY,
@@ -108,7 +126,4 @@ CREATE INDEX IF NOT EXISTS eve_ambient_usage_window_idx
 CREATE INDEX IF NOT EXISTS eve_ambient_usage_expiry_idx
   ON eve_ambient_usage (expires_at);
 
-CREATE TABLE IF NOT EXISTS eve_ambient_sequences (
-  scope text PRIMARY KEY,
-  value bigint NOT NULL CHECK (value > 0)
-);
+CREATE SEQUENCE IF NOT EXISTS eve_ambient_ingress_sequence AS bigint;

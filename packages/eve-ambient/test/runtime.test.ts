@@ -382,6 +382,69 @@ describe("MonitorRuntime", () => {
     });
   });
 
+  it("uses classifier fallback without treating provider failures as schema repairs", async () => {
+    const clock = new VirtualMonitorClock();
+    const invoker = vi.fn<MonitorModelInvoker>().mockRejectedValue(
+      new TransientMonitorError("provider timeout"),
+    );
+    const monitor = defineMonitor<MessageEvent>({
+      id: "provider-fallback",
+      sources: [slack.event("message")],
+      decision: modelDecision({
+        model: "openai/gpt-5-nano",
+        reasoning: "none",
+        instructions: "Classify.",
+        input: () => ({ text: "small" }),
+        timeout: "1s",
+        maxInputTokens: 10,
+        maxOutputTokens: 10,
+        repairAttempts: 1,
+        onError: ignore({ reason: "provider-unavailable" }),
+      }),
+      task: { instructions: "Review.", evidence: () => ({}) },
+      route: () => null,
+      metadata: { owner: "test", useCase: "provider-fallback" },
+    });
+    const runtime = new MonitorRuntime({
+      applicationId: "app-a",
+      deployment: { monitors: [compileMonitor(monitor, "v1")] },
+      channels: [slack],
+      store: new MemoryMonitorStore(),
+      modelInvoker: invoker,
+      clock,
+    });
+    await runtime.initialize();
+    await runtime.publishChat(slack, "message", eventInput("provider-failure"), []);
+    await runtime.drain();
+
+    expect(invoker).toHaveBeenCalledOnce();
+    expect((await runtime.listRuns())[0]).toMatchObject({
+      status: "ignored",
+      decisionSource: "fallback",
+      decision: { action: "ignore", reason: "provider-unavailable" },
+    });
+  });
+
+  it("rejects phaseless chat sources instead of subscribing to both phases", () => {
+    const monitor = defineMonitor<MessageEvent>({
+      id: "phaseless-chat",
+      sources: [{ kind: "channel-event-source", channelId: "slack", eventType: "message" }],
+      decision: () => ignore({ reason: "not-useful" }),
+      task: { instructions: "Review.", evidence: () => ({}) },
+      route: () => null,
+      metadata: { owner: "test", useCase: "chat-phase" },
+    });
+
+    expect(
+      () => new MonitorRuntime({
+        applicationId: "app-a",
+        deployment: { monitors: [compileMonitor(monitor, "v1")] },
+        channels: [slack],
+        store: new MemoryMonitorStore(),
+      }),
+    ).toThrow("must select observed or undispatched");
+  });
+
   it("does not let a failing telemetry observer change durable outcomes", async () => {
     const clock = new VirtualMonitorClock();
     const delivery = new MemoryConversationChannel({ id: "slack-delivery", clock });

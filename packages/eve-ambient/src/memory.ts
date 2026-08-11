@@ -11,6 +11,7 @@ import type {
   SubscriptionStatus,
   UsageReservation,
 } from "./storage.js";
+import { scopedKey } from "./storage.js";
 import { addMs, cloneJson, iso } from "./util.js";
 
 /** Durable-semantics in-memory store for local development and deterministic tests. */
@@ -119,7 +120,10 @@ export class MemoryMonitorStore implements MonitorStore {
       (value) =>
         value.applicationId === input.applicationId &&
         (value.status === "pending" || value.status === "retry" || value.status === "processing") &&
-        (value.leaseExpiresAt ?? value.availableAt) <= input.availableBefore,
+        value.availableAt <= input.availableBefore &&
+        (value.status !== "processing" ||
+          value.leaseExpiresAt === undefined ||
+          value.leaseExpiresAt <= input.availableBefore),
     );
     return fairByTenant(
       due,
@@ -220,6 +224,11 @@ export class MemoryMonitorStore implements MonitorStore {
     return value === undefined ? null : clone(value);
   }
 
+  async getInstance(id: string): Promise<StoredMonitorInstance | null> {
+    const value = this.#instances.get(id);
+    return value === undefined ? null : clone(value);
+  }
+
   async purgeExpired(now: string): Promise<{
     readonly events: number;
     readonly runs: number;
@@ -232,10 +241,39 @@ export class MemoryMonitorStore implements MonitorStore {
     let usage = 0;
     for (const [ref, event] of this.#events) {
       if (event.dedupeExpiresAt <= now) {
+        if (
+          event.directDispatch !== undefined &&
+          ["pending", "processing"].includes(event.directDispatch.status)
+        ) {
+          this.#deadLetters.set(`purge:direct:${event.ref}`, {
+            id: `purge:direct:${event.ref}`,
+            tenantId: event.tenantId,
+            applicationId: event.applicationId,
+            eventRef: event.ref,
+            stage: "direct-dispatch",
+            reason: "source dedupe retention expired before direct dispatch completed",
+            createdAt: now,
+          });
+        }
         this.#events.delete(ref);
         this.#eventDedupe.delete(event.dedupeKey);
         for (const [subscriptionId, subscription] of this.#subscriptions) {
-          if (subscription.eventRef === ref) this.#subscriptions.delete(subscriptionId);
+          if (subscription.eventRef !== ref) continue;
+          if (["pending", "processing", "ready"].includes(subscription.status)) {
+            this.#deadLetters.set(`purge:${subscription.id}`, {
+              id: `purge:${subscription.id}`,
+              tenantId: subscription.tenantId,
+              applicationId: subscription.applicationId,
+              monitorId: subscription.monitorId,
+              definitionVersion: subscription.definitionVersion,
+              eventRef: subscription.eventRef,
+              subscriptionId: subscription.id,
+              stage: "retention",
+              reason: "source dedupe retention expired before subscription completed",
+              createdAt: now,
+            });
+          }
+          this.#subscriptions.delete(subscriptionId);
         }
         events += 1;
       } else if (event.payloadExpiresAt <= now && event.event !== undefined) {
@@ -280,6 +318,14 @@ export class MemoryMonitorStore implements MonitorStore {
         const value = this.#events.get(ref);
         return value === undefined ? null : clone(value);
       },
+      releaseEventDedupe: async (ref) => {
+        const event = this.#events.get(ref);
+        if (event === undefined) return;
+        this.#eventDedupe.delete(event.dedupeKey);
+        const dedupeKey = scopedKey("expired", event.ref, event.dedupeKey);
+        this.#events.set(ref, clone({ ...event, dedupeKey }));
+        this.#eventDedupe.set(dedupeKey, ref);
+      },
       putEvent: async (event) => {
         const previousRef = this.#eventDedupe.get(event.dedupeKey);
         if (previousRef !== undefined && previousRef !== event.ref) this.#events.delete(previousRef);
@@ -300,6 +346,12 @@ export class MemoryMonitorStore implements MonitorStore {
         const value = this.#instances.get(id);
         return value === undefined ? null : clone(value);
       },
+      countInstances: async (input) =>
+        [...this.#instances.values()].filter(
+          (instance) =>
+            instance.tenantId === input.tenantId &&
+            instance.applicationId === input.applicationId,
+        ).length,
       putInstance: async (instance) => {
         this.#instances.set(instance.id, clone(instance));
       },
@@ -336,6 +388,8 @@ export class MemoryMonitorStore implements MonitorStore {
             subscription.monitorId === input.monitorId &&
             subscription.definitionVersion === input.definitionVersion &&
             ["pending", "processing", "ready"].includes(subscription.status) &&
+            (subscription.correlationKeyHash === undefined ||
+              subscription.correlationKeyHash === input.correlationKeyHash) &&
             compareSequence(subscription.ingressSequence, input.ingressSequence) < 0,
         ),
       reserveUsage: async (input) => {

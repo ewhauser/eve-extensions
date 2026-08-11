@@ -634,6 +634,11 @@ export class MonitorRuntime {
       if (duplicate !== null && duplicate.dedupeExpiresAt > now) {
         return { status: "duplicate" as const, eventId: duplicate.ref, traceId: duplicate.traceId };
       }
+      if (duplicate !== null) {
+        // Preserve the expired event tombstone for buffered refs while freeing
+        // the provider dedupe key for this newly accepted delivery.
+        await tx.releaseEventDedupe(duplicate.ref);
+      }
       const ingressSequence = await tx.nextIngressSequence(
         scopedKey(input.tenantId, this.#applicationId),
       );
@@ -936,6 +941,7 @@ export class MonitorRuntime {
           applicationId: current.applicationId,
           monitorId: current.monitorId,
           definitionVersion: current.definitionVersion,
+          correlationKeyHash: current.correlationKeyHash!,
           ingressSequence: current.ingressSequence,
         })
       ) {
@@ -1039,68 +1045,78 @@ export class MonitorRuntime {
       return;
     }
     const now = this.#now();
-    const observedInstances = await this.#store.listInstances({
-      applicationId: subscription.applicationId,
-      monitorId: subscription.monitorId,
-    });
-    const instanceExists = observedInstances.some((value) => value.id === instanceId);
-    const appendLock = instanceExists
-      ? `instance:${instanceId}`
-      : `cardinality:${scopedKey(subscription.tenantId, subscription.applicationId)}`;
+    let instanceExists = (await this.#store.getInstance(instanceId)) !== null;
     let outcome: "opened" | "updated" | "flushed";
-    try {
-      outcome = await this.#store.transaction(appendLock, async (tx) => {
-      let instance = await tx.getInstance(instanceId);
-      let transactionOutcome: "opened" | "updated" | "flushed" = "updated";
-      if (instance === null) {
-        const existing = await this.#store.listInstances({ applicationId: subscription.applicationId });
-        const tenantCount = existing.filter((value) => value.tenantId === subscription.tenantId).length;
-        if (tenantCount >= this.#limits.maxActiveKeysPerTenant) {
-          throw new CardinalityDenied(addMs(now, this.#retry.initialBackoffMs));
+    for (;;) {
+      const appendLock = instanceExists
+        ? `instance:${instanceId}`
+        : `cardinality:${scopedKey(subscription.tenantId, subscription.applicationId)}`;
+      let transactionOutcome: "opened" | "updated" | "flushed" | null;
+      try {
+        transactionOutcome = await this.#store.transaction(appendLock, async (tx) => {
+          let instance = await tx.getInstance(instanceId);
+          let nextOutcome: "opened" | "updated" | "flushed" = "updated";
+          if (instance === null) {
+            // The point-read instance can disappear during retention cleanup.
+            // Retry under the tenant cardinality lock before recreating it.
+            if (instanceExists) return null;
+            const tenantCount = await tx.countInstances({
+              tenantId: subscription.tenantId,
+              applicationId: subscription.applicationId,
+            });
+            if (tenantCount >= this.#limits.maxActiveKeysPerTenant) {
+              throw new CardinalityDenied(addMs(now, this.#retry.initialBackoffMs));
+            }
+            instance = this.#newInstance(instanceId, subscription, monitor, correlationKey, keyHash);
+            nextOutcome = "opened";
+          }
+          const ref: BufferedEventRef = {
+            ref: event.ref,
+            bytes: event.bytes,
+            acceptedAt: event.acceptedAt,
+            ingressSequence: event.ingressSequence,
+          };
+          const append = appendEvent(instance, ref, buffer, now);
+          instance = {
+            ...append.instance,
+            nextEvaluationAt: nextEvaluationAt(append.instance, monitor.definition, now),
+            expiresAt: addMs(
+              now,
+              durationMs((monitor.definition.retention ?? DEFAULT_RETENTION).decisions),
+            ),
+            updatedAt: now,
+          };
+          if (append.flushed) nextOutcome = "flushed";
+          await tx.putInstance(instance);
+          await tx.putSubscription({
+            ...subscription,
+            status: "buffered",
+            correlationKeyHash: keyHash,
+            outcome: "appended",
+            leaseExpiresAt: undefined,
+            updatedAt: now,
+          });
+          return nextOutcome;
+        });
+      } catch (error) {
+        if (!(error instanceof CardinalityDenied)) throw error;
+        await this.#emit("monitor.wake.suppressed", {
+          ...this.#eventDetails(subscription),
+          attributes: { cause: "correlation-cardinality", scope: "tenant" },
+        });
+        if (this.#overflow(monitor.definition) === "buffer") {
+          await this.#retrySubscription(subscription, error.retryAt, "correlation-cardinality");
+        } else {
+          await this.#finishSubscription(subscription, "suppressed", "correlation-cardinality");
         }
-        instance = this.#newInstance(instanceId, subscription, monitor, correlationKey, keyHash);
-        transactionOutcome = "opened";
+        return;
       }
-      const ref: BufferedEventRef = {
-        ref: event.ref,
-        bytes: event.bytes,
-        acceptedAt: event.acceptedAt,
-        ingressSequence: event.ingressSequence,
-      };
-      const append = appendEvent(instance, ref, buffer, now);
-      instance = {
-        ...append.instance,
-        nextEvaluationAt: nextEvaluationAt(append.instance, monitor.definition, now),
-        expiresAt: addMs(
-          now,
-          durationMs((monitor.definition.retention ?? DEFAULT_RETENTION).decisions),
-        ),
-        updatedAt: now,
-      };
-      if (append.flushed) transactionOutcome = "flushed";
-      await tx.putInstance(instance);
-      await tx.putSubscription({
-        ...subscription,
-        status: "buffered",
-        correlationKeyHash: keyHash,
-        outcome: "appended",
-        leaseExpiresAt: undefined,
-        updatedAt: now,
-      });
-      return transactionOutcome;
-      });
-    } catch (error) {
-      if (!(error instanceof CardinalityDenied)) throw error;
-      await this.#emit("monitor.wake.suppressed", {
-        ...this.#eventDetails(subscription),
-        attributes: { cause: "correlation-cardinality", scope: "tenant" },
-      });
-      if (this.#overflow(monitor.definition) === "buffer") {
-        await this.#retrySubscription(subscription, error.retryAt, "correlation-cardinality");
-      } else {
-        await this.#finishSubscription(subscription, "suppressed", "correlation-cardinality");
+      if (transactionOutcome === null) {
+        instanceExists = false;
+        continue;
       }
-      return;
+      outcome = transactionOutcome;
+      break;
     }
     await this.#emit(
       outcome === "opened"
@@ -1258,13 +1274,7 @@ export class MonitorRuntime {
     });
 
     if (run.decision === undefined) {
-      if (run.batch.recordedDecision !== undefined) {
-        run = await this.#checkpointRun(run, {
-          decision: run.batch.recordedDecision,
-          decisionSource: "recorded",
-          stage: "policy",
-        });
-      } else if (typeof monitor.definition.decision === "function") {
+      if (typeof monitor.definition.decision === "function") {
         const rule = monitor.definition.decision;
         const value = this.#callPure("rule decision", () => rule(base));
         validateDecision(value);
@@ -1368,11 +1378,10 @@ export class MonitorRuntime {
       await this.#completeRun(run, "suppressed", { cause: "disabled", scope: "monitor" });
       return;
     }
-    const instance = await this.#store.listInstances({
-      applicationId: run.applicationId,
-      monitorId: run.monitorId,
-    }).then((values) => values.find((value) => value.id === run.instanceId));
-    if (instance === undefined) throw new Error(`monitor instance ${run.instanceId} disappeared`);
+    const instance = await this.#store.getInstance(run.instanceId);
+    if (instance === null || instance.applicationId !== run.applicationId) {
+      throw new Error(`monitor instance ${run.instanceId} disappeared`);
+    }
     const channel = this.#deliveryChannels.get(run.route!.channelId)!;
     await this.#emit("monitor.delivery.started", this.#runDetails(run));
     const idleTimeout = monitor.definition.session?.idleTimeout;
@@ -1477,8 +1486,9 @@ export class MonitorRuntime {
         );
         break;
       }
+      let result: Awaited<ReturnType<MonitorModelInvoker>>;
       try {
-        const result = await this.#modelInvoker({
+        result = await this.#modelInvoker({
           model: definition.model,
           reasoning: definition.reasoning,
           instructions: definition.instructions,
@@ -1490,28 +1500,29 @@ export class MonitorRuntime {
           ...(prior === undefined ? {} : { previousInvalidOutput: prior }),
         });
         validateModelUsage(result.usage);
-        usage = {
-          inputTokens: usage.inputTokens + result.usage.inputTokens,
-          outputTokens: usage.outputTokens + result.usage.outputTokens,
-          ...((usage.estimatedCost ?? 0) + (result.usage.estimatedCost ?? 0) === 0
-            ? {}
-            : { estimatedCost: (usage.estimatedCost ?? 0) + (result.usage.estimatedCost ?? 0) }),
-        };
-        if (result.usage.inputTokens > definition.maxInputTokens) {
-          lastError = new TypeError(
-            `classifier used ${result.usage.inputTokens} input tokens; limit is ${definition.maxInputTokens}`,
-          );
-          break;
-        }
-        try {
-          const parsed = await this.#parseModelOutput(definition, result.output);
-          return { decision: parsed, source: "model", usage };
-        } catch (error) {
-          lastError = error;
-          prior = result.output;
-        }
       } catch (error) {
         lastError = error;
+        break;
+      }
+      usage = {
+        inputTokens: usage.inputTokens + result.usage.inputTokens,
+        outputTokens: usage.outputTokens + result.usage.outputTokens,
+        ...((usage.estimatedCost ?? 0) + (result.usage.estimatedCost ?? 0) === 0
+          ? {}
+          : { estimatedCost: (usage.estimatedCost ?? 0) + (result.usage.estimatedCost ?? 0) }),
+      };
+      if (result.usage.inputTokens > definition.maxInputTokens) {
+        lastError = new TypeError(
+          `classifier used ${result.usage.inputTokens} input tokens; limit is ${definition.maxInputTokens}`,
+        );
+        break;
+      }
+      try {
+        const parsed = await this.#parseModelOutput(definition, result.output);
+        return { decision: parsed, source: "model", usage };
+      } catch (error) {
+        lastError = error;
+        prior = result.output;
       }
       if (repairAttempt === definition.repairAttempts) break;
     }
@@ -2128,6 +2139,11 @@ export class MonitorRuntime {
             `monitor ${monitor.definition.id} applies chat phase ${source.phase} to non-chat source ${source.channelId}:${source.eventType}`,
           );
         }
+        if (source.phase === undefined && event.chat) {
+          throw new TypeError(
+            `monitor ${monitor.definition.id} must select observed or undispatched for chat source ${source.channelId}:${source.eventType}`,
+          );
+        }
       }
     }
     if (this.#activeDefinitions.size === 0 && monitors.length > 0) {
@@ -2703,8 +2719,7 @@ function nextEvaluationAt(
   const hasEvents = instance.sealedBatches.length > 0 || instance.openBatch !== undefined;
   if (!hasEvents) return undefined;
   if (instance.cooldownUntil !== undefined && instance.cooldownUntil > now) return instance.cooldownUntil;
-  const retry = instance.sealedBatches[0]?.retryAt;
-  if (instance.sealedBatches.length > 0) return retry ?? now;
+  if (instance.sealedBatches.length > 0) return now;
   const open = instance.openBatch!;
   const buffer = definition.buffer ?? { mode: "immediate" as const };
   if (buffer.mode === "immediate") return now;
@@ -2721,7 +2736,7 @@ function takeDueBatch(
 ): { readonly instance: StoredMonitorInstance; readonly batch: StoredMonitorBatch } | null {
   if (instance.cooldownUntil !== undefined && instance.cooldownUntil > now) return null;
   const first = instance.sealedBatches[0];
-  if (first !== undefined && (first.retryAt === undefined || first.retryAt <= now)) {
+  if (first !== undefined) {
     return { instance: { ...instance, sealedBatches: instance.sealedBatches.slice(1) }, batch: first };
   }
   const open = instance.openBatch;

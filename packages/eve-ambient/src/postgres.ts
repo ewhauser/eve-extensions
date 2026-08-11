@@ -266,6 +266,14 @@ export class PostgresMonitorStore implements MonitorStore {
     );
   }
 
+  async getInstance(id: string): Promise<StoredMonitorInstance | null> {
+    return selectRecord<StoredMonitorInstance>(
+      this.#pool,
+      `SELECT record FROM ${this.#table("eve_ambient_instances")} WHERE id = $1`,
+      [id],
+    );
+  }
+
   async purgeExpired(now: string): Promise<{
     readonly events: number;
     readonly runs: number;
@@ -275,6 +283,57 @@ export class PostgresMonitorStore implements MonitorStore {
     const client = await connectPostgres(this.#pool);
     try {
       await postgresQuery(client, "BEGIN");
+      await postgresQuery(
+        client,
+        `INSERT INTO ${this.#table("eve_ambient_dead_letters")}
+           (id, application_id, monitor_id, created_at, record)
+         SELECT 'purge:' || subscription.id,
+                subscription.application_id,
+                subscription.monitor_id,
+                $1::timestamptz,
+                jsonb_build_object(
+                  'id', 'purge:' || subscription.id,
+                  'tenantId', subscription.tenant_id,
+                  'applicationId', subscription.application_id,
+                  'monitorId', subscription.monitor_id,
+                  'definitionVersion', subscription.definition_version,
+                  'eventRef', subscription.event_ref,
+                  'subscriptionId', subscription.id,
+                  'stage', 'retention',
+                  'reason', 'source dedupe retention expired before subscription completed',
+                  'createdAt', $1::timestamptz
+                )
+           FROM ${this.#table("eve_ambient_subscriptions")} AS subscription
+           JOIN ${this.#table("eve_ambient_events")} AS event
+             ON event.ref = subscription.event_ref
+          WHERE event.dedupe_expires_at <= $1::timestamptz
+            AND subscription.status = ANY(ARRAY['pending','processing','ready']::text[])
+         ON CONFLICT (id) DO NOTHING`,
+        [now],
+      );
+      await postgresQuery(
+        client,
+        `INSERT INTO ${this.#table("eve_ambient_dead_letters")}
+           (id, application_id, monitor_id, created_at, record)
+         SELECT 'purge:direct:' || event.ref,
+                event.application_id,
+                NULL,
+                $1::timestamptz,
+                jsonb_build_object(
+                  'id', 'purge:direct:' || event.ref,
+                  'tenantId', event.tenant_id,
+                  'applicationId', event.application_id,
+                  'eventRef', event.ref,
+                  'stage', 'direct-dispatch',
+                  'reason', 'source dedupe retention expired before direct dispatch completed',
+                  'createdAt', $1::timestamptz
+                )
+           FROM ${this.#table("eve_ambient_events")} AS event
+          WHERE event.dedupe_expires_at <= $1::timestamptz
+            AND event.record->'directDispatch'->>'status' = ANY(ARRAY['pending','processing']::text[])
+         ON CONFLICT (id) DO NOTHING`,
+        [now],
+      );
       await postgresQuery(
         client,
         `DELETE FROM ${this.#table("eve_ambient_subscriptions")}
@@ -367,6 +426,20 @@ class PostgresTransaction implements MonitorStoreTransaction {
     );
   }
 
+  async releaseEventDedupe(ref: string): Promise<void> {
+    const event = await this.getEvent(ref);
+    if (event === null) return;
+    const dedupeKey = scopedKey("expired", event.ref, event.dedupeKey);
+    await postgresQuery(
+      this.#client,
+      `UPDATE ${this.#table("eve_ambient_events")}
+          SET dedupe_key = $2,
+              record = jsonb_set(record, '{dedupeKey}', to_jsonb($2::text))
+        WHERE ref = $1`,
+      [ref, dedupeKey],
+    );
+  }
+
   async putEvent(event: StoredEvent): Promise<void> {
     await postgresQuery(
       this.#client,
@@ -408,11 +481,12 @@ class PostgresTransaction implements MonitorStoreTransaction {
     await postgresQuery(
       this.#client,
       `INSERT INTO ${this.#table("eve_ambient_subscriptions")}
-         (id, event_ref, tenant_id, application_id, monitor_id, definition_version, ingress_sequence, status, available_at, lease_expires_at, record)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::bigint,$8,$9::timestamptz,$10::timestamptz,$11::jsonb)
+         (id, event_ref, tenant_id, application_id, monitor_id, definition_version, correlation_key_hash, ingress_sequence, status, available_at, lease_expires_at, record)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::bigint,$9,$10::timestamptz,$11::timestamptz,$12::jsonb)
        ON CONFLICT (id) DO UPDATE SET
          monitor_id = EXCLUDED.monitor_id,
          definition_version = EXCLUDED.definition_version,
+         correlation_key_hash = EXCLUDED.correlation_key_hash,
          status = EXCLUDED.status,
          available_at = EXCLUDED.available_at,
          lease_expires_at = EXCLUDED.lease_expires_at,
@@ -424,6 +498,7 @@ class PostgresTransaction implements MonitorStoreTransaction {
         subscription.applicationId,
         subscription.monitorId,
         subscription.definitionVersion,
+        subscription.correlationKeyHash ?? null,
         subscription.ingressSequence,
         subscription.status,
         subscription.availableAt,
@@ -447,6 +522,20 @@ class PostgresTransaction implements MonitorStoreTransaction {
       `SELECT record FROM ${this.#table("eve_ambient_instances")} WHERE id = $1 FOR UPDATE`,
       [id],
     );
+  }
+
+  async countInstances(input: {
+    readonly tenantId: string;
+    readonly applicationId: string;
+  }): Promise<number> {
+    const result = await postgresQuery<{ count: string }>(
+      this.#client,
+      `SELECT count(*)::text AS count
+         FROM ${this.#table("eve_ambient_instances")}
+        WHERE tenant_id = $1 AND application_id = $2`,
+      [input.tenantId, input.applicationId],
+    );
+    return Number(result.rows[0]?.count ?? 0);
   }
 
   async putInstance(instance: StoredMonitorInstance): Promise<void> {
@@ -556,13 +645,17 @@ class PostgresTransaction implements MonitorStoreTransaction {
   }
 
   async nextIngressSequence(scope: string): Promise<string> {
+    // Native sequences avoid a frequently updated heap row, while this
+    // transaction-scoped fence keeps sequence order aligned with visibility:
+    // a later acceptance in the same domain cannot commit past this one.
+    await postgresQuery(
+      this.#client,
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [scopedKey("ingress-sequence", scope)],
+    );
     const result = await postgresQuery<{ value: string }>(
       this.#client,
-      `INSERT INTO ${this.#table("eve_ambient_sequences")} (scope, value)
-       VALUES ($1, 1)
-       ON CONFLICT (scope) DO UPDATE SET value = ${this.#table("eve_ambient_sequences")}.value + 1
-       RETURNING value::text AS value`,
-      [scope],
+      `SELECT nextval('${this.#table("eve_ambient_ingress_sequence")}'::regclass)::text AS value`,
     );
     const value = result.rows[0]?.value;
     if (value === undefined) throw new Error("PostgreSQL did not return an ingress sequence");
@@ -574,6 +667,7 @@ class PostgresTransaction implements MonitorStoreTransaction {
     readonly applicationId: string;
     readonly monitorId: string;
     readonly definitionVersion: string;
+    readonly correlationKeyHash: string;
     readonly ingressSequence: string;
   }): Promise<boolean> {
     const result = await postgresQuery<{ exists: boolean }>(
@@ -585,14 +679,16 @@ class PostgresTransaction implements MonitorStoreTransaction {
             AND application_id = $2
             AND monitor_id = $3
             AND definition_version = $4
-            AND ingress_sequence < $5::bigint
-            AND status = ANY(ARRAY['pending','processing','ready']::text[])
+            AND (correlation_key_hash IS NULL OR correlation_key_hash = $5)
+            AND ingress_sequence < $6::bigint
+            AND status IN ('pending', 'processing', 'ready')
        ) AS exists`,
       [
         input.tenantId,
         input.applicationId,
         input.monitorId,
         input.definitionVersion,
+        input.correlationKeyHash,
         input.ingressSequence,
       ],
     );

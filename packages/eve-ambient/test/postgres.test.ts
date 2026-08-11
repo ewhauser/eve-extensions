@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MemoryMonitorStore } from "../src/memory.js";
 import { PostgresMonitorStore, type PostgresClient, type PostgresPool } from "../src/postgres.js";
+import type { StoredMonitorRun } from "../src/storage.js";
 import { TransientMonitorError } from "../src/types.js";
 
 describe("PostgresMonitorStore error boundaries", () => {
@@ -154,6 +155,86 @@ describe("PostgresMonitorStore due queries", () => {
       expect(call.values?.[0]).toBe("app");
     }
     expect(calls[0]?.text).toContain("PARTITION BY tenant_id");
+  });
+
+  it("matches PostgreSQL availability and lease predicates in memory", async () => {
+    const store = new MemoryMonitorStore();
+    await store.transaction("run", async (tx) => {
+      await tx.putRun({
+        id: "run",
+        instanceId: "instance",
+        tenantId: "tenant",
+        applicationId: "app",
+        monitorId: "monitor",
+        definitionVersion: "v1",
+        correlationKeyHash: "key",
+        status: "processing",
+        availableAt: "2026-01-01T00:01:00.000Z",
+        leaseExpiresAt: "2026-01-01T00:00:10.000Z",
+      } as StoredMonitorRun);
+    });
+
+    await expect(
+      store.listDueRuns({
+        applicationId: "app",
+        availableBefore: "2026-01-01T00:00:30.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("uses key-aware ordering checks and a native sequence behind a commit-order fence", async () => {
+    const calls: string[] = [];
+    const query = (async (text: string) => {
+      calls.push(text);
+      if (text.includes("nextval")) return { rows: [{ value: "42" }] };
+      if (text.includes("SELECT EXISTS")) return { rows: [{ exists: false }] };
+      return { rows: [] };
+    }) as PostgresClient["query"];
+    const pool: PostgresPool = {
+      connect: async () => client(query),
+      query,
+    };
+    const store = new PostgresMonitorStore({ pool });
+
+    await store.transaction("ordering", async (tx) => {
+      await expect(tx.nextIngressSequence("tenant-app")).resolves.toBe("42");
+      await expect(tx.hasEarlierOpenSubscription({
+        tenantId: "tenant",
+        applicationId: "app",
+        monitorId: "monitor",
+        definitionVersion: "v1",
+        correlationKeyHash: "key-hash",
+        ingressSequence: "7",
+      })).resolves.toBe(false);
+    });
+
+    expect(calls.find((text) => text.includes("nextval"))).toContain("eve_ambient_ingress_sequence");
+    expect(calls.find((text) => text.includes("pg_advisory_xact_lock") && text.includes("$1")))
+      .toBeDefined();
+    const ordering = calls.find((text) => text.includes("SELECT EXISTS"));
+    expect(ordering).toContain("correlation_key_hash IS NULL OR correlation_key_hash = $5");
+  });
+
+  it("dead-letters open subscriptions before retention purges them", async () => {
+    const calls: string[] = [];
+    const query = (async (text: string) => {
+      calls.push(text);
+      return { rows: [], rowCount: 0 };
+    }) as PostgresClient["query"];
+    const pool: PostgresPool = {
+      connect: async () => client(query),
+      query,
+    };
+    const store = new PostgresMonitorStore({ pool });
+
+    await store.purgeExpired("2026-01-01T00:00:00.000Z");
+
+    const retentionDeadLetter = calls.find((text) =>
+      text.includes("source dedupe retention expired before subscription completed"),
+    );
+    expect(retentionDeadLetter).toContain("INSERT INTO");
+    expect(retentionDeadLetter).toContain("['pending','processing','ready']");
   });
 });
 

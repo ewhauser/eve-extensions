@@ -6,10 +6,11 @@ correlation, buffers by key, makes a restricted rule or model decision, and
 delivers immutable structured evidence through a channel-owned conversation
 binding.
 
-The package targets `eve@0.31.3` and Node.js 24 or newer. Eve 0.31.3 does not
-yet expose first-class inbound-event, conversation-binding, or compiler hooks,
-so this package supplies that runtime and its adapter contracts. The
-application's existing Eve channel remains responsible for transport,
+The package targets Node.js 24 or newer and has no runtime dependency on a
+particular Eve release. Eve 0.31.3 does not yet expose first-class
+inbound-event, conversation-binding, or compiler hooks, so this package
+supplies that runtime and its adapter contracts. The application's existing Eve
+channel remains responsible for transport,
 authentication, normalization, provider acknowledgement, canonical targets,
 conversation bindings, and session ingress.
 
@@ -17,6 +18,12 @@ conversation bindings, and session ingress.
 
 ```sh
 pnpm add eve-ambient
+```
+
+The optional `eve-ambient/ai-sdk` adapter additionally requires `ai` and `zod`:
+
+```sh
+pnpm add ai zod
 ```
 
 For production, apply `migrations/001_eve_ambient.sql` to PostgreSQL. The
@@ -192,7 +199,10 @@ await monitors.initialize();
 Run `drain()` from short-lived workers or a frequent scheduler. PostgreSQL is
 the mailbox and timer authority; there is no sleeping workflow per active key.
 Due scans are fair across tenants, claims have leases, and processing is
-serialized per correlation key while different keys run in parallel.
+serialized per correlation key while different keys run in parallel. PostgreSQL
+uses point reads, an indexed tenant cardinality count, and a global sequence
+behind a lightweight per-domain commit-order fence; the ingress transaction
+does not scan instance state or update one sequence row per tenant.
 
 ```ts
 const result = await monitors.drain();
@@ -272,7 +282,9 @@ invalid action-specific metadata are rejected before policy or delivery.
 Each initial or repair attempt consumes a separate model-call reservation.
 Input-token budgets reserve the declared per-attempt `maxInputTokens` before the
 call, so the hard ceiling is conservative even when provider tokenization differs
-from the runtime's preflight estimate.
+from the runtime's preflight estimate. Only invalid structured output consumes
+the optional schema-repair attempt; timeouts and other provider failures apply
+`onError` immediately.
 
 For a different model stack, implement `MonitorModelInvoker`. That interface
 contains no tool, credential, session-history, or delivery capability.
@@ -286,12 +298,16 @@ contains no tool, credential, session-history, or delivery capability.
   monitor event is dead-lettered rather than trimmed.
 - Cooldown accumulates per key and schedules an evaluation at expiry even if no
   later event arrives.
-- Transient model and target failures retry under stable leases and delivery
-  keys. Deterministic callback failures dead-letter immediately and cannot
-  block other keys or tenants.
+- Transient store and target failures retry under stable leases and delivery
+  keys. Model-provider failures use the declared fallback. Deterministic
+  callback failures dead-letter immediately and cannot block other keys or
+  tenants.
 - Raw event content is redacted at payload expiry. The source dedupe tombstone
   remains through the longer dedupe window. Delivered evidence is copied into
   the channel/session request and follows decision/session retention.
+- Dedupe expiry records unfinished subscriptions as retention dead letters.
+  Reaccepting the provider ID preserves the expired tombstone until normal
+  purging so older buffered audit references are not orphaned.
 - Lifecycle events expose separate classifier tokens/cost estimates and
   delivery outcomes. Model prices remain an application/provider concern;
   pass `estimatedCost` from a custom invoker when available.

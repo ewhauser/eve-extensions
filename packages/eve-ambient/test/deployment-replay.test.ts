@@ -276,4 +276,60 @@ describe("deployment identity, replay, and retention", () => {
     await runtime.purgeExpired();
     expect((await runtime.publish(source, "changed", event("one", "new"))).status).toBe("accepted");
   });
+
+  it("preserves an expired event tombstone when the provider ID is accepted again", async () => {
+    const clock = new VirtualMonitorClock();
+    const store = new MemoryMonitorStore();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const definition = monitor("dedupe-reuse", delivery, {
+      retention: { payload: "1s", decisions: "1h", dedupe: "1s" },
+    });
+    const runtime = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compileMonitor(definition, "v1")] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store,
+      clock,
+    });
+    await runtime.initialize();
+    const first = await runtime.publish(source, "changed", event("reused", "old"));
+    clock.advance(1_000);
+
+    const second = await runtime.publish(source, "changed", event("reused", "new"));
+
+    expect(second.status).toBe("accepted");
+    expect(second.eventId).not.toBe(first.eventId);
+    expect(await store.getEvent(first.eventId)).not.toBeNull();
+  });
+
+  it("dead-letters unfinished subscriptions before dedupe retention removes them", async () => {
+    const clock = new VirtualMonitorClock();
+    const store = new MemoryMonitorStore();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const definition = monitor("retention-dead-letter", delivery, {
+      retention: { payload: "1s", decisions: "1h", dedupe: "1s" },
+    });
+    const runtime = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compileMonitor(definition, "v1")] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store,
+      clock,
+    });
+    await runtime.initialize();
+    await runtime.publish(source, "changed", event("unfinished"));
+    clock.advance(1_000);
+
+    await runtime.purgeExpired();
+
+    expect(await runtime.listDeadLetters()).toMatchObject([
+      { stage: "retention", reason: "source dedupe retention expired before subscription completed" },
+    ]);
+    await expect(store.listSubscriptionsForMonitor({
+      applicationId: "app",
+      monitorId: definition.id,
+    })).resolves.toEqual([]);
+  });
 });
