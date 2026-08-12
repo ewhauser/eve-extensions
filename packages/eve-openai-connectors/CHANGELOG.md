@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.2.0...eve-openai-connectors-v0.2.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **openai-connectors:** intern shared catalogs ([#32](https://github.com/ewhauser/eve-extensions/issues/32)) ([f804def](https://github.com/ewhauser/eve-extensions/commit/f804def078d432eff210617279346149f069b653))
+
 ## [0.2.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.1.0...eve-openai-connectors-v0.2.0) (2026-08-11)
 
 
