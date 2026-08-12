@@ -21,8 +21,10 @@ export interface AwsLambdaMicrovmTemplateDescriptor {
 
 export interface AwsLambdaMicrovmSessionMetadata extends AwsLambdaMicrovmTemplateDescriptor {
   readonly checkpoint?: AwsLambdaMicrovmCheckpoint;
+  readonly egressNetworkConnectorArn?: string;
   readonly manifestEtag: string;
   readonly microvmId: string;
+  readonly networkLaneId?: string;
 }
 
 export function parseAwsLambdaMicrovmTemplateDescriptor(
@@ -52,9 +54,18 @@ export function parseAwsLambdaMicrovmSessionMetadata(
   const record = expectRecord(value, "session metadata");
   return {
     ...parseAwsLambdaMicrovmTemplateDescriptor(record),
+    egressNetworkConnectorArn: optionalString(
+      record.egressNetworkConnectorArn,
+      "egressNetworkConnectorArn",
+    ),
     manifestEtag: expectString(record.manifestEtag, "manifestEtag"),
     microvmId: expectString(record.microvmId, "microvmId"),
+    networkLaneId: optionalString(record.networkLaneId, "networkLaneId"),
   };
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  return value === undefined ? undefined : expectString(value, name);
 }
 
 function parseCheckpoint(value: unknown): AwsLambdaMicrovmCheckpoint | undefined {

@@ -33,11 +33,14 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     memoryMiB: input.options.memoryMiB,
   });
   const configHash = hashStable({
+    buildNetworkLaneId: input.options.buildNetworkLaneId,
     imageHash,
     executionRoleArn: input.options.executionRoleArn,
     idlePolicy: input.options.idlePolicy,
     maximumDurationSeconds: input.options.maximumDurationSeconds,
+    networkingMode: input.options.networkingMode,
     runtimeEgress: input.options.runtimeEgressNetworkConnectorArns,
+    runtimeNetworkLaneId: input.options.runtimeNetworkLaneId,
     runtimeLogging: input.options.runtimeLogging,
     shellIngress: input.options.shellIngressNetworkConnectorArn,
   });

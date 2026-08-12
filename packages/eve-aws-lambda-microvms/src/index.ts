@@ -13,5 +13,6 @@ export type {
   AwsLambdaMicrovmCloudWatchLogging,
   AwsLambdaMicrovmIdlePolicy,
   AwsLambdaMicrovmMemoryMiB,
+  AwsLambdaMicrovmNetworkingMode,
   AwsLambdaMicrovmSandboxOptions,
 } from "./types.js";

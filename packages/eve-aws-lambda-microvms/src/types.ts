@@ -24,6 +24,9 @@ export interface AwsLambdaMicrovmCloudWatchLogging {
   readonly logStream?: string;
 }
 
+/** Network behavior for build, prewarm, and live-session MicroVMs. */
+export type AwsLambdaMicrovmNetworkingMode = "legacy" | "customer-managed";
+
 /**
  * Options accepted by {@link awsLambdaMicrovm}.
  *
@@ -51,8 +54,18 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly idlePolicy?: Partial<AwsLambdaMicrovmIdlePolicy>;
   /** Exact managed base image. Omit to use the newest available AL2023 image. */
   readonly baseImage?: AwsLambdaMicrovmBaseImage;
+  /**
+   * `customer-managed` fails closed unless both phases name exactly one
+   * same-account, same-region customer connector. Omitted/`legacy` preserves
+   * the 0.1.0 connector defaults for existing consumers.
+   */
+  readonly networkingMode?: AwsLambdaMicrovmNetworkingMode;
+  /** Stable non-secret policy lane associated with the build connector. */
+  readonly buildNetworkLaneId?: string;
   /** Egress connectors used for image build and template bootstrap. */
   readonly buildEgressNetworkConnectorArns?: readonly string[];
+  /** Stable non-secret policy lane associated with the live-session connector. */
+  readonly runtimeNetworkLaneId?: string;
   /** Egress connectors used for live agent sessions. */
   readonly runtimeEgressNetworkConnectorArns?: readonly string[];
   /** Adds AWS's shell ingress connector. Disabled by default. */

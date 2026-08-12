@@ -309,7 +309,9 @@ async function createLeasedSessionHandle(input: {
   let launchedMicrovm = false;
   if (
     microvm !== null &&
-    (microvm.imageArn !== source.imageArn || microvm.imageVersion !== source.imageVersion)
+    (microvm.imageArn !== source.imageArn ||
+      microvm.imageVersion !== source.imageVersion ||
+      !matchesRuntimeNetworkBinding(microvm, persistedSession, input.options))
   ) {
     await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
     microvm = null;
@@ -326,6 +328,8 @@ async function createLeasedSessionHandle(input: {
       templateHash: source.templateHash,
     });
     launchedMicrovm = true;
+  } else if (microvm.state === "SUSPENDED" || microvm.state === "SUSPENDING") {
+    await input.services.api.resumeMicrovm(microvm.microvmId);
   }
   const activeMicrovm = microvm;
 
@@ -409,6 +413,12 @@ async function createLeasedSessionHandle(input: {
       controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
       imageArn: source.imageArn,
       imageVersion: source.imageVersion,
+      ...(input.options.networkingMode === "customer-managed"
+        ? {
+            egressNetworkConnectorArn: input.options.runtimeEgressNetworkConnectorArns[0]!,
+            networkLaneId: input.options.runtimeNetworkLaneId!,
+          }
+        : {}),
       microvmId: activeMicrovm.microvmId,
       region: source.region,
       templateHash: source.templateHash,
@@ -472,10 +482,22 @@ async function reattachMicrovm(
   if (microvm === null || microvm.state === "TERMINATED" || microvm.state === "TERMINATING") {
     return null;
   }
-  if (microvm.state === "SUSPENDED" || microvm.state === "SUSPENDING") {
-    await api.resumeMicrovm(microvm.microvmId);
-  }
   return microvm;
+}
+
+function matchesRuntimeNetworkBinding(
+  microvm: AwsLambdaMicrovmRecord,
+  metadata: AwsLambdaMicrovmSessionMetadata | undefined,
+  options: ResolvedAwsLambdaMicrovmOptions,
+): boolean {
+  if (options.networkingMode !== "customer-managed") return true;
+  const expectedConnector = options.runtimeEgressNetworkConnectorArns[0]!;
+  return (
+    metadata?.networkLaneId === options.runtimeNetworkLaneId &&
+    metadata?.egressNetworkConnectorArn === expectedConnector &&
+    microvm.egressNetworkConnectorArns.length === 1 &&
+    microvm.egressNetworkConnectorArns[0] === expectedConnector
+  );
 }
 
 async function runMicrovm(input: {
@@ -507,6 +529,20 @@ async function runMicrovm(input: {
       eveSession: hashKey(input.purposeKey),
     }),
   });
+  if (input.options.networkingMode === "customer-managed") {
+    const expectedConnector = input.egressNetworkConnectorArns[0]!;
+    const matchesConnector =
+      microvm.egressNetworkConnectorArns.length === 1 &&
+      microvm.egressNetworkConnectorArns[0] === expectedConnector;
+    const matchesImage =
+      microvm.imageArn === input.imageArn && microvm.imageVersion === input.imageVersion;
+    if (!matchesConnector || !matchesImage) {
+      await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
+      throw new Error(
+        `AWS Lambda MicroVM activation did not match the requested image and customer-managed connector; terminated ${microvm.microvmId} before controller traffic.`,
+      );
+    }
+  }
   return microvm;
 }
 

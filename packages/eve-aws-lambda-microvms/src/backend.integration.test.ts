@@ -20,6 +20,18 @@ const OPTIONS = {
   buildRoleArn: "arn:aws:iam::123456789012:role/eve-build",
   region: "us-east-1",
 } as const;
+const STRICT_OPTIONS = {
+  ...OPTIONS,
+  buildEgressNetworkConnectorArns: [
+    "arn:aws:lambda:us-east-1:123456789012:network-connector:build",
+  ],
+  buildNetworkLaneId: "build-lane",
+  networkingMode: "customer-managed",
+  runtimeEgressNetworkConnectorArns: [
+    "arn:aws:lambda:us-east-1:123456789012:network-connector:runtime",
+  ],
+  runtimeNetworkLaneId: "runtime-lane",
+} as const;
 
 describe("AWS Lambda MicroVM backend", () => {
   it("requires and reuses an empty build-time template", async () => {
@@ -190,15 +202,91 @@ describe("AWS Lambda MicroVM backend", () => {
     ).rejects.toThrow("not ready");
     expect(fixture.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
   });
+
+  it.each([
+    { returnedConnectorArns: [] },
+    {
+      returnedConnectorArns: [
+        "arn:aws:lambda:us-east-1:123456789012:network-connector:unexpected",
+      ],
+    },
+  ] as const)("rejects strict connector activation mismatch %# before controller traffic", async ({ returnedConnectorArns }) => {
+    const fixture = createServicesFixture({
+      returnedConnectorArns,
+    });
+    const backend = createAwsLambdaMicrovmSandbox({
+      options: STRICT_OPTIONS,
+      services: fixture.services,
+    });
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-strict-activation",
+    });
+
+    await expect(
+      backend.create({
+        runtimeContext: { appRoot: "/app" },
+        sessionKey: "session-strict-activation",
+        templateKey: "template-strict-activation",
+      }),
+    ).rejects.toThrow(/terminated .* before controller traffic/);
+    expect(fixture.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
+    expect(fixture.controllers).toHaveLength(0);
+  });
+
+  it("persists the strict lane and connector and rejects stale reattachment", async () => {
+    const fixture = createServicesFixture();
+    const backend = createAwsLambdaMicrovmSandbox({
+      options: STRICT_OPTIONS,
+      services: fixture.services,
+    });
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-strict-reattach",
+    });
+    const first = await backend.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-strict-reattach",
+      templateKey: "template-strict-reattach",
+    });
+    const state = await first.captureState();
+    expect(state.metadata).toMatchObject({
+      egressNetworkConnectorArn: STRICT_OPTIONS.runtimeEgressNetworkConnectorArns[0],
+      networkLaneId: "runtime-lane",
+    });
+
+    const changed = createAwsLambdaMicrovmSandbox({
+      options: { ...STRICT_OPTIONS, runtimeNetworkLaneId: "runtime-lane-v2" },
+      services: fixture.services,
+    });
+    const replacement = await changed.create({
+      existingMetadata: state.metadata,
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-strict-reattach",
+      templateKey: "template-strict-reattach",
+    });
+
+    expect(fixture.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
+    expect(fixture.api.runMicrovm).toHaveBeenCalledTimes(2);
+    expect(fixture.controllers).toHaveLength(2);
+    await replacement.shutdown();
+  });
 });
 
-function createServicesFixture(input: { readonly controllerReadyError?: Error } = {}): {
+function createServicesFixture(
+  input: {
+    readonly controllerReadyError?: Error;
+    readonly returnedConnectorArns?: readonly string[];
+  } = {},
+): {
   readonly api: ReturnType<typeof createFakeApi>;
   readonly controllers: FakeController[];
   readonly services: AwsLambdaMicrovmBackendServices;
   readonly storage: FakeStorage;
 } {
-  const api = createFakeApi();
+  const api = createFakeApi(input.returnedConnectorArns);
   const storage = new FakeStorage();
   const controllers: FakeController[] = [];
   return {
@@ -217,7 +305,7 @@ function createServicesFixture(input: { readonly controllerReadyError?: Error } 
   };
 }
 
-function createFakeApi() {
+function createFakeApi(returnedConnectorArns?: readonly string[]) {
   const microvms = new Map<string, AwsLambdaMicrovmRecord>();
   let imageCreated = false;
   let nextMicrovm = 1;
@@ -256,6 +344,8 @@ function createFakeApi() {
     runMicrovm: vi.fn(async (input) => {
       const microvmId = `mvm-${nextMicrovm++}`;
       const record: AwsLambdaMicrovmRecord = {
+        egressNetworkConnectorArns:
+          returnedConnectorArns ?? [...input.egressNetworkConnectorArns],
         endpoint: `https://${microvmId}.example.test`,
         imageArn: input.imageArn,
         imageVersion: input.imageVersion,
