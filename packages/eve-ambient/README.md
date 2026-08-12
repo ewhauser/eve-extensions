@@ -291,6 +291,13 @@ contains no tool, credential, session-history, or delivery capability.
 
 ## Durability and operations
 
+- The correlation-instance mailbox lifecycle (idle, collecting, evaluating,
+  cooldown) is an explicit XState statechart in `src/instance-machine.ts`. The
+  machine is a pure transition table: every event carries its own clock
+  reading, the state value is derived from durable instance fields at
+  hydration, and the store's `nextEvaluationAt` due-scan timer is computed from
+  machine context. Persistence stays in the `MonitorStore`; no live actors or
+  in-process timers are involved.
 - Ingress, subscription results, mailboxes, timer generations, runs, evidence
   snapshots, quotas, dead letters, and deployment identity are durable.
 - Debounce closes on quiet period, mandatory maximum wait, count, or byte
