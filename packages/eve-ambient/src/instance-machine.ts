@@ -214,8 +214,14 @@ function completeRun(
           : addMs(event.now, context.config.cooldownAfterWakeMs),
     };
   }
-  if (next.cooldownUntil !== undefined && next.cooldownUntil <= event.now) {
-    // Normalize records written before expired cooldowns were cleared at claim.
+  if (
+    next.cooldownUntil !== undefined &&
+    next.cooldownUntil <= event.now &&
+    next.openBatch === undefined
+  ) {
+    // Preserve an expired cooldown while its accumulated open batch is still
+    // waiting behind older sealed work. The claim that closes that open batch
+    // consumes the marker and records the cooldown-expired closure cause.
     next = { ...next, cooldownUntil: undefined };
   }
   if (
@@ -285,9 +291,12 @@ export const instanceLifecycleMachine = setup({
         activeRunId: event.runId,
         evaluationGeneration: context.evaluationGeneration + 1,
         claimedBatch: batch,
-        // An expired cooldown is consumed by the claim that it gated, so only
-        // that claim carries the cooldown-expired closure cause.
-        ...(context.cooldownUntil !== undefined && context.cooldownUntil <= event.now
+        // An expired cooldown is consumed only by the claim that closes its
+        // accumulated open batch. A sealed batch may be selected first; keep
+        // the marker in that case so the gated batch retains its closure cause.
+        ...(context.cooldownUntil !== undefined &&
+          context.cooldownUntil <= event.now &&
+          (due.kind === "open" || context.openBatch === undefined)
           ? { cooldownUntil: undefined }
           : {}),
       };
@@ -395,7 +404,12 @@ export function computeNextEvaluationAt(
   if (context.activeRunId !== undefined) return undefined;
   const hasEvents = context.sealedBatches.length > 0 || context.openBatch !== undefined;
   if (!hasEvents) return undefined;
-  if (context.cooldownUntil !== undefined && context.cooldownUntil > now) return context.cooldownUntil;
+  if (context.cooldownUntil !== undefined) {
+    if (context.cooldownUntil > now) return context.cooldownUntil;
+    // A retained expired cooldown means an open batch is still waiting behind
+    // sealed work. Reschedule it immediately rather than applying debounce.
+    if (context.openBatch !== undefined) return now;
+  }
   if (context.sealedBatches.length > 0) return now;
   const open = context.openBatch!;
   if (context.config.buffer.mode === "immediate") return now;

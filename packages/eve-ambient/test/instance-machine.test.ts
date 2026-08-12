@@ -254,6 +254,8 @@ describe("instance lifecycle model sweep", () => {
             }
             const cooldownWasExpired =
               inst.cooldownUntil !== undefined && inst.cooldownUntil <= now;
+            const gatedOpenBatchRemains =
+              inst.openBatch !== undefined && inst.sealedBatches.length > 0;
             const result = dispatch(inst, definition, {
               type: "CLAIM",
               runId: `run_${inst.evaluationGeneration + 1}`,
@@ -261,13 +263,16 @@ describe("instance lifecycle model sweep", () => {
             });
             // The due-scan timer never fires without a claimable batch.
             expect(result.claimedBatch, `${name}: due timer with nothing claimable`).toBeDefined();
-            // A consumed cooldown never lingers past the claim it gated.
+            // An expired cooldown remains only while its accumulated open
+            // batch is waiting behind an older sealed batch.
             if (cooldownWasExpired) {
-              expect(result.instance.cooldownUntil).toBeUndefined();
-              if (result.claimedBatch!.events.length > 1 || inst.openBatch !== undefined) {
-                if (inst.sealedBatches.length === 0) {
-                  expect(result.claimedBatch!.closedBy).toBe("cooldown-expired");
-                }
+              if (gatedOpenBatchRemains) {
+                expect(result.instance.cooldownUntil).toBe(inst.cooldownUntil);
+              } else {
+                expect(result.instance.cooldownUntil).toBeUndefined();
+              }
+              if (inst.openBatch !== undefined && inst.sealedBatches.length === 0) {
+                expect(result.claimedBatch!.closedBy).toBe("cooldown-expired");
               }
             }
             next = {
@@ -323,9 +328,14 @@ describe("instance lifecycle model sweep", () => {
             }
             if (op === "complete-ignore") {
               expect(result.instance.consecutiveIgnores).toBe(inst.consecutiveIgnores + 1);
-              // An inherited stale cooldown never survives completion.
-              if (result.instance.cooldownUntil !== undefined) {
-                expect(result.instance.cooldownUntil > now).toBe(true);
+              // An expired cooldown survives only while its accumulated open
+              // batch is still pending, and is immediately due in that case.
+              if (
+                result.instance.cooldownUntil !== undefined &&
+                result.instance.cooldownUntil <= now
+              ) {
+                expect(result.instance.openBatch).toBeDefined();
+                expect(result.instance.nextEvaluationAt).toBe(now);
               }
             }
             expect(result.instance.activeRunId).toBeUndefined();
@@ -347,6 +357,68 @@ describe("instance lifecycle model sweep", () => {
       expect(explored).toBeGreaterThan(10);
     });
   }
+});
+
+describe("expired cooldown consumption", () => {
+  it("retains the closure cause when post-expiry sealed work is claimed first", () => {
+    const definition = CONFIGS.find(({ name }) => name === "immediate+cooldown")!.definition;
+    const at = (milliseconds: number): string => new Date(T0 + milliseconds).toISOString();
+    let instance = freshInstance();
+
+    instance = dispatch(instance, definition, {
+      type: "APPEND",
+      ref: { ref: "evt_1", bytes: 10, acceptedAt: at(0), ingressSequence: "1" },
+      now: at(0),
+    }).instance;
+    let result = dispatch(instance, definition, { type: "CLAIM", runId: "run_1", now: at(0) });
+    instance = result.instance;
+    instance = dispatch(instance, definition, {
+      type: "RUN_COMPLETED",
+      status: "delivered",
+      decision: { action: "wake", reasonClass: "test" },
+      now: at(0),
+    }).instance;
+
+    // This event accumulates during cooldown. The next event arrives after
+    // expiry but before the due scan, so immediate mode seals it separately.
+    instance = dispatch(instance, definition, {
+      type: "APPEND",
+      ref: { ref: "evt_2", bytes: 10, acceptedAt: at(1_000), ingressSequence: "2" },
+      now: at(1_000),
+    }).instance;
+    instance = dispatch(instance, definition, {
+      type: "APPEND",
+      ref: { ref: "evt_3", bytes: 10, acceptedAt: at(10_000), ingressSequence: "3" },
+      now: at(10_000),
+    }).instance;
+
+    result = dispatch(instance, definition, {
+      type: "CLAIM",
+      runId: "run_2",
+      now: at(10_000),
+    });
+    expect(result.claimedBatch?.events.map(({ ref }) => ref)).toEqual(["evt_3"]);
+    expect(result.claimedBatch?.closedBy).toBe("immediate");
+    expect(result.instance.cooldownUntil).toBe(at(10_000));
+
+    instance = dispatch(result.instance, definition, {
+      type: "RUN_COMPLETED",
+      status: "ignored",
+      decision: { action: "ignore", reasonClass: "test" },
+      now: at(10_000),
+    }).instance;
+    expect(instance.cooldownUntil).toBe(at(10_000));
+    expect(instance.nextEvaluationAt).toBe(at(10_000));
+
+    result = dispatch(instance, definition, {
+      type: "CLAIM",
+      runId: "run_3",
+      now: at(10_000),
+    });
+    expect(result.claimedBatch?.events.map(({ ref }) => ref)).toEqual(["evt_2"]);
+    expect(result.claimedBatch?.closedBy).toBe("cooldown-expired");
+    expect(result.instance.cooldownUntil).toBeUndefined();
+  });
 });
 
 type ScenarioStep =
