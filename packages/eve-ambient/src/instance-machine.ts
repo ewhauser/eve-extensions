@@ -214,9 +214,14 @@ function completeRun(
           : addMs(event.now, context.config.cooldownAfterWakeMs),
     };
   }
+  if (next.cooldownUntil !== undefined && next.cooldownUntil <= event.now) {
+    // Normalize records written before expired cooldowns were cleared at claim.
+    next = { ...next, cooldownUntil: undefined };
+  }
   if (
     context.config.buffer.mode === "immediate" &&
     next.cooldownUntil !== undefined &&
+    next.cooldownUntil > event.now &&
     next.sealedBatches.length > 0
   ) {
     next = consolidateBatches(next, event.now);
@@ -280,6 +285,11 @@ export const instanceLifecycleMachine = setup({
         activeRunId: event.runId,
         evaluationGeneration: context.evaluationGeneration + 1,
         claimedBatch: batch,
+        // An expired cooldown is consumed by the claim that it gated, so only
+        // that claim carries the cooldown-expired closure cause.
+        ...(context.cooldownUntil !== undefined && context.cooldownUntil <= event.now
+          ? { cooldownUntil: undefined }
+          : {}),
       };
     }),
     complete: assign(({ context, event }) => {
