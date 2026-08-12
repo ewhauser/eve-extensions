@@ -61,6 +61,9 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
   readonly #api: AwsLambdaMicrovmApi;
   readonly #endpoint: string;
   readonly #microvmId: string;
+  readonly #activationId?: string;
+  readonly #controllerCaSha256?: string;
+  readonly #controllerSessionToken?: string;
   #heartbeatsEnabled = true;
   readonly #heartbeatWaiters = new Set<() => void>();
   #token?: { readonly expiresAt: number; readonly value: string };
@@ -73,6 +76,9 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
     this.#api = input.api;
     this.#endpoint = input.microvm.endpoint.replace(/\/+$/, "");
     this.#microvmId = input.microvm.microvmId;
+    this.#activationId = input.microvm.activationId;
+    this.#controllerCaSha256 = input.microvm.controllerCaSha256;
+    this.#controllerSessionToken = input.microvm.controllerSessionToken;
   }
 
   async checkpointCommitted(checkpointId: string): Promise<void> {
@@ -233,7 +239,13 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
     while (Date.now() < deadline) {
       try {
         const output = await this.#json("/v1/health");
-        if (output.status === "ready" && output.protocolVersion === 1) return;
+        if (
+          output.status === "ready" &&
+          output.protocolVersion === 2 &&
+          (this.#activationId === undefined || output.activationId === this.#activationId) &&
+          (this.#controllerCaSha256 === undefined ||
+            output.controllerCaSha256 === this.#controllerCaSha256)
+        ) return;
         lastError = new Error("Controller returned an incompatible protocol response.");
       } catch (error) {
         lastError = error;
@@ -404,6 +416,9 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
         ...init,
         headers: {
           ...init.headers,
+          ...(this.#controllerSessionToken === undefined
+            ? {}
+            : { "x-eve-controller-session": this.#controllerSessionToken }),
           "x-aws-proxy-auth": token,
           "x-aws-proxy-port": "8080",
         },

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AwsLambdaMicrovmApi, AwsLambdaMicrovmRecord } from "./api.js";
+import { createAwsLambdaMicrovmActivationEnvelope } from "./activation.js";
 import {
   AWS_LAMBDA_MICROVM_BACKEND_NAME,
   createAwsLambdaMicrovmSandbox,
@@ -293,6 +294,17 @@ function createServicesFixture(
     api,
     controllers,
     services: {
+      activationIssuer: {
+        async issueActivation() {
+          return createAwsLambdaMicrovmActivationEnvelope({
+            activationId: "activation-fixture-12345678",
+            capability: testCapability(),
+            controllerCaSha256: "c".repeat(64),
+            expiresAt: "2030-01-01T00:05:00.000Z",
+            issuedAt: "2030-01-01T00:00:00.000Z",
+          });
+        },
+      },
       api,
       createController() {
         const controller = new FakeController(input.controllerReadyError);
@@ -303,6 +315,19 @@ function createServicesFixture(
     },
     storage,
   };
+}
+
+function testCapability(): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "ES256", typ: "JWT" })}.${encode({
+    aud: "agent-egress",
+    exp: 1_893_456_300,
+    iat: 1_893_456_000,
+    jti: "grant-1",
+    lane_id: "runtime-lane",
+    sub: "sandbox/test",
+    typ: "agent-egress-capability+jwt",
+  })}.signature`;
 }
 
 function createFakeApi(returnedConnectorArns?: readonly string[]) {
