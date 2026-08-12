@@ -170,7 +170,9 @@ The package must not read files, environment variables, or secret stores for cre
 
 ### 5.3 `catalog` — inventory, naming, search
 
-**Per-user inventory cache.** Keyed by a per-user principal identifier — derived by default from `ctx.session.auth` using Eve's own convention (`user:<issuer>:<principalId>`), overridable via a `getPrincipal(ctx)` option for auth-less deployments — with `inventoryTtlMs` (default 5 minutes). Deduplicate concurrent loads with an in-flight promise per principal. Cache negative results briefly (~30s) so a broken token cannot produce a request storm.
+**Split authorization and immutable content caches.** Per-user state is keyed by a principal identifier — derived by default from `ctx.session.auth` using Eve's convention (`user:<issuer>:<principalId>`), overridable via `getPrincipal(ctx)` — with `inventoryTtlMs` (default 5 minutes). It retains only the current token/client state and a reference to that principal's authorized catalog. Concurrent loads are deduplicated; failures are cached briefly (~30s); principal and client maps are size-bounded. Credential rotation invalidates only that principal's protocol session and inventory, and stale in-flight loads cannot repopulate it.
+
+Normalized catalogs are SHA-256 content-addressed after applying the tool prefix, name limit, service filter, and complete upstream tool metadata. A process-wide bounded interner retains frozen descriptor arrays and deeply frozen raw input-schema objects. Equivalent catalogs therefore hit Eve's schema identity cache even when they came from different principals or tokens; annotation, filter, prefix, or metadata divergence produces a distinct content address. A second bounded cache reuses connector-scoped `defineTool()` records for an unchanged catalog, avoiding per-step rematerialization without sharing execution clients or approval policies across connector configurations. Aggregate hit, miss, entry, eviction, and estimated-byte metrics contain no principal, token, or schema labels.
 
 **Name mapping — the load-bearing part.**
 
@@ -232,10 +234,10 @@ Approval is only honored by Eve for **step-scoped** dynamic tools, whose live `e
 Composed inside the extension from `connectors.begin`, `connectors.search`, `connectors.call`, and `connectors.approvalFor`. The contract, in order, with a hard rule that **the resolver never throws**:
 
 1. Return `null` immediately when disabled, when there is no principal, or when `getToken` yields `null`. These are the common paths and must cost nothing.
-2. Attempt an inventory load under a short overall budget (~5s). **On failure, do not return `null`** — continue to step 4 with an empty catalog so already-discovered tools stay callable. Log once per principal.
+2. Attempt an inventory load under a short overall budget (~5s). **On failure, do not return `null`** — continue to step 4 with an empty catalog so already-discovered tools remain visible. Their execution still revalidates current catalog membership and fails closed if that check cannot complete. Log once per principal.
 3. Emit relative `search` and optional `status` entries. Eve qualifies them as `openai__search` and `openai__status`. Search results explain that returned names receive the same `openai__` namespace on the next step.
 4. Rebuild previously discovered tools from conversation history, capped at `maxMaterializedTools` (default 30, most recent first) to bound context. `begin()` performs this itself and returns the result as `session.discovered`, so the cap and the prefix-derived search-tool name have a single configuration source; `searchResultsFromMessages(messages, options?)` remains exported as the lower-level primitive.
-5. Every `execute` calls `callTool(item.upstream, input)` — the stored upstream string, never a derived one — returning `structuredContent ?? content`. Map `isError: true` to a thrown error carrying the returned text so the model can adapt.
+5. Every `execute` re-loads current per-principal authorization, verifies that the stored upstream tool is still present, and compares all policy/schema-relevant descriptor fields before calling `callTool(item.upstream, input)` — the stored upstream string, never a derived one. Catalog removal or credential-driven descriptor changes fail closed before the network call. Successful calls return `structuredContent ?? content`; `isError: true` becomes a thrown error carrying returned text so the model can adapt.
 
 **Why step-scoped**, given session- and turn-scoped resolvers are cheaper: only step scope refreshes between model calls within a turn, which is what makes discover-then-call work in a single turn; and only step scope honors `approval`.
 

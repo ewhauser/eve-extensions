@@ -1,18 +1,43 @@
+import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
+
+import { BoundedTtlCache } from "./cache.js";
 import { buildNameMap } from "./naming.js";
 import { flagsFromAnnotations } from "./policy.js";
-import type { ConnectorToolItem, SearchInput, UpstreamTool } from "./types.js";
+import type {
+  ConnectorToolItem,
+  JsonObject,
+  JsonValue,
+  SearchInput,
+  UpstreamTool,
+} from "./types.js";
 
 /** Keep materialized descriptions bounded so search results stay cheap. */
 const MAX_DESCRIPTION_LENGTH = 700;
 
 export interface Inventory {
-  items: ConnectorToolItem[];
-  byUpstream: Map<string, ConnectorToolItem>;
+  /** Content address of the normalized catalog and mapping configuration. */
+  fingerprint: string;
+  /** Shared, deeply immutable descriptor array. */
+  items: readonly ConnectorToolItem[];
+  byUpstream: ReadonlyMap<string, ConnectorToolItem>;
   /** service → tool count, insertion-ordered by first appearance. */
-  services: Map<string, number>;
+  services: ReadonlyMap<string, number>;
   readOnlyCount: number;
   loadedAt: number;
+  estimatedBytes: number;
 }
+
+interface InternedCatalog extends Omit<Inventory, "loadedAt"> {}
+
+// Catalogs outlive the default five-minute principal inventory but remain
+// bounded under both cardinality and estimated retained content.
+const catalogInternCache = new BoundedTtlCache<InternedCatalog>({
+  ttlMs: 15 * 60_000,
+  maxEntries: 256,
+  maxEstimatedBytes: 128 * 1024 * 1024,
+  registerMetrics: true,
+});
 
 function serviceOf(upstream: string): string {
   const dot = upstream.indexOf(".");
@@ -34,6 +59,93 @@ function decorateDescription(
   return text;
 }
 
+function stableJson(value: unknown): string | undefined {
+  if (value === null) return "null";
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return JSON.stringify(value);
+    case "number":
+      return Number.isFinite(value) ? JSON.stringify(value) : "null";
+    case "object": {
+      if (Array.isArray(value)) {
+        return `[${value.map((item) => stableJson(item) ?? "null").join(",")}]`;
+      }
+      const object = value as Record<string, unknown>;
+      const fields: string[] = [];
+      for (const key of Object.keys(object).sort()) {
+        const encoded = stableJson(object[key]);
+        if (encoded !== undefined) fields.push(`${JSON.stringify(key)}:${encoded}`);
+      }
+      return `{${fields.join(",")}}`;
+    }
+    default:
+      return undefined;
+  }
+}
+
+function deepFreezeJson(value: JsonValue): JsonValue {
+  if (typeof value !== "object" || value === null) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreezeJson(item);
+  } else {
+    for (const item of Object.values(value)) deepFreezeJson(item);
+  }
+  return Object.freeze(value);
+}
+
+function immutableSchema(value: unknown): JsonObject {
+  const schema = typeof value === "object" && value !== null ? value : { type: "object" };
+  const encoded = stableJson(schema) ?? '{"type":"object"}';
+  return deepFreezeJson(JSON.parse(encoded) as JsonObject) as JsonObject;
+}
+
+function readonlyMap<K, V>(source: Map<K, V>): ReadonlyMap<K, V> {
+  return Object.freeze({
+    get size() {
+      return source.size;
+    },
+    has: (key: K) => source.has(key),
+    get: (key: K) => source.get(key),
+    entries: () => source.entries(),
+    keys: () => source.keys(),
+    values: () => source.values(),
+    forEach: (callback: (value: V, key: K, map: ReadonlyMap<K, V>) => void, thisArg?: unknown) => {
+      const view = readonlyMap(source);
+      source.forEach((value, key) => callback.call(thisArg, value, key, view));
+    },
+    [Symbol.iterator]: () => source[Symbol.iterator](),
+  });
+}
+
+function fingerprintCatalog(
+  tools: readonly UpstreamTool[],
+  prefix: string,
+  maxToolNameLength: number,
+  allowedServices: ReadonlySet<string> | undefined,
+): { fingerprint: string; estimatedBytes: number } {
+  const normalizedTools = tools
+    .filter(
+      (tool): tool is UpstreamTool & { name: string } =>
+        typeof tool?.name === "string" &&
+        tool.name.length > 0 &&
+        (allowedServices === undefined || allowedServices.has(serviceOf(tool.name).toLowerCase())),
+    )
+    .map((tool) => ({ tool, encoded: stableJson(tool) ?? "{}" }))
+    .sort((a, b) => a.tool.name.localeCompare(b.tool.name) || a.encoded.localeCompare(b.encoded));
+  const encoded = stableJson({
+    format: 1,
+    prefix,
+    maxToolNameLength,
+    allowedServices: allowedServices === undefined ? null : [...allowedServices].sort(),
+    tools: normalizedTools.map(({ tool }) => tool),
+  }) ?? "{}";
+  return {
+    fingerprint: createHash("sha256").update(encoded, "utf8").digest("hex"),
+    estimatedBytes: Buffer.byteLength(encoded, "utf8"),
+  };
+}
+
 export function buildInventory(
   tools: readonly UpstreamTool[],
   prefix: string,
@@ -41,6 +153,35 @@ export function buildInventory(
   maxToolNameLength = 64,
   allowedServices?: ReadonlySet<string>,
 ): Inventory {
+  const { fingerprint, estimatedBytes } = fingerprintCatalog(
+    tools,
+    prefix,
+    maxToolNameLength,
+    allowedServices,
+  );
+  const catalog = catalogInternCache.getOrCreate(fingerprint, estimatedBytes, () =>
+    materializeCatalog(
+      tools,
+      prefix,
+      warn,
+      maxToolNameLength,
+      allowedServices,
+      fingerprint,
+      estimatedBytes,
+    ),
+  );
+  return Object.freeze({ ...catalog, loadedAt: Date.now() });
+}
+
+function materializeCatalog(
+  tools: readonly UpstreamTool[],
+  prefix: string,
+  warn: ((message: string) => void) | undefined,
+  maxToolNameLength: number,
+  allowedServices: ReadonlySet<string> | undefined,
+  fingerprint: string,
+  estimatedBytes: number,
+): InternedCatalog {
   const named = tools.filter(
     (tool): tool is UpstreamTool & { name: string } =>
       typeof tool?.name === "string" &&
@@ -64,25 +205,29 @@ export function buildInventory(
     const tool = byName.get(upstream);
     if (!tool) continue;
     const flags = flagsFromAnnotations(tool.annotations);
-    const item: ConnectorToolItem = {
+    const item: ConnectorToolItem = Object.freeze({
       name: mapped,
       upstream,
       service: serviceOf(upstream),
       description: decorateDescription(tool.description ?? tool.title ?? "", flags),
-      inputSchema:
-        typeof tool.inputSchema === "object" && tool.inputSchema !== null
-          ? (tool.inputSchema as ConnectorToolItem["inputSchema"])
-          : { type: "object" },
+      inputSchema: immutableSchema(tool.inputSchema),
       readOnly: flags.readOnly,
       destructive: flags.destructive,
-    };
+    });
     items.push(item);
     byUpstream.set(upstream, item);
     services.set(item.service, (services.get(item.service) ?? 0) + 1);
     if (item.readOnly) readOnlyCount++;
   }
 
-  return { items, byUpstream, services, readOnlyCount, loadedAt: Date.now() };
+  return Object.freeze({
+    fingerprint,
+    items: Object.freeze(items),
+    byUpstream: readonlyMap(byUpstream),
+    services: readonlyMap(services),
+    readOnlyCount,
+    estimatedBytes,
+  });
 }
 
 const TOKEN_SPLIT = /[\s_\-./]+/;
@@ -145,6 +290,23 @@ export function searchInventory(
   return scored.slice(0, limit).map((entry) => entry.item);
 }
 
+/** Compare every field that can affect schema, execution routing, or policy. */
+export function sameToolDescriptor(
+  expected: ConnectorToolItem,
+  current: ConnectorToolItem,
+): boolean {
+  return (
+    expected === current ||
+    (expected.name === current.name &&
+      expected.upstream === current.upstream &&
+      expected.service === current.service &&
+      expected.description === current.description &&
+      expected.readOnly === current.readOnly &&
+      expected.destructive === current.destructive &&
+      stableJson(expected.inputSchema) === stableJson(current.inputSchema))
+  );
+}
+
 const NEGATIVE_TTL_MS = 30_000;
 
 /**
@@ -156,14 +318,35 @@ export class InventoryCache {
   private readonly positive = new Map<string, { inventory: Inventory; expiresAt: number }>();
   private readonly negative = new Map<string, { error: unknown; expiresAt: number }>();
   private readonly inflight = new Map<string, Promise<Inventory>>();
+  private readonly generations = new Map<string, number>();
 
-  constructor(private readonly ttlMs: number) {}
+  constructor(
+    private readonly ttlMs: number,
+    private readonly maxEntries = 1_000,
+  ) {}
 
   /** Return the cached inventory when fresh, without loading. */
   peek(principal: string): Inventory | null {
+    this.prune();
     const entry = this.positive.get(principal);
-    if (entry && entry.expiresAt > Date.now()) return entry.inventory;
+    if (entry && entry.expiresAt > Date.now()) {
+      this.positive.delete(principal);
+      this.positive.set(principal, entry);
+      return entry.inventory;
+    }
     return null;
+  }
+
+  /** Invalidate only this principal; stale in-flight loads cannot repopulate it. */
+  invalidate(principal: string): void {
+    if (this.inflight.has(principal)) {
+      this.generations.set(principal, (this.generations.get(principal) ?? 0) + 1);
+    } else {
+      this.generations.delete(principal);
+    }
+    this.positive.delete(principal);
+    this.negative.delete(principal);
+    this.inflight.delete(principal);
   }
 
   async get(principal: string, loader: () => Promise<Inventory>): Promise<Inventory> {
@@ -171,31 +354,69 @@ export class InventoryCache {
     if (cached) return cached;
 
     const negative = this.negative.get(principal);
-    if (negative && negative.expiresAt > Date.now()) throw negative.error;
+    if (negative && negative.expiresAt > Date.now()) {
+      this.negative.delete(principal);
+      this.negative.set(principal, negative);
+      throw negative.error;
+    }
 
     const existing = this.inflight.get(principal);
     if (existing) return existing;
 
+    const generation = this.generations.get(principal) ?? 0;
     const load = (async () => {
       try {
         const inventory = await loader();
-        this.positive.set(principal, {
-          inventory,
-          expiresAt: Date.now() + this.ttlMs,
-        });
-        this.negative.delete(principal);
+        if ((this.generations.get(principal) ?? 0) === generation) {
+          this.positive.set(principal, {
+            inventory,
+            expiresAt: Date.now() + this.ttlMs,
+          });
+          this.trim(this.positive);
+          this.negative.delete(principal);
+        }
         return inventory;
       } catch (error) {
-        this.negative.set(principal, {
-          error,
-          expiresAt: Date.now() + NEGATIVE_TTL_MS,
-        });
+        if ((this.generations.get(principal) ?? 0) === generation) {
+          this.negative.set(principal, {
+            error,
+            expiresAt: Date.now() + NEGATIVE_TTL_MS,
+          });
+          this.trim(this.negative);
+        }
         throw error;
       } finally {
-        this.inflight.delete(principal);
+        if ((this.generations.get(principal) ?? 0) === generation) {
+          this.inflight.delete(principal);
+        }
+        if (
+          !this.positive.has(principal) &&
+          !this.negative.has(principal) &&
+          !this.inflight.has(principal)
+        ) {
+          this.generations.delete(principal);
+        }
       }
     })();
     this.inflight.set(principal, load);
     return load;
+  }
+
+  private prune(): void {
+    const now = Date.now();
+    for (const [principal, entry] of this.positive) {
+      if (entry.expiresAt <= now) this.positive.delete(principal);
+    }
+    for (const [principal, entry] of this.negative) {
+      if (entry.expiresAt <= now) this.negative.delete(principal);
+    }
+  }
+
+  private trim<T>(entries: Map<string, T>): void {
+    while (entries.size > this.maxEntries) {
+      const oldest = entries.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      entries.delete(oldest);
+    }
   }
 }

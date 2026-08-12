@@ -90,6 +90,8 @@ Do not ask users to paste access tokens into chat messages. Acquire and store th
 
 The connector catalog can contain hundreds of tools. In the default `deferred` mode, the extension advertises the complete mapped catalog with each schema marked for deferred loading. The patched Eve runtime adds the provider's native tool-search tool, so Anthropic or OpenAI searches the catalog and loads only the schemas needed for the current request.
 
+Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. `openai__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
+
 If the catalog is temporarily unavailable, the extension automatically falls back to progressive search:
 
 1. The agent calls `openai__search` with a service and keywords.
@@ -111,7 +113,7 @@ The token must be one of:
 - A Codex access token created for the user in the ChatGPT admin console under Access tokens. These are long-lived, admin-governed, revocable, and work as raw bearer tokens.
 - A ChatGPT session access token obtained through an OAuth or device-code flow owned by your application. These are short-lived, so your application must handle refresh.
 
-The extension never logs or persists the token. It holds the value only for the outbound request to OpenAI's connector service.
+The extension never logs or persists the token. It holds tokens only in a bounded in-process per-user protocol-client cache. A changed token immediately invalidates that user's protocol session and authorization inventory; unchanged immutable catalog content can still be reused.
 
 ## Configuration
 
@@ -175,6 +177,7 @@ Add `--call` to make one read-only live call. The probe reports catalog health a
 
 - Connector output is untrusted input. A GitHub issue, Drive document, or Notion page can contain instruction-shaped text. Treat retrieved content as data and keep writes behind approval.
 - Cross-service chains deserve extra scrutiny: content read from one service must not silently authorize a write to another.
+- Every connector call revalidates current per-user catalog membership and the policy-relevant descriptor. A tool removed or changed after discovery fails closed before any upstream `tools/call` request.
 - The connector endpoint is an OpenAI backend used by Codex, not a documented public OpenAI API. OpenAI can change or gate it without notice. Review this dependency with your security team before production use.
 - Connector traffic residency through this endpoint is undocumented. Verify it against any residency obligations.
 - The extension does not authorize new connectors. Users authorize services in ChatGPT.

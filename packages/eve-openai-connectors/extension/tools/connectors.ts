@@ -6,6 +6,7 @@ import {
   DEFER_PROVIDER_OPTIONS,
   type Connectors,
 } from "../lib/connectors.js";
+import { getOrCreateDeferredToolSet } from "../lib/tool-cache.js";
 import type { ApprovalsConfig, CreateConnectorsOptions } from "../lib/types.js";
 
 let configuredFor: object | undefined;
@@ -65,17 +66,26 @@ export default defineDynamic({
       // runtime keeps these schemas deferred and adds the provider's search
       // tool. Approval remains enforced by Eve when a connector is called.
       if (session.deferred.length > 0) {
-        for (const item of session.deferred) {
-          tools[item.name] = defineTool({
-            description: item.description,
-            inputSchema: item.inputSchema,
-            approval: connectors.approvalFor(item),
-            providerOptions: DEFER_PROVIDER_OPTIONS,
-            execute: async (input, toolCtx) =>
-              connectors.call(toolCtx, item.upstream, input),
-          });
-        }
-        return tools;
+        if (session.catalogFingerprint === null) return null;
+        return getOrCreateDeferredToolSet(
+          connectors,
+          session.catalogFingerprint,
+          session.deferred.length,
+          () => {
+            const deferredTools: Record<string, DynamicToolEntry<any, any>> = {};
+            for (const item of session.deferred) {
+              deferredTools[item.name] = defineTool({
+                description: item.description,
+                inputSchema: item.inputSchema,
+                approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
+                providerOptions: DEFER_PROVIDER_OPTIONS,
+                execute: async (input, toolCtx) =>
+                  connectors.call(toolCtx, item.upstream, input, item),
+              });
+            }
+            return Object.freeze(deferredTools);
+          },
+        );
       }
 
       // Explicit search mode, or the automatic fallback when the catalog is
@@ -98,9 +108,9 @@ export default defineDynamic({
         tools[item.name] = defineTool({
           description: item.description,
           inputSchema: item.inputSchema,
-          approval: connectors.approvalFor(item),
+          approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
           execute: async (input, toolCtx) =>
-            connectors.call(toolCtx, item.upstream, input),
+            connectors.call(toolCtx, item.upstream, input, item),
         });
       }
 

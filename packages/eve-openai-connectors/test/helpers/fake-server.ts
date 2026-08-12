@@ -9,9 +9,13 @@ export interface FakeServerOptions {
   sessionId?: string;
   /** Reject every request with this HTTP status (e.g. 401). */
   rejectStatus?: number;
-  tools?: UpstreamTool[];
+  tools?: UpstreamTool[] | ((authorization: string | undefined) => UpstreamTool[]);
   /** tools/call handler; defaults to echoing the arguments. */
-  onCall?(name: string, args: Record<string, unknown>): unknown;
+  onCall?(
+    name: string,
+    args: Record<string, unknown>,
+    authorization: string | undefined,
+  ): unknown;
   /** Paginate tools/list into chunks of this size. */
   pageSize?: number;
 }
@@ -25,7 +29,8 @@ export interface FakeServer {
 
 export async function startFakeMcpServer(options: FakeServerOptions = {}): Promise<FakeServer> {
   const requests: FakeServer["requests"] = [];
-  const tools = options.tools ?? [];
+  const toolsFor = (authorization: string | undefined): UpstreamTool[] =>
+    typeof options.tools === "function" ? options.tools(authorization) : (options.tools ?? []);
 
   const server: Server = createServer((req, res) => {
     let body = "";
@@ -64,6 +69,9 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
           };
           break;
         case "tools/list": {
+          const tools = toolsFor(
+            typeof req.headers.authorization === "string" ? req.headers.authorization : undefined,
+          );
           const pageSize = options.pageSize ?? (tools.length || 1);
           const start = envelope.params?.cursor ? Number(envelope.params.cursor) : 0;
           const page = tools.slice(start, start + pageSize);
@@ -75,7 +83,13 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
           const name = envelope.params?.name ?? "";
           const args = envelope.params?.arguments ?? {};
           result = options.onCall
-            ? options.onCall(name, args)
+            ? options.onCall(
+                name,
+                args,
+                typeof req.headers.authorization === "string"
+                  ? req.headers.authorization
+                  : undefined,
+              )
             : { content: [{ type: "text", text: JSON.stringify({ name, args }) }] };
           break;
         }
