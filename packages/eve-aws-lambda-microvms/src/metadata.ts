@@ -1,4 +1,4 @@
-export const AWS_LAMBDA_MICROVM_METADATA_VERSION = 1;
+export const AWS_LAMBDA_MICROVM_METADATA_VERSION = 2;
 
 export interface AwsLambdaMicrovmCheckpoint {
   readonly etag?: string;
@@ -20,7 +20,10 @@ export interface AwsLambdaMicrovmTemplateDescriptor {
 }
 
 export interface AwsLambdaMicrovmSessionMetadata extends AwsLambdaMicrovmTemplateDescriptor {
+  readonly activationId?: string;
+  readonly capabilitySha256?: string;
   readonly checkpoint?: AwsLambdaMicrovmCheckpoint;
+  readonly controllerCaSha256?: string;
   readonly egressNetworkConnectorArn?: string;
   readonly manifestEtag: string;
   readonly microvmId: string;
@@ -54,6 +57,9 @@ export function parseAwsLambdaMicrovmSessionMetadata(
   const record = expectRecord(value, "session metadata");
   return {
     ...parseAwsLambdaMicrovmTemplateDescriptor(record),
+    activationId: optionalString(record.activationId, "activationId"),
+    capabilitySha256: optionalSha256(record.capabilitySha256, "capabilitySha256"),
+    controllerCaSha256: optionalSha256(record.controllerCaSha256, "controllerCaSha256"),
     egressNetworkConnectorArn: optionalString(
       record.egressNetworkConnectorArn,
       "egressNetworkConnectorArn",
@@ -62,6 +68,10 @@ export function parseAwsLambdaMicrovmSessionMetadata(
     microvmId: expectString(record.microvmId, "microvmId"),
     networkLaneId: optionalString(record.networkLaneId, "networkLaneId"),
   };
+}
+
+function optionalSha256(value: unknown, name: string): string | undefined {
+  return value === undefined ? undefined : expectSha256(value, name);
 }
 
 function optionalString(value: unknown, name: string): string | undefined {
