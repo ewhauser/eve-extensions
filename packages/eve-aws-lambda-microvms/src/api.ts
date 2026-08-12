@@ -7,6 +7,12 @@ export type AwsLambdaMicrovmState =
   | "TERMINATING";
 
 export interface AwsLambdaMicrovmRecord {
+  readonly activationId?: string;
+  readonly controllerCaSha256?: string;
+  readonly controllerSessionToken?: string;
+  readonly placeholderGeneration?: number;
+  readonly placeholderPlacement?: { readonly environmentVariable: string };
+  readonly trustedBindingGeneration?: number;
   readonly egressNetworkConnectorArns: readonly string[];
   readonly endpoint: string;
   readonly imageArn: string;

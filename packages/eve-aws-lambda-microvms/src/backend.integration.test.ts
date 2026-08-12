@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AwsLambdaMicrovmApi, AwsLambdaMicrovmRecord } from "./api.js";
+import { createAwsLambdaMicrovmActivationEnvelope } from "./activation.js";
 import {
   AWS_LAMBDA_MICROVM_BACKEND_NAME,
   createAwsLambdaMicrovmSandbox,
@@ -293,6 +294,21 @@ function createServicesFixture(
     api,
     controllers,
     services: {
+      activationProvider: {
+        async createActivation() {
+          return createAwsLambdaMicrovmActivationEnvelope({
+            activationId: "activation-fixture-12345678",
+            controllerCaSha256: "c".repeat(64),
+            controllerSessionToken: "eve_local_fixture_12345678",
+            placeholder: {
+              generation: 1,
+              placement: { environmentVariable: "OPENAI_API_KEY" },
+              token: "eve_placeholder_fixture_12345678",
+              trustedBindingGeneration: 1,
+            },
+          });
+        },
+      },
       api,
       createController() {
         const controller = new FakeController(input.controllerReadyError);
