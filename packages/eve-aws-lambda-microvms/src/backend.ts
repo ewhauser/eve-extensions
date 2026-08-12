@@ -311,36 +311,30 @@ async function createLeasedSessionHandle(input: {
   }
 
   const source = persistedSession ?? template;
-  let microvm = await reattachMicrovm(input.services.api, persistedSession);
-  let launchedMicrovm = false;
-  if (
-    microvm !== null &&
-    (microvm.imageArn !== source.imageArn ||
-      microvm.imageVersion !== source.imageVersion ||
-      !matchesRuntimeNetworkBinding(microvm, persistedSession, input.options))
-  ) {
-    await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
-    microvm = null;
-  }
-  if (microvm === null) {
-    microvm = await runMicrovm({
-      egressNetworkConnectorArns: input.options.runtimeEgressNetworkConnectorArns,
-      imageArn: source.imageArn,
-      imageVersion: source.imageVersion,
-      options: input.options,
-      purposeKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
-      sessionKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
-      services: input.services,
-      templateHash: source.templateHash,
-    });
-    launchedMicrovm = true;
-  } else if (microvm.state === "SUSPENDED" || microvm.state === "SUSPENDING") {
-    await input.services.api.resumeMicrovm(microvm.microvmId);
-  }
+  const microvm = await runMicrovm({
+    egressNetworkConnectorArns: input.options.runtimeEgressNetworkConnectorArns,
+    imageArn: source.imageArn,
+    imageVersion: source.imageVersion,
+    options: input.options,
+    purposeKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
+    replacementOf:
+      persistedSession?.activationId === undefined
+        ? undefined
+        : {
+            activationId: persistedSession.activationId,
+            placeholderGeneration: persistedSession.placeholderGeneration!,
+            trustedBindingGeneration: persistedSession.trustedBindingGeneration!,
+          },
+    sessionKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
+    services: input.services,
+    templateHash: source.templateHash,
+  });
+  const launchedMicrovm = true;
   const activeMicrovm = microvm;
 
   const controller = input.services.createController(activeMicrovm);
   try {
+    assertFreshReplacement(activeMicrovm, persistedSession, input.options);
     await controller.waitUntilReady();
     if (persistedSession === undefined || persistedSession.microvmId !== activeMicrovm.microvmId) {
       if (source.checkpoint !== undefined) {
@@ -376,18 +370,9 @@ async function createLeasedSessionHandle(input: {
   async function ensureActive(): Promise<void> {
     await ensureLease();
     if (!controllerPaused) return;
-    const current = await input.services.api.getMicrovm(activeMicrovm.microvmId);
-    if (current === null || current.state === "TERMINATED" || current.state === "TERMINATING") {
-      throw new Error(
-        "AWS Lambda MicroVM was terminated after this handle captured state. Open a new sandbox handle to restore its checkpoint.",
-      );
-    }
-    if (current.state === "SUSPENDED" || current.state === "SUSPENDING") {
-      await input.services.api.resumeMicrovm(activeMicrovm.microvmId);
-    }
-    controller.resumeHeartbeats();
-    await controller.waitUntilReady();
-    controllerPaused = false;
+    throw new Error(
+      "AWS Lambda MicroVM authority ended after checkpoint termination. Open a new sandbox handle for a fresh activation and restore.",
+    );
   }
 
   const session = createAwsLambdaMicrovmSession({
@@ -414,6 +399,15 @@ async function createLeasedSessionHandle(input: {
     });
     const checkpoint = pending?.checkpoint ?? previousCheckpoint;
     const body: Omit<AwsLambdaMicrovmSessionMetadata, "manifestEtag"> = {
+      ...(activeMicrovm.activationId === undefined
+        ? {}
+        : {
+            activationId: activeMicrovm.activationId,
+            controllerCaSha256: activeMicrovm.controllerCaSha256!,
+            placeholderGeneration: activeMicrovm.placeholderGeneration!,
+            placeholderPlacement: activeMicrovm.placeholderPlacement!,
+            trustedBindingGeneration: activeMicrovm.trustedBindingGeneration!,
+          }),
       checkpoint,
       configHash: source.configHash,
       controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
@@ -442,14 +436,30 @@ async function createLeasedSessionHandle(input: {
       metadata = nextMetadata;
       await pending?.commit();
       controller.pauseHeartbeats();
-      try {
-        await input.services.api.suspendMicrovm(activeMicrovm.microvmId);
-      } catch (error) {
-        controller.resumeHeartbeats();
-        await controller.checkpointRelease().catch(() => undefined);
-        throw error;
-      }
       controllerPaused = true;
+      if (nextMetadata.activationId !== undefined) {
+        try {
+          await input.services.activationProvider!.revokeTrustedBinding({
+            activationId: nextMetadata.activationId,
+            placeholderGeneration: nextMetadata.placeholderGeneration!,
+            trustedBindingGeneration: nextMetadata.trustedBindingGeneration!,
+          });
+        } catch (error) {
+          await input.services.api.terminateMicrovm(activeMicrovm.microvmId).catch(() => undefined);
+          throw new Error(
+            "AWS Lambda MicroVM checkpoint is durable, but revoking its trusted proxy binding failed; the MicroVM was terminated and the checkpoint remains available.",
+            { cause: error },
+          );
+        }
+      }
+      try {
+        await input.services.api.terminateMicrovm(activeMicrovm.microvmId);
+      } catch (error) {
+        throw new Error(
+          "AWS Lambda MicroVM checkpoint is durable, but terminating the retired MicroVM failed; stale authority remains unusable.",
+          { cause: error },
+        );
+      }
       captured = true;
       await activeLease.release();
       lease = undefined;
@@ -479,31 +489,34 @@ async function createLeasedSessionHandle(input: {
   };
 }
 
-async function reattachMicrovm(
-  api: AwsLambdaMicrovmApi,
-  metadata: AwsLambdaMicrovmSessionMetadata | undefined,
-): Promise<AwsLambdaMicrovmRecord | null> {
-  if (metadata === undefined) return null;
-  const microvm = await api.getMicrovm(metadata.microvmId);
-  if (microvm === null || microvm.state === "TERMINATED" || microvm.state === "TERMINATING") {
-    return null;
-  }
-  return microvm;
-}
-
-function matchesRuntimeNetworkBinding(
+function assertFreshReplacement(
   microvm: AwsLambdaMicrovmRecord,
   metadata: AwsLambdaMicrovmSessionMetadata | undefined,
   options: ResolvedAwsLambdaMicrovmOptions,
-): boolean {
-  if (options.networkingMode !== "customer-managed") return true;
+): void {
+  if (metadata === undefined || options.networkingMode !== "customer-managed") return;
   const expectedConnector = options.runtimeEgressNetworkConnectorArns[0]!;
-  return (
-    metadata?.networkLaneId === options.runtimeNetworkLaneId &&
-    metadata?.egressNetworkConnectorArn === expectedConnector &&
+  const valid =
     microvm.egressNetworkConnectorArns.length === 1 &&
-    microvm.egressNetworkConnectorArns[0] === expectedConnector
-  );
+    microvm.egressNetworkConnectorArns[0] === expectedConnector &&
+    microvm.activationId !== undefined &&
+    microvm.activationId !== metadata.activationId &&
+    microvm.controllerSessionToken !== undefined &&
+    microvm.placeholderGeneration !== undefined &&
+    metadata.placeholderGeneration !== undefined &&
+    microvm.placeholderGeneration > metadata.placeholderGeneration &&
+    microvm.trustedBindingGeneration !== undefined &&
+    metadata.trustedBindingGeneration !== undefined &&
+    microvm.trustedBindingGeneration > metadata.trustedBindingGeneration &&
+    microvm.placeholderPlacement?.environmentVariable ===
+      metadata.placeholderPlacement?.environmentVariable &&
+    microvm.controllerCaSha256 !== undefined &&
+    microvm.controllerCaSha256 === metadata.controllerCaSha256;
+  if (!valid) {
+    throw new Error(
+      "AWS Lambda MicroVM replacement rejected stale placeholder/binding generations, activation, controller authentication, CA, placement, or connector state.",
+    );
+  }
 }
 
 async function runMicrovm(input: {
@@ -512,6 +525,11 @@ async function runMicrovm(input: {
   readonly imageVersion: string;
   readonly options: ResolvedAwsLambdaMicrovmOptions;
   readonly purposeKey: string;
+  readonly replacementOf?: {
+    readonly activationId: string;
+    readonly placeholderGeneration: number;
+    readonly trustedBindingGeneration: number;
+  };
   readonly sessionKey?: string;
   readonly services: AwsLambdaMicrovmBackendServices;
   readonly templateHash: string;
@@ -531,6 +549,7 @@ async function runMicrovm(input: {
               ? input.options.buildNetworkLaneId!
               : input.options.runtimeNetworkLaneId!,
           purposeHash: hashKey(input.purposeKey),
+          replacementOf: input.replacementOf,
         })
       : undefined;
   const runHookPayload =

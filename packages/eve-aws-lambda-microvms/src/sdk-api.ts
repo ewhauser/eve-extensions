@@ -10,9 +10,7 @@ import {
   ListMicrovmImageVersionsCommand,
   ListMicrovmImagesCommand,
   type Logging,
-  ResumeMicrovmCommand,
   RunMicrovmCommand,
-  SuspendMicrovmCommand,
   TerminateMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 
@@ -211,10 +209,6 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
     return items;
   }
 
-  async resumeMicrovm(microvmId: string): Promise<void> {
-    await this.#client.send(new ResumeMicrovmCommand({ microvmIdentifier: microvmId }));
-  }
-
   async runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord> {
     return microvmFromOutput(
       await this.#client.send(
@@ -232,10 +226,6 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
         }),
       ),
     );
-  }
-
-  async suspendMicrovm(microvmId: string): Promise<void> {
-    await this.#client.send(new SuspendMicrovmCommand({ microvmIdentifier: microvmId }));
   }
 
   async terminateMicrovm(microvmId: string): Promise<void> {

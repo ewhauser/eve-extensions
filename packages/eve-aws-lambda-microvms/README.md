@@ -45,7 +45,7 @@ The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime
 
 ## Persistence and lifecycle
 
-Native AWS suspension retains memory, files, and running processes. Before eve explicitly suspends a session, it freezes workload processes and publishes the complete writable overlay to S3. The archive preserves numeric ownership, modes, links, ACLs, xattrs, device entries, and overlay whiteouts. It excludes `/proc`, `/sys`, `/dev`, `/run`, and controller state.
+Before eve terminates a session, it freezes workload processes and publishes the complete writable overlay to S3. The archive preserves numeric ownership, modes, links, ACLs, xattrs, device entries, and overlay whiteouts. It excludes `/proc`, `/sys`, `/dev`, `/run`, and controller state.
 
 AWS terminates every MicroVM by its configured maximum duration, at the end of suspended retention, or after an operational failure. On the next turn, eve launches the exact image version recorded in the checkpoint and restores all writable paths, including changes under `/etc`, `/usr/local`, `/root`, `/var`, `/tmp`, and `/workspace`. Files survive replacement; processes do not. If AWS has recalled or removed the recorded image version, eve leaves the checkpoint intact and fails instead of restoring only `/workspace` onto a different image.
 
@@ -235,6 +235,24 @@ Legacy mode continues to default both phases to `INTERNET_EGRESS` and preserves 
 
 The controller uploads and restores checkpoints through short-lived S3 presigned URLs. A restricted VPC path must therefore reach the bucket, normally through an S3 gateway endpoint or controlled NAT. See AWS's [MicroVM networking](https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html) guide.
 
+### Protocol v2 replacement lifecycle
+
+Customer-managed sessions require an injected activation provider. Each launch receives a strict,
+secret-free activation envelope smaller than 4 KiB containing an opaque provider credential
+placeholder with its exact environment-variable placement and generations, a separate opaque
+localhost controller-session token, an activation identifier, and the immutable controller CA
+digest. Neither opaque value is a JWT or authorization assertion. JWT-shaped input is rejected,
+the guest never requests or renews egress authorization, and placeholder possession establishes no
+authority.
+
+Session metadata v2 persists the non-secret activation identifier, placeholder placement and
+generation, trusted-binding generation, and controller CA digest. Capture commits the verified
+checkpoint manifest, revokes the old trusted proxy binding, and then terminates the MicroVM.
+Opening the session again always launches a fresh MicroVM, installs fresh placeholder/binding
+generations and fresh local controller authentication, and verifies the exact singleton connector,
+image, protocol, CA digest, placement, and generations before restoring the checksum-verified
+checkpoint. There is no native suspend/resume or stale-placeholder fallback.
+
 ## Operations and retention
 
 Image build logs use `/aws/lambda/microvms/<image-name>` unless you supply another CloudWatch target. Runtime logs use the configured `runtimeLogging` group. eve logs lifecycle phases and failures, but not command text or environment values. Enable CloudTrail management events for Lambda operations and S3 data events on the artifact prefix when you need an audit trail.
@@ -257,8 +275,8 @@ The runner always attempts the following teardown sequence, whether the tests pa
 5. Delete all S3 objects and abort multipart uploads.
 6. Delete the CloudFormation stack and wait for completion.
 
-The live suite validates package-level image provisioning and reuse, command and file APIs, native
-suspend/resume with a running process, and full-filesystem restore after forced termination. It
+The live suite validates package-level image provisioning and reuse, command and file APIs, and
+full-filesystem restore after checkpoint termination. It
 then runs the deterministic Eve fixture in `apps/eve-aws-lambda-microvms-e2e`. That fixture sends
 an attachment through Eve's real staging path, loads a packaged skill, reads its sibling reference,
 resumes the session, forcibly terminates its MicroVM, and repeats the attachment and skill checks

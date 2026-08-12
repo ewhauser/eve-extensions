@@ -36,6 +36,11 @@ export interface AwsLambdaMicrovmActivationProvider {
   createActivation(
     request: AwsLambdaMicrovmActivationRequest,
   ): Promise<AwsLambdaMicrovmActivationEnvelope>;
+  revokeTrustedBinding(input: {
+    readonly activationId: string;
+    readonly placeholderGeneration: number;
+    readonly trustedBindingGeneration: number;
+  }): Promise<void>;
 }
 
 export function createAwsLambdaMicrovmActivationEnvelope(input: {

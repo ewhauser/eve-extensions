@@ -181,11 +181,9 @@ function fakeApi(): AwsLambdaMicrovmApi & { readonly createAuthToken: ReturnType
     async listManagedImageVersions() {
       return [];
     },
-    async resumeMicrovm() {},
     async runMicrovm() {
       return MICROVM;
     },
-    async suspendMicrovm() {},
     async terminateMicrovm() {},
   };
 }
