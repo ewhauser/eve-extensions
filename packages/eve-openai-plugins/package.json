@@ -35,7 +35,7 @@
     "@types/node": "^24.0.0",
     "eve": "0.31.3",
     "eve-openai-connectors": "workspace:*",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "eve": "0.31.3",

@@ -52,7 +52,7 @@
     "ai": "^7.0.38",
     "pg": "^8.16.3",
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
