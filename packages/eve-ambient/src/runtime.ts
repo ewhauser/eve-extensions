@@ -5,11 +5,11 @@ import {
   validateDecision,
   validateMonitorDefinition,
 } from "./definition.js";
+import { dispatchLifecycle } from "./instance-machine.js";
 import type {
   BufferedEventRef,
   MonitorStore,
   MonitorStoreTransaction,
-  OpenMonitorBatch,
   StoredEvent,
   StoredMonitorBatch,
   StoredMonitorInstance,
@@ -1076,10 +1076,13 @@ export class MonitorRuntime {
             acceptedAt: event.acceptedAt,
             ingressSequence: event.ingressSequence,
           };
-          const append = appendEvent(instance, ref, buffer, now);
+          const append = dispatchLifecycle(instance, monitor.definition, {
+            type: "APPEND",
+            ref,
+            now,
+          });
           instance = {
             ...append.instance,
-            nextEvaluationAt: nextEvaluationAt(append.instance, monitor.definition, now),
             expiresAt: addMs(
               now,
               durationMs((monitor.definition.retention ?? DEFAULT_RETENTION).decisions),
@@ -1168,28 +1171,25 @@ export class MonitorRuntime {
         return null;
       }
       const monitor = this.#definition(instance.monitorId, instance.definitionVersion);
-      const selected = takeDueBatch(instance, monitor.definition, now);
-      if (selected === null) {
-        await tx.putInstance({
-          ...instance,
-          nextEvaluationAt: nextEvaluationAt(instance, monitor.definition, now),
-          updatedAt: now,
-        });
-        return null;
-      }
       const generation = instance.evaluationGeneration + 1;
       const runId = `run_${stableHash(scopedKey(instance.id, String(generation)))}`;
+      const claim = dispatchLifecycle(instance, monitor.definition, {
+        type: "CLAIM",
+        runId,
+        now,
+      });
+      if (claim.claimedBatch === undefined) {
+        await tx.putInstance({ ...claim.instance, updatedAt: now });
+        return null;
+      }
       const replayExpiries: string[] = [];
-      for (const reference of selected.batch.events) {
+      for (const reference of claim.claimedBatch.events) {
         const event = await tx.getEvent(reference.ref);
         if (event !== null) replayExpiries.push(event.payloadExpiresAt);
       }
       const replayExpiresAt = replayExpiries.sort()[0] ?? now;
       const nextInstance: StoredMonitorInstance = {
-        ...selected.instance,
-        activeRunId: runId,
-        nextEvaluationAt: undefined,
-        evaluationGeneration: generation,
+        ...claim.instance,
         updatedAt: now,
       };
       const run: StoredMonitorRun = {
@@ -1200,7 +1200,7 @@ export class MonitorRuntime {
         monitorId: instance.monitorId,
         definitionVersion: instance.definitionVersion,
         correlationKeyHash: instance.correlationKeyHash,
-        batch: selected.batch,
+        batch: claim.claimedBatch,
         mode: monitor.definition.mode ?? "active",
         instanceView: instanceView(instance),
         status: "pending",
@@ -1798,48 +1798,30 @@ export class MonitorRuntime {
       const instance = await tx.getInstance(run.instanceId);
       if (currentRun === null || instance === null || instance.activeRunId !== run.id) return;
       const decisionValue = currentRun.decision;
-      let nextInstance: StoredMonitorInstance = {
-        ...instance,
-        activeRunId: undefined,
-        lastDecision:
-          decisionValue === undefined
-            ? instance.lastDecision
-            : {
+      const completion = dispatchLifecycle(instance, monitor.definition, {
+        type: "RUN_COMPLETED",
+        status,
+        ...(decisionValue === undefined
+          ? {}
+          : {
+              decision: {
                 action: decisionValue.action,
-                ...(decisionValue.confidence === undefined ? {} : { confidence: decisionValue.confidence }),
+                ...(decisionValue.confidence === undefined
+                  ? {}
+                  : { confidence: decisionValue.confidence }),
                 reasonClass: reasonClass(decisionValue.reason),
-                decidedAt: now,
               },
-        consecutiveIgnores:
-          decisionValue?.action === "ignore" ? instance.consecutiveIgnores + 1 : instance.consecutiveIgnores,
+            }),
         ...(currentRun.receipt === undefined ? {} : { binding: currentRun.receipt.binding }),
+        now,
+      });
+      const nextInstance: StoredMonitorInstance = {
+        ...completion.instance,
         expiresAt: addMs(
           now,
           durationMs((monitor.definition.retention ?? DEFAULT_RETENTION).decisions),
         ),
         updatedAt: now,
-      };
-      if (decisionValue?.action === "wake" && (status === "delivered" || status === "shadowed")) {
-        nextInstance = {
-          ...nextInstance,
-          lastWakeAt: now,
-          eventsSinceLastWake: 0,
-          consecutiveIgnores: 0,
-          ...(monitor.definition.cooldown === undefined
-            ? { cooldownUntil: undefined }
-            : { cooldownUntil: addMs(now, durationMs(monitor.definition.cooldown.afterWake)) }),
-        };
-      }
-      if (
-        (monitor.definition.buffer ?? { mode: "immediate" }).mode === "immediate" &&
-        nextInstance.cooldownUntil !== undefined &&
-        nextInstance.sealedBatches.length > 0
-      ) {
-        nextInstance = consolidateImmediateCooldown(nextInstance, now);
-      }
-      nextInstance = {
-        ...nextInstance,
-        nextEvaluationAt: nextEvaluationAt(nextInstance, monitor.definition, now),
       };
       await tx.putInstance(nextInstance);
       await tx.putRun({
@@ -1940,14 +1922,13 @@ export class MonitorRuntime {
       error: reason,
       updatedAt: now,
     });
+    const failure = dispatchLifecycle(
+      instance,
+      this.#definition(run.monitorId, run.definitionVersion).definition,
+      { type: "RUN_FAILED", now },
+    );
     const nextInstance: StoredMonitorInstance = {
-      ...instance,
-      activeRunId: undefined,
-      nextEvaluationAt: nextEvaluationAt(
-        { ...instance, activeRunId: undefined },
-        this.#definition(run.monitorId, run.definitionVersion).definition,
-        now,
-      ),
+      ...failure.instance,
       updatedAt: now,
     };
     await tx.putInstance(nextInstance);
@@ -2609,166 +2590,10 @@ function assertSizedJson(value: unknown, name: string, maxBytes: number): assert
   }
 }
 
-function appendEvent(
-  instance: StoredMonitorInstance,
-  event: BufferedEventRef,
-  buffer: NonNullable<MonitorDefinition<ChannelEvent>["buffer"]>,
-  now: string,
-): { readonly instance: StoredMonitorInstance; readonly flushed: boolean } {
-  if (buffer.mode === "immediate") {
-    if (instance.cooldownUntil !== undefined && instance.cooldownUntil > now) {
-      const open = instance.openBatch;
-      return {
-        instance: {
-          ...instance,
-          openBatch:
-            open === undefined
-              ? { events: [event], bytes: event.bytes, openedAt: now, updatedAt: now }
-              : {
-                  ...open,
-                  events: [...open.events, event],
-                  bytes: open.bytes + event.bytes,
-                  updatedAt: now,
-                },
-          eventsSinceLastWake: instance.eventsSinceLastWake + 1,
-        },
-        flushed: false,
-      };
-    }
-    const batch: StoredMonitorBatch = {
-      events: [event],
-      bytes: event.bytes,
-      openedAt: now,
-      closedAt: now,
-      closedBy: "immediate",
-    };
-    return {
-      instance: {
-        ...instance,
-        sealedBatches: [...instance.sealedBatches, batch],
-        eventsSinceLastWake: instance.eventsSinceLastWake + 1,
-      },
-      flushed: true,
-    };
-  }
-  let open = instance.openBatch;
-  let sealed = [...instance.sealedBatches];
-  let flushed = false;
-  if (
-    open !== undefined &&
-    (open.events.length + 1 > buffer.maxEvents || open.bytes + event.bytes > buffer.maxBytes)
-  ) {
-    const closedBy: MonitorBatchClosedBy =
-      open.events.length + 1 > buffer.maxEvents ? "max-events" : "max-bytes";
-    sealed.push(closeBatch(open, now, closedBy));
-    open = undefined;
-    flushed = true;
-  }
-  if (open === undefined) {
-    open = { events: [event], bytes: event.bytes, openedAt: now, updatedAt: now };
-  } else {
-    open = {
-      ...open,
-      events: [...open.events, event],
-      bytes: open.bytes + event.bytes,
-      updatedAt: now,
-    };
-  }
-  return {
-    instance: {
-      ...instance,
-      openBatch: open,
-      sealedBatches: sealed,
-      eventsSinceLastWake: instance.eventsSinceLastWake + 1,
-    },
-    flushed,
-  };
-}
 
-function consolidateImmediateCooldown(
-  instance: StoredMonitorInstance,
-  now: string,
-): StoredMonitorInstance {
-  const events = [
-    ...instance.sealedBatches.flatMap((batch) => batch.events),
-    ...(instance.openBatch?.events ?? []),
-  ];
-  if (events.length === 0) return instance;
-  const openedAt = [
-    ...instance.sealedBatches.map((batch) => batch.openedAt),
-    ...(instance.openBatch === undefined ? [] : [instance.openBatch.openedAt]),
-  ].sort()[0]!;
-  return {
-    ...instance,
-    sealedBatches: [],
-    openBatch: {
-      events,
-      bytes: events.reduce((sum, event) => sum + event.bytes, 0),
-      openedAt,
-      updatedAt: now,
-    },
-  };
-}
 
-function nextEvaluationAt(
-  instance: StoredMonitorInstance,
-  definition: MonitorDefinition<ChannelEvent>,
-  now: string,
-): string | undefined {
-  if (instance.activeRunId !== undefined) return undefined;
-  const hasEvents = instance.sealedBatches.length > 0 || instance.openBatch !== undefined;
-  if (!hasEvents) return undefined;
-  if (instance.cooldownUntil !== undefined && instance.cooldownUntil > now) return instance.cooldownUntil;
-  if (instance.sealedBatches.length > 0) return now;
-  const open = instance.openBatch!;
-  const buffer = definition.buffer ?? { mode: "immediate" as const };
-  if (buffer.mode === "immediate") return now;
-  return minTimestamp(
-    addMs(open.updatedAt, durationMs(buffer.quietPeriod)),
-    addMs(open.openedAt, durationMs(buffer.maxWait)),
-  );
-}
 
-function takeDueBatch(
-  instance: StoredMonitorInstance,
-  definition: MonitorDefinition<ChannelEvent>,
-  now: string,
-): { readonly instance: StoredMonitorInstance; readonly batch: StoredMonitorBatch } | null {
-  if (instance.cooldownUntil !== undefined && instance.cooldownUntil > now) return null;
-  const first = instance.sealedBatches[0];
-  if (first !== undefined) {
-    return { instance: { ...instance, sealedBatches: instance.sealedBatches.slice(1) }, batch: first };
-  }
-  const open = instance.openBatch;
-  if (open === undefined) return null;
-  const buffer = definition.buffer ?? { mode: "immediate" as const };
-  let closedBy: MonitorBatchClosedBy;
-  if (instance.cooldownUntil !== undefined && instance.cooldownUntil <= now) {
-    closedBy = "cooldown-expired";
-  } else if (buffer.mode === "immediate") {
-    closedBy = "immediate";
-  } else {
-    const quiet = addMs(open.updatedAt, durationMs(buffer.quietPeriod));
-    const maximum = addMs(open.openedAt, durationMs(buffer.maxWait));
-    if (quiet > now && maximum > now) return null;
-    closedBy = maximum <= quiet ? "max-wait" : "quiet-period";
-  }
-  return { instance: { ...instance, openBatch: undefined }, batch: closeBatch(open, now, closedBy) };
-}
 
-function closeBatch(
-  open: OpenMonitorBatch,
-  now: string,
-  closedBy: MonitorBatchClosedBy,
-): StoredMonitorBatch {
-  return {
-    events: open.events,
-    bytes: open.bytes,
-    openedAt: open.openedAt,
-    closedAt: now,
-    closedBy,
-  };
-}
 
 function batchView(batch: StoredMonitorBatch): MonitorBatchView {
   return freeze({

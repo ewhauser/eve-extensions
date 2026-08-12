@@ -99,3 +99,15 @@ export {
   type WakeDecision,
 } from "./types.js";
 export { durationMs } from "./util.js";
+export {
+  computeNextEvaluationAt,
+  deriveLifecycleValue,
+  dispatchLifecycle,
+  instanceLifecycleMachine,
+  lifecycleConfig,
+  type LifecycleConfig,
+  type LifecycleContext,
+  type LifecycleDispatchResult,
+  type LifecycleEvent,
+  type LifecycleStateValue,
+} from "./instance-machine.js";
