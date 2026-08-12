@@ -1,4 +1,5 @@
 import type { DynamicResolveContext, Approval } from "eve/tools";
+import type { CacheMetrics } from "./cache.js";
 
 /** The auth shape Eve provides on both resolve and tool contexts. */
 export type SessionAuth = DynamicResolveContext["session"]["auth"];
@@ -52,18 +53,18 @@ export interface UpstreamCallResult {
  */
 export interface ConnectorToolItem {
   /** Mapped, API-legal tool name, e.g. `github_search_repositories`. */
-  name: string;
+  readonly name: string;
   /** Exact upstream dotted name, e.g. `github.search_repositories`. */
-  upstream: string;
+  readonly upstream: string;
   /** Service namespace, e.g. `github`. */
-  service: string;
-  description: string;
+  readonly service: string;
+  readonly description: string;
   /** Input schema as returned upstream; `{type:"object"}` when absent. */
-  inputSchema: JsonObject;
+  readonly inputSchema: JsonObject;
   /** From `annotations.readOnlyHint`. */
-  readOnly: boolean;
+  readonly readOnly: boolean;
   /** From `annotations.destructiveHint`; true when annotations are missing. */
-  destructive: boolean;
+  readonly destructive: boolean;
 }
 
 export interface SearchInput {
@@ -179,17 +180,21 @@ export interface ConnectorSession {
    * Tools previously discovered via search in this conversation, rebuilt from
    * history (no network), capped at `maxMaterializedTools`, most recent first.
    */
-  discovered: ConnectorToolItem[];
+  discovered: readonly ConnectorToolItem[];
   /**
    * The full mapped catalog in deferred mode. Empty in search mode and when
    * the catalog is unavailable, which signals the search fallback.
    */
-  deferred: ConnectorToolItem[];
+  deferred: readonly ConnectorToolItem[];
+  /** Content address used only to reuse connector-scoped tool definitions. */
+  catalogFingerprint: string | null;
 }
 
 export interface ConnectorStatus {
   enabled: boolean;
   tokenPresent: boolean;
+  /** Process-wide aggregate only; contains no principal or schema labels. */
+  cache: CacheMetrics;
   catalog:
     | {
         ok: true;

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { getConnectorCacheMetrics } from "../extension/lib/cache.js";
 import { createConnectors } from "../extension/lib/connectors.js";
 import { ConnectorToolError } from "../extension/lib/errors.js";
 import type { ConnectorContext, ConnectorToolItem, UpstreamTool } from "../extension/lib/types.js";
@@ -17,7 +18,7 @@ const DEAD_URL = "http://127.0.0.1:9/mcp";
 
 type Ctx = ConnectorContext & { messages?: readonly unknown[] };
 
-function makeCtx(messages: readonly unknown[] = []): Ctx {
+function makeCtx(messages: readonly unknown[] = [], principalId = "user-1"): Ctx {
   return {
     session: {
       id: "session-1",
@@ -25,7 +26,7 @@ function makeCtx(messages: readonly unknown[] = []): Ctx {
         current: {
           attributes: {},
           authenticator: "test-idp",
-          principalId: "user-1",
+          principalId,
           principalType: "user",
         },
         initiator: null,
@@ -103,7 +104,7 @@ describe("begin() — the step.started contract (never throws)", () => {
     expect(String(silentLogger.error.mock.calls[0]?.[0])).not.toContain("Bearer");
   });
 
-  test("a failing catalog degrades apps_search but keeps discovered tools callable", async () => {
+  test("a failing catalog degrades apps_search but keeps discovered tools visible", async () => {
     const connectors = createConnectors({
       getToken: () => "tok",
       baseUrl: DEAD_URL,
@@ -313,6 +314,12 @@ describe("search / call / status against a live (fake) catalog", () => {
     const status = await connectors.status(makeCtx());
     expect(status.tokenPresent).toBe(true);
     expect(status.catalog).toMatchObject({ ok: true, totalTools: CATALOG.length });
+    expect(status.cache).toMatchObject({
+      hits: expect.any(Number),
+      misses: expect.any(Number),
+      entries: expect.any(Number),
+      estimatedBytes: expect.any(Number),
+    });
 
     const noToken = createConnectors({ getToken: () => null, logger: silentLogger });
     expect((await noToken.status(makeCtx())).tokenPresent).toBe(false);
@@ -332,5 +339,118 @@ describe("search / call / status against a live (fake) catalog", () => {
     ]);
     const listCalls = server.requests.filter((request) => request.method === "tools/list");
     expect(listCalls).toHaveLength(1);
+  });
+});
+
+describe("catalog interning and authorization isolation", () => {
+  test("many principals retain one large immutable catalog graph", async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const largeCatalog: UpstreamTool[] = Array.from({ length: 120 }, (_, index) => ({
+      name: `memory_${suffix}.tool_${index}`,
+      description: `Synthetic memory regression tool ${index}.`,
+      inputSchema: {
+        type: "object",
+        properties: Object.fromEntries(
+          Array.from({ length: 12 }, (__, field) => [
+            `field_${field}`,
+            { type: "string", description: `Field ${field} for tool ${index}.` },
+          ]),
+        ),
+        required: ["field_0"],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    }));
+    server = await startFakeMcpServer({ tools: largeCatalog });
+    const connectors = createConnectors({
+      getToken: (ctx) => `token-${ctx.session.auth.current?.principalId ?? "unknown"}`,
+      baseUrl: server.url,
+      discovery: "deferred",
+      logger: silentLogger,
+    });
+    const before = getConnectorCacheMetrics();
+    const sessions = await Promise.all(
+      Array.from({ length: 32 }, (_, index) => connectors.begin(makeCtx([], `user-${index}`))),
+    );
+    const deferred = sessions.map((session) => session?.deferred).filter((items) => items !== undefined);
+
+    expect(deferred).toHaveLength(32);
+    expect(new Set(deferred).size).toBe(1);
+    expect(new Set(deferred.flatMap((items) => items)).size).toBe(largeCatalog.length);
+    expect(new Set(deferred.flatMap((items) => items.map((item) => item.inputSchema))).size).toBe(
+      largeCatalog.length,
+    );
+    const after = getConnectorCacheMetrics();
+    expect(after.misses - before.misses).toBe(1);
+    expect(after.hits - before.hits).toBeGreaterThanOrEqual(31);
+    expect(after.estimatedBytes - before.estimatedBytes).toBeGreaterThan(0);
+  });
+
+  test("credential invalidation and rotation refresh authorization but reuse unchanged content", async () => {
+    server = await startFakeMcpServer({ tools: CATALOG });
+    let token: string | null = "token-a";
+    const connectors = createConnectors({
+      getToken: () => token,
+      baseUrl: server.url,
+      discovery: "deferred",
+      logger: silentLogger,
+    });
+
+    const first = await connectors.begin(makeCtx());
+    token = null;
+    expect(await connectors.begin(makeCtx())).toBeNull();
+    token = "token-b";
+    const second = await connectors.begin(makeCtx());
+
+    expect(second?.deferred).toBe(first?.deferred);
+    expect(server.requests.filter((request) => request.method === "tools/list")).toHaveLength(2);
+  });
+
+  test("divergent catalogs and stale per-principal tools fail closed", async () => {
+    const sharedRead: UpstreamTool = {
+      name: "github.shared",
+      description: "Shared tool.",
+      inputSchema: { type: "object" },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    };
+    const sharedWrite: UpstreamTool = {
+      ...sharedRead,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    };
+    const privileged: UpstreamTool = {
+      name: "github.admin_secret",
+      description: "Privileged tool.",
+      inputSchema: { type: "object" },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    };
+    server = await startFakeMcpServer({
+      tools: (authorization) =>
+        authorization === "Bearer token-a" ? [sharedRead, privileged] : [sharedWrite],
+    });
+    const connectors = createConnectors({
+      getToken: (ctx) =>
+        ctx.session.auth.current?.principalId === "user-a" ? "token-a" : "token-b",
+      baseUrl: server.url,
+      discovery: "deferred",
+      logger: silentLogger,
+    });
+    const sessionA = await connectors.begin(makeCtx([], "user-a"));
+    const sessionB = await connectors.begin(makeCtx([], "user-b"));
+    const privilegedItem = sessionA?.deferred.find((item) => item.upstream === privileged.name);
+    const staleSharedItem = sessionA?.deferred.find((item) => item.upstream === sharedRead.name);
+
+    expect(sessionA?.deferred).not.toBe(sessionB?.deferred);
+    expect(sessionB?.deferred.map((item) => item.upstream)).toEqual(["github.shared"]);
+    expect(privilegedItem).toBeDefined();
+    expect(staleSharedItem).toBeDefined();
+    const callsBefore = server.requests.filter((request) => request.method === "tools/call").length;
+    await expect(
+      connectors.call(makeCtx([], "user-b"), privileged.name, {}, privilegedItem),
+    ).rejects.toThrow(/not available to the current user/);
+    await expect(
+      connectors.call(makeCtx([], "user-b"), sharedRead.name, {}, staleSharedItem),
+    ).rejects.toThrow(/changed since discovery/);
+    expect(server.requests.filter((request) => request.method === "tools/call")).toHaveLength(
+      callsBefore,
+    );
   });
 });
