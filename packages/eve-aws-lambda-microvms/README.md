@@ -39,7 +39,7 @@ export default defineSandbox({
 
 `applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.31.3's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
 
-The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, managed internet egress, no shell access, and no guest execution role. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
+The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
 `eve dev` and `eve start` provision authored bootstrap and workspace templates. Eve's Vercel build hook also prewarms them during `eve build`. When Eve supplies no template key, this package lazily provisions an empty application template during the first session create. That caller therefore needs image-build permissions unless the same default template was already provisioned.
 
@@ -216,7 +216,22 @@ See AWS's [security and permissions](https://docs.aws.amazon.com/lambda/latest/d
 
 eve always attaches AWS's `ALL_INGRESS` connector and creates auth tokens scoped only to controller port 8080. Tokens last at most 60 minutes, are refreshed before expiry, and are never persisted. `shellAccess: true` additionally attaches `SHELL_INGRESS`; shell tokens still come from AWS's separate shell-token API.
 
-Build and runtime egress use `INTERNET_EGRESS` by default. Pass custom connector ARNs through `buildEgressNetworkConnectorArns` and `runtimeEgressNetworkConnectorArns`. An explicit empty array means no egress. Connectors are fixed at launch, so `sandbox.setNetworkPolicy()` throws for this backend. Configure VPC security groups, network ACLs, routing, and DNS on the connector instead.
+For production, select customer-managed networking explicitly and provide the non-secret policy lane bound to each connector:
+
+```ts
+awsLambdaMicrovm({
+  // required fields omitted
+  networkingMode: "customer-managed",
+  buildNetworkLaneId: "package-build-v1",
+  buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
+  runtimeNetworkLaneId: "agent-runtime-v1",
+  runtimeEgressNetworkConnectorArns: [process.env.EVE_AWS_RUNTIME_CONNECTOR_ARN!],
+});
+```
+
+This mode requires exactly one connector for image build/template prewarm and exactly one for live sessions. Both must be customer-managed connector ARNs in the configured Region and the build role's AWS account. Missing, blank, empty, multiple, cross-Region, cross-account, and AWS-managed `INTERNET_EGRESS` values fail before AWS clients are constructed. The connector AWS reports for each launched MicroVM is checked before controller traffic; a mismatch is terminated. Session metadata records the runtime lane ID and connector ARN, and stale reattachment is terminated and replaced before exposing the guest.
+
+Legacy mode continues to default both phases to `INTERNET_EGRESS` and preserves explicit connector arrays (including `[]`) for existing consumers. Do not use legacy mode as a production no-Internet control: explicit empty-array behavior is an AWS API semantic rather than this package's strict invariant. Connectors are fixed at launch, so `sandbox.setNetworkPolicy()` throws for this backend. Configure VPC security groups, network ACLs, routing, and DNS on the connector instead.
 
 The controller uploads and restores checkpoints through short-lived S3 presigned URLs. A restricted VPC path must therefore reach the bucket, normally through an S3 gateway endpoint or controlled NAT. See AWS's [MicroVM networking](https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html) guide.
 

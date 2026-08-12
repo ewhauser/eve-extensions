@@ -260,10 +260,17 @@ function imageVersionFromOutput(
   };
 }
 
-function microvmFromOutput(value: unknown): AwsLambdaMicrovmRecord {
+export function microvmFromOutput(value: unknown): AwsLambdaMicrovmRecord {
   const output = expectRecord(value, "MicroVM");
   const rawEndpoint = expectString(output.endpoint, "endpoint");
+  const egressNetworkConnectors =
+    output.egressNetworkConnectors === undefined
+      ? []
+      : expectArray(output.egressNetworkConnectors, "egressNetworkConnectors");
   return {
+    egressNetworkConnectorArns: egressNetworkConnectors.map((connector, index) =>
+      expectString(connector, `egressNetworkConnectors[${index}]`),
+    ),
     endpoint: rawEndpoint.startsWith("http") ? rawEndpoint : `https://${rawEndpoint}`,
     imageArn: expectString(output.imageArn, "imageArn"),
     imageVersion: expectString(output.imageVersion, "imageVersion"),

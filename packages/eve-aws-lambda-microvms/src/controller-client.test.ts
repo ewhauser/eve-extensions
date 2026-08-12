@@ -4,6 +4,7 @@ import type { AwsLambdaMicrovmApi, AwsLambdaMicrovmRecord } from "./api.js";
 import { HttpAwsLambdaMicrovmController } from "./controller-client.js";
 
 const MICROVM: AwsLambdaMicrovmRecord = {
+  egressNetworkConnectorArns: [],
   endpoint: "https://mvm.example.test",
   imageArn: "arn:aws:lambda:us-east-1:123456789012:microvm-image:test",
   imageVersion: "1.0",
