@@ -38,6 +38,8 @@ function getConnectors(): Connectors {
     maxToolNameLength: 56,
   };
   if (config.allowedServices !== undefined) options.allowedServices = config.allowedServices;
+  if (config.excludedServices !== undefined) options.excludedServices = config.excludedServices;
+  options.protocolClientLifetime = config.protocolClientLifetime;
   if (config.getPrincipal !== undefined) options.getPrincipal = config.getPrincipal;
   if (config.baseUrl !== undefined) options.baseUrl = config.baseUrl;
   if (config.inventoryTtlMs !== undefined) options.inventoryTtlMs = config.inventoryTtlMs;
@@ -61,6 +63,11 @@ function getConnectors(): Connectors {
     options.approvals = approvals;
   }
   if (config.approvalFor !== undefined) options.approvalFor = config.approvalFor;
+  if (config.transformCallInput !== undefined) {
+    options.transformCallInput = config.transformCallInput;
+  }
+  if (config.onAuthError !== undefined) options.onAuthError = config.onAuthError;
+  if (config.onResolution !== undefined) options.onResolution = config.onResolution;
   if (config.logger !== undefined) options.logger = config.logger;
 
   configuredFor = config;

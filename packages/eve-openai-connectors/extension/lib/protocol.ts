@@ -37,6 +37,8 @@ export interface ProtocolClient {
     args: Record<string, unknown>,
     options?: { signal?: AbortSignal },
   ): Promise<UpstreamCallResult>;
+  /** Drop local state and best-effort terminate the upstream MCP session. */
+  close(): Promise<void>;
 }
 
 interface JsonRpcEnvelope {
@@ -242,6 +244,33 @@ export function createProtocolClient(options: ProtocolClientOptions): ProtocolCl
         { timeoutMs: callTimeoutMs, ...(opts.signal ? { signal: opts.signal } : {}) },
       );
       return (payload?.result ?? {}) as UpstreamCallResult;
+    },
+
+    async close(): Promise<void> {
+      const closingSessionId = sessionId;
+      sessionId = null;
+      initialized = null;
+      if (!closingSessionId) return;
+
+      // Streamable HTTP sessions are terminated with DELETE. Cleanup is
+      // deliberately best effort: local credential-bearing state is dropped
+      // synchronously, and a server that does not implement DELETE must not
+      // replace the operation's real result or error.
+      try {
+        const response = await fetchImpl(baseUrl, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${options.token}`,
+            "Mcp-Session-Id": closingSessionId,
+            "X-OpenAI-Product-Sku": "codex",
+            originator: "codex_cli_rs",
+          },
+          signal: AbortSignal.timeout(initTimeoutMs),
+        });
+        await response.text().catch(() => "");
+      } catch {
+        // The in-memory token and session references have already been dropped.
+      }
     },
   };
 }

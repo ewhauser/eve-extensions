@@ -7,8 +7,10 @@ export interface FakeServerOptions {
   sse?: boolean;
   /** Return this `Mcp-Session-Id` header on every response. */
   sessionId?: string;
-  /** Reject every request with this HTTP status (e.g. 401). */
-  rejectStatus?: number;
+  /** Reject every request, or selected protocol methods, with an HTTP status. */
+  rejectStatus?: number | ((method: string, authorization?: string) => number | undefined);
+  /** Delay selected rejected responses to exercise credential-rotation races. */
+  rejectDelayMs?: number;
   tools?: UpstreamTool[] | ((authorization: string | undefined) => UpstreamTool[]);
   /** tools/call handler; defaults to echoing the arguments. */
   onCall?(
@@ -20,6 +22,8 @@ export interface FakeServerOptions {
   pageSize?: number;
   /** Delay tools/list responses to exercise client-side latency budgets. */
   listDelayMs?: number;
+  /** Delay tools/call responses to exercise cancellation and cleanup. */
+  callDelayMs?: number;
 }
 
 export interface FakeServer {
@@ -38,6 +42,21 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
     let body = "";
     req.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
     req.on("end", () => {
+      if (req.method === "DELETE") {
+        requests.push({ method: "session/delete", headers: req.headers });
+        const rejectStatus =
+          typeof options.rejectStatus === "function"
+            ? options.rejectStatus(
+                "session/delete",
+                typeof req.headers.authorization === "string"
+                  ? req.headers.authorization
+                  : undefined,
+              )
+            : options.rejectStatus;
+        res.writeHead(rejectStatus ?? 204);
+        res.end();
+        return;
+      }
       const envelope = body ? (JSON.parse(body) as {
         id?: number;
         method: string;
@@ -45,9 +64,19 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
       }) : { method: "" };
       requests.push({ method: envelope.method, headers: req.headers });
 
-      if (options.rejectStatus) {
-        res.writeHead(options.rejectStatus, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "rejected" }));
+      const authorization =
+        typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
+      const rejectStatus =
+        typeof options.rejectStatus === "function"
+          ? options.rejectStatus(envelope.method, authorization)
+          : options.rejectStatus;
+      if (rejectStatus) {
+        const reject = () => {
+          res.writeHead(rejectStatus, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "rejected" }));
+        };
+        if (options.rejectDelayMs) setTimeout(reject, options.rejectDelayMs);
+        else reject();
         return;
       }
 
@@ -71,9 +100,7 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
           };
           break;
         case "tools/list": {
-          const tools = toolsFor(
-            typeof req.headers.authorization === "string" ? req.headers.authorization : undefined,
-          );
+          const tools = toolsFor(authorization);
           const pageSize = options.pageSize ?? (tools.length || 1);
           const start = envelope.params?.cursor ? Number(envelope.params.cursor) : 0;
           const page = tools.slice(start, start + pageSize);
@@ -88,9 +115,7 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
             ? options.onCall(
                 name,
                 args,
-                typeof req.headers.authorization === "string"
-                  ? req.headers.authorization
-                  : undefined,
+                authorization,
               )
             : { content: [{ type: "text", text: JSON.stringify({ name, args }) }] };
           break;
@@ -109,8 +134,14 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
           res.end(payload);
         }
       };
-      if (envelope.method === "tools/list" && options.listDelayMs) {
-        setTimeout(respond, options.listDelayMs);
+      const delay =
+        envelope.method === "tools/list"
+          ? options.listDelayMs
+          : envelope.method === "tools/call"
+            ? options.callDelayMs
+            : undefined;
+      if (delay) {
+        setTimeout(respond, delay);
       } else {
         respond();
       }

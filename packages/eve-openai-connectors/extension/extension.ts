@@ -12,6 +12,9 @@ import type {
 type GetToken = CreateConnectorsOptions["getToken"];
 type GetPrincipal = (ctx: ConnectorContext) => string | null;
 type ApprovalFor = (item: ConnectorToolItem) => Approval;
+type TransformCallInput = NonNullable<CreateConnectorsOptions["transformCallInput"]>;
+type OnAuthError = NonNullable<CreateConnectorsOptions["onAuthError"]>;
+type OnResolution = NonNullable<CreateConnectorsOptions["onResolution"]>;
 
 const approvalAction = z.enum(["allow", "approve", "deny"]);
 const approvalRule = z.object({
@@ -31,7 +34,9 @@ const config = z
       .optional(),
     enabled: z.boolean().default(true),
     allowedServices: z.array(z.string().trim().min(1)).optional(),
+    excludedServices: z.array(z.string().trim().min(1)).optional(),
     discovery: z.enum(["client", "search", "deferred"]).default("client"),
+    protocolClientLifetime: z.enum(["principal", "operation"]).default("principal"),
     baseUrl: z.string().url().optional(),
     inventoryTtlMs: z.number().int().positive().optional(),
     maxMaterializedTools: z.number().int().nonnegative().optional(),
@@ -50,6 +55,21 @@ const config = z
     approvalFor: z
       .custom<ApprovalFor>((value) => typeof value === "function", {
         message: "approvalFor must be a function.",
+      })
+      .optional(),
+    transformCallInput: z
+      .custom<TransformCallInput>((value) => typeof value === "function", {
+        message: "transformCallInput must be a function.",
+      })
+      .optional(),
+    onAuthError: z
+      .custom<OnAuthError>((value) => typeof value === "function", {
+        message: "onAuthError must be a function.",
+      })
+      .optional(),
+    onResolution: z
+      .custom<OnResolution>((value) => typeof value === "function", {
+        message: "onResolution must be a function.",
       })
       .optional(),
     logger: z
