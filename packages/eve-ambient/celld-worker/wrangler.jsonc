@@ -1,0 +1,32 @@
+{
+  // Deployment template for the eve-ambient correlation mailbox as a celld
+  // fleet application. Copy it next to your own configuration and change the
+  // two vars; nothing else here is per-deployment.
+  //
+  //   celld deploy --config wrangler.jsonc
+  //
+  // `main` is TypeScript on purpose: celld shells out to esbuild, which
+  // compiles and bundles .ts entry points and resolves the eve-ambient sources
+  // this worker imports. Point CELLD_ESBUILD at the binary if it is not on
+  // PATH, and run ./build.mjs first to see bundling failures before a deploy.
+  "name": "eve-ambient-mailbox",
+  "main": "index.ts",
+  "compatibility_date": "2026-01-01",
+  "durable_objects": {
+    "bindings": [{ "name": "MONITOR", "class_name": "MonitorInstance" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MonitorInstance"] }],
+  "vars": {
+    // Where a claimed batch is evaluated: the route your application mounts
+    // `createEvaluationFetchHandler(runtime, { secret })` on. When set, it
+    // wins over the evaluatorUrl the runtime sends with each append, so the
+    // fleet stays in control of its own callback target.
+    "EVALUATOR_URL": "https://app.internal.example/monitor-evaluations",
+
+    // The shared secret. Cells present it to the evaluator as
+    // `authorization: Bearer <secret>`, and the fleet requires the same header
+    // on every /cells route. It must equal the runtime's `mailbox.secret`.
+    // Deploy it from your secret store, never from a committed file.
+    "EVALUATOR_SECRET": "replace-me"
+  }
+}
