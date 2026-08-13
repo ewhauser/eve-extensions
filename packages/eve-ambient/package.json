@@ -1,6 +1,6 @@
 {
   "name": "eve-ambient",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Durable typed event monitors and ambient attention for Eve agents.",
   "license": "MIT",
   "type": "module",
