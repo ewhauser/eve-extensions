@@ -338,7 +338,15 @@ export function instanceStoreKey(input: {
   );
 }
 
-/** Collision-free encoding for durable compound key and lock components. */
+const UTF8 = new TextEncoder();
+
+/**
+ * Collision-free encoding for durable compound key and lock components.
+ *
+ * `TextEncoder` rather than `Buffer.byteLength(part, "utf8")` — identical byte
+ * counts, but no Node built-in, so this module stays bundleable for non-Node
+ * hosts alongside the lifecycle statechart.
+ */
 export function scopedKey(...parts: readonly string[]): string {
-  return parts.map((part) => `${Buffer.byteLength(part, "utf8")}:${part}`).join("|");
+  return parts.map((part) => `${UTF8.encode(part).length}:${part}`).join("|");
 }

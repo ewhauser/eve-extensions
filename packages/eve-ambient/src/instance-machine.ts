@@ -12,7 +12,9 @@ import type {
   MonitorBindingView,
   MonitorDefinition,
 } from "./types.js";
-import { addMs, durationMs, minTimestamp } from "./util.js";
+// `./time.js`, not `./util.js`: the statechart must stay free of Node built-ins
+// so it can be bundled for Worker/Durable-Object hosts.
+import { addMs, durationMs, minTimestamp } from "./time.js";
 
 /**
  * The correlation-instance mailbox lifecycle from RFC §10, expressed as an

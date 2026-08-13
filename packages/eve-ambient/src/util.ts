@@ -1,42 +1,20 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Duration, JsonValue, StandardSchema } from "./types.js";
+import type { JsonValue, StandardSchema } from "./types.js";
 
-const DURATION_PATTERN = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/;
-const DURATION_FACTORS: Readonly<Record<string, number>> = {
-  ms: 1,
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-  d: 86_400_000,
-};
-
-export function durationMs(value: Duration, name = "duration"): number {
-  if (typeof value === "number") {
-    assertPositiveSafeInteger(value, name);
-    return value;
-  }
-  const match = DURATION_PATTERN.exec(value);
-  if (!match) {
-    throw new TypeError(`${name} must be a positive duration such as "2s" or "24h"`);
-  }
-  const amount = Number(match[1]);
-  const factor = DURATION_FACTORS[match[2]!]!;
-  const result = amount * factor;
-  assertPositiveSafeInteger(result, name);
-  return result;
-}
-
-export function assertPositiveSafeInteger(value: number, name: string): void {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new TypeError(`${name} must be a positive safe integer`);
-  }
-}
-
-export function assertNonNegativeSafeInteger(value: number, name: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`${name} must be a non-negative safe integer`);
-  }
-}
+/**
+ * The duration and timestamp helpers live in `./time.js`, which imports no
+ * Node built-ins so that the lifecycle statechart can be bundled for non-Node
+ * hosts. They are re-exported here to keep `util.js` the single import site
+ * every other module already uses.
+ */
+export {
+  addMs,
+  assertNonNegativeSafeInteger,
+  assertPositiveSafeInteger,
+  durationMs,
+  iso,
+  minTimestamp,
+} from "./time.js";
 
 export function assertNonEmpty(value: string, name: string): void {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -119,22 +97,6 @@ export function stableHash(value: string): string {
 
 export function opaqueId(prefix: string): string {
   return `${prefix}_${randomUUID()}`;
-}
-
-export function iso(date: Date | number): string {
-  return new Date(date).toISOString();
-}
-
-export function addMs(timestamp: string, milliseconds: number): string {
-  return iso(Date.parse(timestamp) + milliseconds);
-}
-
-export function minTimestamp(...timestamps: readonly (string | undefined)[]): string | undefined {
-  let result: string | undefined;
-  for (const timestamp of timestamps) {
-    if (timestamp !== undefined && (result === undefined || timestamp < result)) result = timestamp;
-  }
-  return result;
 }
 
 export async function parseSchema<T>(
