@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.2.1...eve-openai-connectors-v0.3.0) (2026-08-13)
+
+
+### Features
+
+* **openai-connectors:** persist discovered tool working set ([#54](https://github.com/ewhauser/eve-extensions/issues/54)) ([4680018](https://github.com/ewhauser/eve-extensions/commit/4680018ce230fd40f416570e0b1417b01c5c8541))
+
 ## [0.2.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.2.0...eve-openai-connectors-v0.2.1) (2026-08-12)
 
 
