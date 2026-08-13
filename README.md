@@ -7,12 +7,12 @@ This pnpm monorepo collects capabilities that can be used with Eve without
 being part of Eve core. Each package is independently consumable and documents
 its own installation requirements, operational constraints, and license.
 
+`eve-ambient` now lives in the standalone
+[`ewhauser/eve-ambient`](https://github.com/ewhauser/eve-ambient) repository and
+is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhauser/eve-ambient).
+
 ## Packages
 
-- [`eve-ambient`](packages/eve-ambient) — implements durable typed channel
-  events, exact-key correlation, bounded debounce, restricted wake decisions,
-  structured evidence, quotas, replay, and channel-owned conversation binding
-  for ambient Eve agents. It is licensed under MIT.
 - [`eve-project-link`](packages/eve-project-link) — links an entire Eve context
   channel to a durable external project hub, injects a compact project context
   card on every turn, and guides the agent to use already-mounted Notion,
@@ -79,6 +79,6 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-ambient`, `eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`,
+`eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`,
 `eve-openai-plugins`, and `eve-openai-imagegen` are MIT-licensed, while
 `eve-aws-lambda-microvms` is Apache-2.0-licensed.
