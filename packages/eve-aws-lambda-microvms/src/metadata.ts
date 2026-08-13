@@ -1,4 +1,4 @@
-export const AWS_LAMBDA_MICROVM_METADATA_VERSION = 1;
+export const AWS_LAMBDA_MICROVM_METADATA_VERSION = 2;
 
 export interface AwsLambdaMicrovmCheckpoint {
   readonly etag?: string;
@@ -20,11 +20,16 @@ export interface AwsLambdaMicrovmTemplateDescriptor {
 }
 
 export interface AwsLambdaMicrovmSessionMetadata extends AwsLambdaMicrovmTemplateDescriptor {
+  readonly activationId?: string;
   readonly checkpoint?: AwsLambdaMicrovmCheckpoint;
+  readonly controllerCaSha256?: string;
   readonly egressNetworkConnectorArn?: string;
   readonly manifestEtag: string;
   readonly microvmId: string;
   readonly networkLaneId?: string;
+  readonly placeholderGeneration?: number;
+  readonly placeholderPlacement?: { readonly environmentVariable: string };
+  readonly trustedBindingGeneration?: number;
 }
 
 export function parseAwsLambdaMicrovmTemplateDescriptor(
@@ -52,8 +57,11 @@ export function parseAwsLambdaMicrovmSessionMetadata(
 ): AwsLambdaMicrovmSessionMetadata | undefined {
   if (value === undefined) return undefined;
   const record = expectRecord(value, "session metadata");
+  rejectUnexpectedSessionKeys(record);
   return {
     ...parseAwsLambdaMicrovmTemplateDescriptor(record),
+    activationId: optionalString(record.activationId, "activationId"),
+    controllerCaSha256: optionalSha256(record.controllerCaSha256, "controllerCaSha256"),
     egressNetworkConnectorArn: optionalString(
       record.egressNetworkConnectorArn,
       "egressNetworkConnectorArn",
@@ -61,7 +69,68 @@ export function parseAwsLambdaMicrovmSessionMetadata(
     manifestEtag: expectString(record.manifestEtag, "manifestEtag"),
     microvmId: expectString(record.microvmId, "microvmId"),
     networkLaneId: optionalString(record.networkLaneId, "networkLaneId"),
+    placeholderGeneration: optionalPositiveInteger(
+      record.placeholderGeneration,
+      "placeholderGeneration",
+    ),
+    placeholderPlacement: parsePlaceholderPlacement(record.placeholderPlacement),
+    trustedBindingGeneration: optionalPositiveInteger(
+      record.trustedBindingGeneration,
+      "trustedBindingGeneration",
+    ),
   };
+}
+
+function rejectUnexpectedSessionKeys(record: Record<string, unknown>): void {
+  const allowed = new Set([
+    "activationId",
+    "checkpoint",
+    "configHash",
+    "controllerCaSha256",
+    "controllerProtocolVersion",
+    "egressNetworkConnectorArn",
+    "imageArn",
+    "imageVersion",
+    "manifestEtag",
+    "microvmId",
+    "networkLaneId",
+    "placeholderGeneration",
+    "placeholderPlacement",
+    "region",
+    "templateHash",
+    "trustedBindingGeneration",
+    "version",
+  ]);
+  const unexpected = Object.keys(record).find((key) => !allowed.has(key));
+  if (unexpected !== undefined) {
+    throw new Error(`Invalid AWS Lambda MicroVM session metadata field ${unexpected}.`);
+  }
+}
+
+function parsePlaceholderPlacement(
+  value: unknown,
+): { readonly environmentVariable: string } | undefined {
+  if (value === undefined) return undefined;
+  const record = expectRecord(value, "placeholderPlacement");
+  if (Object.keys(record).length !== 1 || !("environmentVariable" in record)) {
+    throw new Error("Invalid AWS Lambda MicroVM placeholderPlacement.");
+  }
+  const environmentVariable = expectString(
+    record.environmentVariable,
+    "placeholderPlacement.environmentVariable",
+  );
+  if (!/^[A-Z_][A-Z0-9_]{0,127}$/.test(environmentVariable)) {
+    throw new Error("Invalid AWS Lambda MicroVM placeholderPlacement.environmentVariable.");
+  }
+  return { environmentVariable };
+}
+
+function optionalPositiveInteger(value: unknown, name: string): number | undefined {
+  return value === undefined ? undefined : expectPositiveInteger(value, name);
+}
+
+function optionalSha256(value: unknown, name: string): string | undefined {
+  return value === undefined ? undefined : expectSha256(value, name);
 }
 
 function optionalString(value: unknown, name: string): string | undefined {

@@ -106,10 +106,10 @@ describe("AWS Lambda MicroVM backend", () => {
     expect(fixture.api.createImage).toHaveBeenCalledTimes(1);
     expect(fixture.api.runMicrovm).toHaveBeenCalledTimes(1);
     await handle.shutdown();
-    expect(fixture.api.suspendMicrovm).toHaveBeenCalledTimes(1);
+    expect(fixture.api.terminateMicrovm).toHaveBeenCalledTimes(1);
   });
 
-  it("bootstraps, checkpoints, suspends, and restores a terminated session", async () => {
+  it("bootstraps, checkpoints, terminates, freshly launches, and restores a session", async () => {
     const fixture = createServicesFixture();
     const backend = createAwsLambdaMicrovmSandbox({ options: OPTIONS, services: fixture.services });
 
@@ -147,13 +147,9 @@ describe("AWS Lambda MicroVM backend", () => {
       manifestEtag: expect.any(String),
     });
     expect(fixture.storage.completedSha256s).toEqual(["a".repeat(64), "a".repeat(64)]);
-    expect(fixture.api.suspendMicrovm).toHaveBeenCalledTimes(1);
 
     await handle.shutdown();
-    expect(fixture.api.terminateMicrovm).toHaveBeenCalledTimes(1);
-
-    // Simulate provider retention expiry after Eve has safely suspended the session.
-    await fixture.api.terminateMicrovm("mvm-2");
+    expect(fixture.api.terminateMicrovm).toHaveBeenCalledTimes(2);
 
     const restored = await backend.create({
       existingMetadata: state.metadata,
@@ -236,7 +232,7 @@ describe("AWS Lambda MicroVM backend", () => {
     expect(fixture.controllers).toHaveLength(0);
   });
 
-  it("persists the strict lane and connector and rejects stale reattachment", async () => {
+  it("persists placeholder binding generations and installs fresh replacement material", async () => {
     const fixture = createServicesFixture();
     const backend = createAwsLambdaMicrovmSandbox({
       options: STRICT_OPTIONS,
@@ -254,9 +250,19 @@ describe("AWS Lambda MicroVM backend", () => {
     });
     const state = await first.captureState();
     expect(state.metadata).toMatchObject({
+      activationId: expect.any(String),
+      controllerCaSha256: "c".repeat(64),
       egressNetworkConnectorArn: STRICT_OPTIONS.runtimeEgressNetworkConnectorArns[0],
       networkLaneId: "runtime-lane",
+      placeholderGeneration: 1,
+      placeholderPlacement: { environmentVariable: "OPENAI_API_KEY" },
+      trustedBindingGeneration: 1,
     });
+    expect(fixture.api.runMicrovm).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        idlePolicy: expect.objectContaining({ autoResumeEnabled: false }),
+      }),
+    );
 
     const changed = createAwsLambdaMicrovmSandbox({
       options: { ...STRICT_OPTIONS, runtimeNetworkLaneId: "runtime-lane-v2" },
@@ -272,7 +278,72 @@ describe("AWS Lambda MicroVM backend", () => {
     expect(fixture.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
     expect(fixture.api.runMicrovm).toHaveBeenCalledTimes(2);
     expect(fixture.controllers).toHaveLength(2);
+    expect((await replacement.captureState()).metadata).not.toMatchObject({
+      activationId: state.metadata.activationId,
+      placeholderGeneration: state.metadata.placeholderGeneration,
+      trustedBindingGeneration: state.metadata.trustedBindingGeneration,
+    });
+    expect(fixture.revokeTrustedBinding).toHaveBeenCalledWith({
+      activationId: "activation-fixture-1",
+      placeholderGeneration: 1,
+      trustedBindingGeneration: 1,
+    });
+    expect(fixture.revokeTrustedBinding.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.api.terminateMicrovm.mock.invocationCallOrder[0]!,
+    );
     await replacement.shutdown();
+  });
+
+  it("rejects a replacement that reuses stale placeholder and trusted-binding generations", async () => {
+    const fixture = createServicesFixture({ staleActivation: true });
+    const backend = createAwsLambdaMicrovmSandbox({
+      options: STRICT_OPTIONS,
+      services: fixture.services,
+    });
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-stale-authority",
+    });
+    const first = await backend.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-stale-authority",
+      templateKey: "template-stale-authority",
+    });
+    const state = await first.captureState();
+    await expect(
+      backend.create({
+        existingMetadata: state.metadata,
+        runtimeContext: { appRoot: "/app" },
+        sessionKey: "session-stale-authority",
+        templateKey: "template-stale-authority",
+      }),
+    ).rejects.toThrow(/stale placeholder\/binding generations/);
+  });
+
+  it("terminates and preserves the checkpoint when trusted-binding revocation fails", async () => {
+    const fixture = createServicesFixture({
+      revokeError: new Error("trusted control unavailable"),
+    });
+    const backend = createAwsLambdaMicrovmSandbox({
+      options: STRICT_OPTIONS,
+      services: fixture.services,
+    });
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-revoke-failure",
+    });
+    const handle = await backend.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-revoke-failure",
+      templateKey: "template-revoke-failure",
+    });
+    await handle.session.writeTextFile({ content: "changed", path: "/workspace/state" });
+
+    await expect(handle.captureState()).rejects.toThrow(/revoking its trusted proxy binding failed/);
+    expect(fixture.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
+    expect(fixture.storage.completedSha256s).toEqual(["a".repeat(64)]);
   });
 });
 
@@ -280,34 +351,43 @@ function createServicesFixture(
   input: {
     readonly controllerReadyError?: Error;
     readonly returnedConnectorArns?: readonly string[];
+    readonly revokeError?: Error;
+    readonly staleActivation?: boolean;
   } = {},
 ): {
   readonly api: ReturnType<typeof createFakeApi>;
   readonly controllers: FakeController[];
+  readonly revokeTrustedBinding: ReturnType<typeof vi.fn>;
   readonly services: AwsLambdaMicrovmBackendServices;
   readonly storage: FakeStorage;
 } {
   const api = createFakeApi(input.returnedConnectorArns);
   const storage = new FakeStorage();
   const controllers: FakeController[] = [];
+  let activationGeneration = 0;
+  const revokeTrustedBinding = vi.fn(async () => {
+    if (input.revokeError !== undefined) throw input.revokeError;
+  });
   return {
     api,
     controllers,
     services: {
       activationProvider: {
         async createActivation() {
+          if (!input.staleActivation || activationGeneration === 0) activationGeneration++;
           return createAwsLambdaMicrovmActivationEnvelope({
-            activationId: "activation-fixture-12345678",
+            activationId: `activation-fixture-${activationGeneration}`,
             controllerCaSha256: "c".repeat(64),
-            controllerSessionToken: "eve_local_fixture_12345678",
+            controllerSessionToken: `eve_local_fixture_${activationGeneration}`,
             placeholder: {
-              generation: 1,
+              generation: activationGeneration,
               placement: { environmentVariable: "OPENAI_API_KEY" },
-              token: "eve_placeholder_fixture_12345678",
-              trustedBindingGeneration: 1,
+              token: `eve_placeholder_fixture_${activationGeneration}`,
+              trustedBindingGeneration: activationGeneration,
             },
           });
         },
+        revokeTrustedBinding,
       },
       api,
       createController() {
@@ -317,6 +397,7 @@ function createServicesFixture(
       },
       storage,
     },
+    revokeTrustedBinding,
     storage,
   };
 }
@@ -353,10 +434,6 @@ function createFakeApi(returnedConnectorArns?: readonly string[]) {
     listManagedImageVersions: vi.fn(async (managedImageArn: string) => [
       { imageArn: managedImageArn, imageVersion: "0" },
     ]),
-    resumeMicrovm: vi.fn(async (microvmId: string) => {
-      const current = microvms.get(microvmId);
-      if (current !== undefined) microvms.set(microvmId, { ...current, state: "RUNNING" });
-    }),
     runMicrovm: vi.fn(async (input) => {
       const microvmId = `mvm-${nextMicrovm++}`;
       const record: AwsLambdaMicrovmRecord = {
@@ -370,10 +447,6 @@ function createFakeApi(returnedConnectorArns?: readonly string[]) {
       };
       microvms.set(microvmId, record);
       return record;
-    }),
-    suspendMicrovm: vi.fn(async (microvmId: string) => {
-      const current = microvms.get(microvmId);
-      if (current !== undefined) microvms.set(microvmId, { ...current, state: "SUSPENDED" });
     }),
     terminateMicrovm: vi.fn(async (microvmId: string) => {
       const current = microvms.get(microvmId);
