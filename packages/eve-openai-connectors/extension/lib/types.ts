@@ -73,6 +73,34 @@ export interface SearchInput {
   limit?: number;
 }
 
+/** Raw input emitted by OpenAI for a client-executed `tool_search_call`. */
+export interface ClientToolSearchInput {
+  arguments?: unknown;
+  call_id?: unknown;
+}
+
+/** Model-facing function definition loaded by client-executed tool search. */
+export interface ClientFunctionTool extends JsonObject {
+  readonly type: "function";
+  readonly name: string;
+  readonly description: string;
+  readonly defer_loading: true;
+  readonly parameters: JsonObject;
+}
+
+export interface ClientToolSearchOutput {
+  readonly tools: readonly ClientFunctionTool[];
+}
+
+/** A client-loaded definition matched back to the current authorized catalog. */
+export interface LoadedConnectorTool {
+  readonly item: ConnectorToolItem;
+  /** Exact provider-visible name recorded in `tool_search_output`. */
+  readonly providerName: string;
+  /** Version-tagged description recorded in `tool_search_output`. */
+  readonly description: string;
+}
+
 /** Declarative approval treatment for a tool. */
 export type ApprovalAction = "allow" | "approve" | "deny";
 
@@ -136,6 +164,10 @@ export interface CreateConnectorsOptions {
   maxMaterializedTools?: number;
   searchLimitDefault?: number;
   searchLimitMax?: number;
+  /** Maximum total serialized bytes returned by one client tool search. */
+  clientSearchMaxBytes?: number;
+  /** Wall-clock budget for one client tool search, including catalog lookup. */
+  clientSearchTimeoutMs?: number;
   /**
    * Declarative approval policy (simple or detailed mode). Ignored when
    * `approvalFor` is supplied.
@@ -154,6 +186,9 @@ export interface CreateConnectorsOptions {
   /**
    * How the model discovers connector tools.
    *
+   * - `"client"` — advertise one OpenAI client-executed `tool_search` and
+   *   load a bounded authorized subset. Other providers use the bounded
+   *   progressive marker tool instead of restoring the full catalog.
    * - `"search"` — progressive discovery through the extension's search
    *   tool; works with unpatched Eve.
    * - `"deferred"` — expose the full catalog as deferred tools and let
@@ -161,7 +196,7 @@ export interface CreateConnectorsOptions {
    *   Eve 0.31.3 patch shipped with this package. Falls back to search when
    *   the catalog is unavailable.
    */
-  discovery?: "search" | "deferred";
+  discovery?: "client" | "search" | "deferred";
 }
 
 /** What `begin()` returns for a step with connector access. */
@@ -181,6 +216,10 @@ export interface ConnectorSession {
    * history (no network), capped at `maxMaterializedTools`, most recent first.
    */
   discovered: readonly ConnectorToolItem[];
+  /** Definitions loaded by prior client tool-search outputs and revalidated against the current catalog. */
+  loaded: readonly LoadedConnectorTool[];
+  /** Whether this step should contribute the client-search marker tool. */
+  clientSearchEnabled: boolean;
   /**
    * The full mapped catalog in deferred mode. Empty in search mode and when
    * the catalog is unavailable, which signals the search fallback.

@@ -18,6 +18,8 @@ export interface FakeServerOptions {
   ): unknown;
   /** Paginate tools/list into chunks of this size. */
   pageSize?: number;
+  /** Delay tools/list responses to exercise client-side latency budgets. */
+  listDelayMs?: number;
 }
 
 export interface FakeServer {
@@ -97,13 +99,20 @@ export async function startFakeMcpServer(options: FakeServerOptions = {}): Promi
           result = {};
       }
 
-      const payload = JSON.stringify({ jsonrpc: "2.0", id: envelope.id, result });
-      if (options.sse) {
-        res.writeHead(200, { ...headers, "Content-Type": "text/event-stream" });
-        res.end(`event: message\ndata: ${payload}\n\n`);
+      const respond = () => {
+        const payload = JSON.stringify({ jsonrpc: "2.0", id: envelope.id, result });
+        if (options.sse) {
+          res.writeHead(200, { ...headers, "Content-Type": "text/event-stream" });
+          res.end(`event: message\ndata: ${payload}\n\n`);
+        } else {
+          res.writeHead(200, { ...headers, "Content-Type": "application/json" });
+          res.end(payload);
+        }
+      };
+      if (envelope.method === "tools/list" && options.listDelayMs) {
+        setTimeout(respond, options.listDelayMs);
       } else {
-        res.writeHead(200, { ...headers, "Content-Type": "application/json" });
-        res.end(payload);
+        respond();
       }
     });
   });

@@ -6,6 +6,12 @@ import {
   searchInventory,
   type Inventory,
 } from "./catalog.js";
+import {
+  clientToolSearchResultsFromMessages,
+  materializeClientToolSearchOutput,
+  MIN_CLIENT_SEARCH_OUTPUT_BYTES,
+  parseClientToolSearchInput,
+} from "./client-search.js";
 import { getConnectorCacheMetrics } from "./cache.js";
 import { ConnectorAuthError, ConnectorToolError } from "./errors.js";
 import { searchResultsFromMessages } from "./messages.js";
@@ -25,6 +31,8 @@ import type {
   ConnectorContext,
   ConnectorSession,
   ConnectorStatus,
+  ClientToolSearchInput,
+  ClientToolSearchOutput,
   ConnectorToolItem,
   CreateConnectorsOptions,
   SearchInput,
@@ -58,6 +66,12 @@ export interface Connectors {
     ctx: ConnectorContext,
     input: SearchInput | Record<string, unknown>,
   ): Promise<ConnectorToolItem[]>;
+  /** Execute OpenAI client tool search, or the bounded progressive provider fallback. */
+  clientSearch(
+    ctx: ConnectorContext,
+    input: ClientToolSearchInput | Record<string, unknown>,
+    namespace: string,
+  ): Promise<ClientToolSearchOutput>;
   /** Execute a materialized connector tool after revalidating current catalog membership. */
   call(
     ctx: ConnectorContext,
@@ -94,6 +108,23 @@ function serviceFromUpstream(upstream: string): string {
 }
 
 const MAX_PRINCIPAL_CACHE_ENTRIES = 1_000;
+const DEFAULT_CLIENT_SEARCH_MAX_BYTES = 64 * 1024;
+const DEFAULT_CLIENT_SEARCH_TIMEOUT_MS = 5_000;
+
+async function within<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 export function createConnectors(options: CreateConnectorsOptions): Connectors {
   if (typeof options?.getToken !== "function") {
@@ -110,8 +141,21 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
   const maxMaterializedTools = options.maxMaterializedTools ?? 30;
   const searchLimitDefault = options.searchLimitDefault ?? 8;
   const searchLimitMax = options.searchLimitMax ?? 25;
+  const clientSearchMaxBytes = options.clientSearchMaxBytes ?? DEFAULT_CLIENT_SEARCH_MAX_BYTES;
+  const clientSearchTimeoutMs = options.clientSearchTimeoutMs ?? DEFAULT_CLIENT_SEARCH_TIMEOUT_MS;
+  if (
+    !Number.isInteger(clientSearchMaxBytes) ||
+    clientSearchMaxBytes < MIN_CLIENT_SEARCH_OUTPUT_BYTES
+  ) {
+    throw new Error(
+      `eve-openai-connectors: clientSearchMaxBytes must be an integer of at least ${MIN_CLIENT_SEARCH_OUTPUT_BYTES}.`,
+    );
+  }
+  if (!Number.isInteger(clientSearchTimeoutMs) || clientSearchTimeoutMs <= 0) {
+    throw new Error("eve-openai-connectors: clientSearchTimeoutMs must be a positive integer.");
+  }
   const logger = options.logger ?? console;
-  const discovery = options.discovery ?? "search";
+  const discovery = options.discovery ?? "client";
 
   const searchToolName = buildSearchToolName(toolPrefix);
   const statusToolName = buildStatusToolName(toolPrefix);
@@ -296,6 +340,13 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           (item) =>
             allowedServices === undefined || allowedServices.has(serviceFromUpstream(item.upstream)),
         );
+        const loaded = inventory
+          ? clientToolSearchResultsFromMessages(
+              ctx.messages ?? [],
+              inventory,
+              maxMaterializedTools,
+            )
+          : [];
         const deferred = discovery === "deferred" && inventory ? inventory.items : [];
 
         return {
@@ -308,6 +359,8 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
             "Report the health of the ChatGPT connector catalog for the current user: available services, tool counts, and whether the access token works.",
           statusInputSchema,
           discovered,
+          loaded,
+          clientSearchEnabled: discovery === "client",
           deferred,
           catalogFingerprint: inventory?.fingerprint ?? null,
         };
@@ -330,6 +383,37 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
         limitDefault: searchLimitDefault,
         limitMax: searchLimitMax,
       });
+    },
+
+    async clientSearch(ctx, input, namespace): Promise<ClientToolSearchOutput> {
+      return within(
+        (async () => {
+          const parsed = parseClientToolSearchInput(input);
+          const principal = principalOf(ctx);
+          if (!principal) {
+            throw new Error("Connector tool search is unavailable: no authenticated user.");
+          }
+          const token = await tokenFor(ctx, principal);
+          if (!token) {
+            throw new Error(
+              "Connector tool search is unavailable: the current user has no access token.",
+            );
+          }
+          const inventory = await loadInventory(principal, token);
+          const matches = searchInventory(inventory, parsed, {
+            limitDefault: searchLimitDefault,
+            limitMax: searchLimitMax,
+          });
+          return materializeClientToolSearchOutput(
+            inventory,
+            matches,
+            namespace,
+            clientSearchMaxBytes,
+          );
+        })(),
+        clientSearchTimeoutMs,
+        `Connector tool search exceeded its ${clientSearchTimeoutMs}ms latency budget.`,
+      );
     },
 
     async call(ctx, upstream, input, expected): Promise<unknown> {

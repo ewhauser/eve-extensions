@@ -6,6 +6,13 @@ import {
   DEFER_PROVIDER_OPTIONS,
   type Connectors,
 } from "../lib/connectors.js";
+import {
+  CLIENT_TOOL_SEARCH_DESCRIPTION,
+  CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
+  CLIENT_TOOL_SEARCH_MARKER_NAME,
+  CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
+  namespaceFromClientMarkerToolName,
+} from "../lib/client-search.js";
 import { getOrCreateDeferredToolSet } from "../lib/tool-cache.js";
 import type { ApprovalsConfig, CreateConnectorsOptions } from "../lib/types.js";
 
@@ -36,6 +43,12 @@ function getConnectors(): Connectors {
     options.searchLimitDefault = config.searchLimitDefault;
   }
   if (config.searchLimitMax !== undefined) options.searchLimitMax = config.searchLimitMax;
+  if (config.clientSearchMaxBytes !== undefined) {
+    options.clientSearchMaxBytes = config.clientSearchMaxBytes;
+  }
+  if (config.clientSearchTimeoutMs !== undefined) {
+    options.clientSearchTimeoutMs = config.clientSearchTimeoutMs;
+  }
   if (config.approvals !== undefined) {
     const approvals: ApprovalsConfig = { mode: config.approvals.mode };
     if (config.approvals.rules !== undefined) approvals.rules = config.approvals.rules;
@@ -88,25 +101,52 @@ export default defineDynamic({
         );
       }
 
-      // Explicit search mode, or the automatic fallback when the catalog is
-      // temporarily unavailable.
-      tools[session.searchToolName] = defineTool({
-        description: session.searchToolDescription + namespaceGuidance,
-        inputSchema: session.searchInputSchema,
-        execute: async (input, toolCtx) => connectors.search(toolCtx, input),
-      });
-
-      if (extension.config.includeStatus) {
-        tools[session.statusToolName] = defineTool({
-          description: session.statusToolDescription,
-          inputSchema: session.statusInputSchema,
-          execute: async (_input, toolCtx) => connectors.status(toolCtx),
+      if (session.clientSearchEnabled) {
+        tools[CLIENT_TOOL_SEARCH_MARKER_NAME] = defineTool({
+          description: CLIENT_TOOL_SEARCH_DESCRIPTION,
+          inputSchema: CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
+          providerOptions: CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
+          execute: async (input, toolCtx) =>
+            connectors.clientSearch(
+              toolCtx,
+              input,
+              namespaceFromClientMarkerToolName(toolCtx.toolName),
+            ),
         });
+      }
+
+      if (!session.clientSearchEnabled) {
+        // Explicit search mode, or the automatic fallback when a deferred
+        // catalog is temporarily unavailable. In client mode the marker
+        // itself is the bounded progressive fallback on other providers.
+        tools[session.searchToolName] = defineTool({
+          description: session.searchToolDescription + namespaceGuidance,
+          inputSchema: session.searchInputSchema,
+          execute: async (input, toolCtx) => connectors.search(toolCtx, input),
+        });
+
+        if (extension.config.includeStatus) {
+          tools[session.statusToolName] = defineTool({
+            description: session.statusToolDescription,
+            inputSchema: session.statusInputSchema,
+            execute: async (_input, toolCtx) => connectors.status(toolCtx),
+          });
+        }
       }
 
       for (const item of session.discovered) {
         tools[item.name] = defineTool({
           description: item.description,
+          inputSchema: item.inputSchema,
+          approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
+          execute: async (input, toolCtx) =>
+            connectors.call(toolCtx, item.upstream, input, item),
+        });
+      }
+      for (const loaded of session.loaded) {
+        const item = loaded.item;
+        tools[item.name] = defineTool({
+          description: loaded.description,
           inputSchema: item.inputSchema,
           approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
           execute: async (input, toolCtx) =>

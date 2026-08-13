@@ -21,6 +21,7 @@ export interface Inventory {
   /** Shared, deeply immutable descriptor array. */
   items: readonly ConnectorToolItem[];
   byUpstream: ReadonlyMap<string, ConnectorToolItem>;
+  byName: ReadonlyMap<string, ConnectorToolItem>;
   /** service → tool count, insertion-ordered by first appearance. */
   services: ReadonlyMap<string, number>;
   readOnlyCount: number;
@@ -59,7 +60,7 @@ function decorateDescription(
   return text;
 }
 
-function stableJson(value: unknown): string | undefined {
+export function stableJson(value: unknown): string | undefined {
   if (value === null) return "null";
   switch (typeof value) {
     case "string":
@@ -198,6 +199,7 @@ function materializeCatalog(
 
   const items: ConnectorToolItem[] = [];
   const byUpstream = new Map<string, ConnectorToolItem>();
+  const byMappedName = new Map<string, ConnectorToolItem>();
   const services = new Map<string, number>();
   let readOnlyCount = 0;
 
@@ -216,6 +218,7 @@ function materializeCatalog(
     });
     items.push(item);
     byUpstream.set(upstream, item);
+    byMappedName.set(mapped, item);
     services.set(item.service, (services.get(item.service) ?? 0) + 1);
     if (item.readOnly) readOnlyCount++;
   }
@@ -224,6 +227,7 @@ function materializeCatalog(
     fingerprint,
     items: Object.freeze(items),
     byUpstream: readonlyMap(byUpstream),
+    byName: readonlyMap(byMappedName),
     services: readonlyMap(services),
     readOnlyCount,
     estimatedBytes,
