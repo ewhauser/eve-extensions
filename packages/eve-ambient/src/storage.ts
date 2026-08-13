@@ -203,8 +203,12 @@ export interface StoredDeadLetter {
 
 export interface StoredDeployment {
   readonly applicationId: string;
+  /** Mailbox ownership is durable; changing it without migration strands work. */
+  readonly mailboxMode?: "store" | "celld" | undefined;
   readonly activeMonitorIds: readonly string[];
   readonly activeVersions: Readonly<Record<string, readonly string[]>>;
+  /** Definition versions pinned by cells, which are not visible in store tables. */
+  readonly celldDefinitionPins?: Readonly<Record<string, readonly string[]>> | undefined;
   readonly updatedAt: string;
 }
 

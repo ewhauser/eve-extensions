@@ -7,8 +7,8 @@ due-scan. **Experimental** — see the limitations box in the package README
 before deploying it.
 
 The cell holds no monitor configuration and no provider credentials. It learns
-`monitorId`, `definitionVersion`, and the buffer/cooldown configuration from
-its first append and pins them; evaluation is a callback into your application,
+`monitorId`, `definitionVersion`, and the buffer/cooldown/retention configuration
+from its first append and pins them; evaluation is a callback into your application,
 where the decision pipeline, budgets, and run records already live.
 
 ## Deploy
@@ -47,13 +47,17 @@ rewritten by a deploy.
 | `GET /cells/<instanceKey>/whoami` | owning Durable Object id, for placement tracing |
 
 Everything under `/cells` requires `authorization: Bearer $EVALUATOR_SECRET`.
+If `EVALUATOR_SECRET` is absent or empty, those routes fail closed with `503`
+and no request is forwarded to a cell.
 celld's *internal* listener (`/shutdown`, `/evict`) is unauthenticated and must
 be firewalled separately — that is a fleet configuration concern, not this
 worker's.
 
 ## `rearm`
 
-celld stops re-dispatching an alarm after six counted handler failures. A cell
+celld stops re-dispatching an alarm after six counted handler failures. Durable
+runtime backoff is not a handler failure: a `retry` response carries `retryAt`,
+and the cell moves its alarm there without closing the active run. A cell
 that exhausts the ladder keeps its buffered events and its instance record but
 has no timer left to evaluate them. `rearm` recomputes the due time from the
 stored record with the same derivation the statechart uses and sets the alarm

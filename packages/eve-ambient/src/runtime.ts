@@ -22,7 +22,7 @@ import type {
   CelldMailboxOptions,
   EvaluationRequest,
   EvaluationResponse,
-  EvaluationStatus,
+  EvaluationTerminalStatus,
   MailboxOptions,
 } from "./mailbox.js";
 import type {
@@ -180,6 +180,7 @@ export class MonitorRuntime {
   readonly #deployment: MonitorDeployment;
   readonly #mailbox: MailboxOptions;
   readonly #fetch: typeof fetch;
+  readonly #recordedCelldDefinitionPins = new Set<string>();
   #initialized = false;
 
   constructor(options: MonitorRuntimeOptions) {
@@ -255,6 +256,21 @@ export class MonitorRuntime {
     const removals = new Set(
       (this.#deployment.monitorRemovals ?? []).map((removal) => removal.id),
     );
+    if (this.#mailbox.mode === "celld") {
+      if (migrations.size > 0 || removals.size > 0) {
+        throw new Error(
+          "celld mailbox does not support monitor migrations or removals; drain or migrate the fleet before changing durable identity",
+        );
+      }
+      const compatible = this.#deployment.monitors.find(
+        (monitor) => (monitor.compatibleWith?.length ?? 0) > 0,
+      );
+      if (compatible !== undefined) {
+        throw new Error(
+          `celld mailbox does not support compatibleWith migrations (${compatible.definition.id}@${compatible.version}); cells must be migrated explicitly`,
+        );
+      }
+    }
     for (const migration of migrations.values()) {
       if (activeIds.includes(migration.from)) {
         throw new Error(`migration source ${migration.from} must not remain active`);
@@ -269,6 +285,12 @@ export class MonitorRuntime {
       async (tx) => {
       const previous = await tx.getDeployment(this.#applicationId);
       if (previous !== null) {
+        const previousMailboxMode = previous.mailboxMode ?? "store";
+        if (previousMailboxMode !== this.#mailbox.mode) {
+          throw new Error(
+            `mailbox mode cannot change from ${previousMailboxMode} to ${this.#mailbox.mode} without an explicit durable-state migration`,
+          );
+        }
         for (const id of previous.activeMonitorIds) {
           if (!activeIds.includes(id) && !migrations.has(id) && !removals.has(id)) {
             throw new Error(
@@ -285,6 +307,14 @@ export class MonitorRuntime {
     for (const id of removals) await this.#removeMonitorState(id);
     await this.#migrateCompatibleVersions();
     await this.#validatePinnedDefinitions();
+    this.#validateCelldDefinitionPins(expectedDeployment?.celldDefinitionPins);
+    for (const [monitorId, versions] of Object.entries(
+      expectedDeployment?.celldDefinitionPins ?? {},
+    )) {
+      for (const version of versions) {
+        this.#recordedCelldDefinitionPins.add(definitionKey(monitorId, version));
+      }
+    }
 
     await this.#store.transaction(`deployment:${this.#applicationId}`, async (tx) => {
       const current = await tx.getDeployment(this.#applicationId);
@@ -293,8 +323,12 @@ export class MonitorRuntime {
       }
       await tx.putDeployment({
         applicationId: this.#applicationId,
+        mailboxMode: this.#mailbox.mode,
         activeMonitorIds: activeIds,
         activeVersions,
+        ...(expectedDeployment?.celldDefinitionPins === undefined
+          ? {}
+          : { celldDefinitionPins: expectedDeployment.celldDefinitionPins }),
         updatedAt: this.#now(),
       });
     });
@@ -1227,21 +1261,29 @@ export class MonitorRuntime {
         ...(monitor.definition.cooldown === undefined
           ? {}
           : { cooldown: monitor.definition.cooldown }),
+        retention: monitor.definition.retention ?? DEFAULT_RETENTION,
       },
       evaluatorUrl: mailbox.evaluatorUrl,
       tenantId: subscription.tenantId,
       applicationId: subscription.applicationId,
       correlationKey,
       correlationKeyHash: keyHash,
+      subscriptionId: subscription.id,
       ref: event.ref,
       bytes: event.bytes,
       ingressSequence: event.ingressSequence,
       acceptedAt: event.acceptedAt,
-      payload: event.event === undefined ? null : (event.event as unknown as JsonValue),
     };
     let outcome: CelldAppendOutcome;
     try {
       outcome = await this.#postCellAppend(mailbox, instanceId, body);
+      try {
+        await this.#recordCelldDefinitionPin(subscription.monitorId, subscription.definitionVersion);
+      } catch (error) {
+        throw new TransientMonitorError(
+          `could not record celld definition pin: ${errorMessage(error)}`,
+        );
+      }
     } catch (error) {
       if (error instanceof CelldAppendRejected) {
         await this.#deadLetterSubscription(subscription, "buffer", error.message);
@@ -1336,8 +1378,9 @@ export class MonitorRuntime {
    * nothing is delivered twice. A non-terminal record resumes from its last
    * checkpoint exactly as `#processRun` does for a store-mode run.
    *
-   * Anything short of a terminal outcome throws, so the transport answers 5xx
-   * and celld's own alarm-retry ladder brings the evaluation back.
+   * A retry scheduled by the durable run record is returned as a successful
+   * `retry` answer. The cell moves its alarm to `retryAt`, so ordinary budget
+   * and transient backoff do not consume celld's finite failure ladder.
    */
   async handleEvaluation(request: EvaluationRequest): Promise<EvaluationResponse> {
     this.#assertInitialized();
@@ -1359,11 +1402,15 @@ export class MonitorRuntime {
     } catch (error) {
       throw new EvaluationRequestError(errorMessage(error), "unknown-definition");
     }
+    const now = this.#now();
     const existing = await this.#store.getRun(request.runId);
     if (existing !== null) {
       if (
         existing.applicationId !== this.#applicationId ||
-        existing.instanceId !== request.instanceId
+        existing.instanceId !== request.instanceId ||
+        existing.tenantId !== request.tenantId ||
+        existing.monitorId !== request.monitorId ||
+        existing.definitionVersion !== request.definitionVersion
       ) {
         throw new EvaluationRequestError(
           `run ${request.runId} is recorded against another monitor instance`,
@@ -1371,8 +1418,9 @@ export class MonitorRuntime {
         );
       }
       if (isTerminalRunStatus(existing.status)) return recordedEvaluation(existing);
+      const retryAt = evaluationUnavailableUntil(existing, now);
+      if (retryAt !== null) return scheduledEvaluation(existing.id, retryAt);
     }
-    const now = this.#now();
     const retention = monitor.definition.retention ?? DEFAULT_RETENTION;
     let run: StoredMonitorRun;
     if (existing === null) {
@@ -1445,6 +1493,12 @@ export class MonitorRuntime {
       await this.#failRun(run, error, context);
     }
     if (context.outcome !== undefined) return context.outcome;
+    const deferred = await this.#store.getRun(run.id);
+    if (deferred !== null) {
+      if (isTerminalRunStatus(deferred.status)) return recordedEvaluation(deferred);
+      const retryAt = evaluationUnavailableUntil(deferred, this.#now());
+      if (retryAt !== null) return scheduledEvaluation(deferred.id, retryAt);
+    }
     throw new TransientMonitorError(
       `monitor run ${run.id} has not reached a terminal outcome; retry the evaluation`,
     );
@@ -2719,6 +2773,40 @@ export class MonitorRuntime {
     }
   }
 
+  #validateCelldDefinitionPins(
+    pins: Readonly<Record<string, readonly string[]>> | undefined,
+  ): void {
+    for (const [monitorId, versions] of Object.entries(pins ?? {})) {
+      for (const version of versions) {
+        if (!this.#definitions.has(definitionKey(monitorId, version))) {
+          throw new Error(
+            `durable celld mailbox requires pinned definition ${monitorId}@${version}; retain it as inactive until the fleet state is explicitly migrated or discarded`,
+          );
+        }
+      }
+    }
+  }
+
+  async #recordCelldDefinitionPin(monitorId: string, version: string): Promise<void> {
+    const definition = definitionKey(monitorId, version);
+    if (this.#recordedCelldDefinitionPins.has(definition)) return;
+    await this.#store.transaction(`deployment:${this.#applicationId}`, async (tx) => {
+      const deployment = await tx.getDeployment(this.#applicationId);
+      if (deployment === null || (deployment.mailboxMode ?? "store") !== "celld") {
+        throw new Error("celld deployment record disappeared while appending to a cell");
+      }
+      const pins: Record<string, readonly string[]> = {
+        ...(deployment.celldDefinitionPins ?? {}),
+      };
+      const versions = new Set(pins[monitorId] ?? []);
+      if (versions.has(version)) return;
+      versions.add(version);
+      pins[monitorId] = [...versions].sort();
+      await tx.putDeployment({ ...deployment, celldDefinitionPins: pins, updatedAt: this.#now() });
+    });
+    this.#recordedCelldDefinitionPins.add(definition);
+  }
+
   #monitorScope(input: { readonly tenantId: string; readonly applicationId: string; readonly monitorId: string }) {
     return scopedKey(input.tenantId, input.applicationId, input.monitorId);
   }
@@ -2856,11 +2944,27 @@ function isTerminalRunStatus(status: StoredMonitorRun["status"]): boolean {
   );
 }
 
+function evaluationUnavailableUntil(run: StoredMonitorRun, now: string): string | null {
+  if (run.availableAt > now) return run.availableAt;
+  if (
+    run.status === "processing" &&
+    run.leaseExpiresAt !== undefined &&
+    run.leaseExpiresAt > now
+  ) {
+    return run.leaseExpiresAt;
+  }
+  return null;
+}
+
+function scheduledEvaluation(runId: string, retryAt: string): EvaluationResponse {
+  return { runId, status: "retry", retryAt };
+}
+
 /** Projects a recorded run into the answer a cell needs to close its run. */
 function recordedEvaluation(run: StoredMonitorRun): EvaluationResponse {
   return {
     runId: run.id,
-    status: run.status as EvaluationStatus,
+    status: run.status as EvaluationTerminalStatus,
     ...(run.decision === undefined
       ? {}
       : {

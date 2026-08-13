@@ -31,7 +31,10 @@ export type {
   CelldMailboxOptions,
   EvaluationRequest,
   EvaluationResponse,
+  EvaluationRetryResponse,
   EvaluationStatus,
+  EvaluationTerminalResponse,
+  EvaluationTerminalStatus,
   MailboxOptions,
   StoreMailboxOptions,
 } from "./mailbox.js";

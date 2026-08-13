@@ -344,7 +344,7 @@ channels
     ▼
 ingress pipeline (unchanged)        schema, dedupe, ingress sequence, filter,
     │                              correlate, loop prevention, event budgets
-    │  POST /cells/<instanceKey>/append  {ref, bytes, seq, config}
+    │  POST /cells/<instanceKey>/append  {subscriptionId, ref, bytes, seq, config}
     ▼
 celld cells                        the statechart, buffer/cooldown, alarms.
     │                              No model credentials in the fleet.
@@ -352,15 +352,19 @@ celld cells                        the statechart, buffer/cooldown, alarms.
     ▼
 runtime.handleEvaluation()         decision, budgets, evidence, route,
     │                              delivery; writes the run to the store
-    │  {status, decision, binding} → cell dispatches RUN_COMPLETED
+    │  terminal → RUN_COMPLETED; retryAt → cell re-arms without failing
     ▼
 delivery channels                  unchanged: idempotency keys, coalescing
 ```
 
-Only post-filter appends leave the runtime. Payloads stay in the event store
-from ingress and the evaluator reads them by ref; the cell keeps its own copy
-for inspection only. Because run records are written identically in both
+Only post-filter appends leave the runtime. Payloads stay exclusively in the
+event store from ingress and the evaluator reads them by ref; cells persist
+only references and scheduling metadata. Appends are idempotent by durable
+subscription ID, including a lost response after the cell committed. Because
+run records are written identically in both
 tiers, `replay()`, `listRuns()`, and `listDeadLetters()` behave the same.
+An idle cell arms a cleanup alarm for the monitor's decision-retention expiry;
+the instance record and expired append receipts are then removed durably.
 
 ### When to choose it
 
@@ -372,7 +376,9 @@ idle keys cost bucket storage rather than resident memory.
 
 Stay on the store tier otherwise. It is the default, it is the small-deployment
 answer, and it stays conformance-tested — the two tiers execute the same
-`dispatchLifecycle`, so moving between them is a configuration change.
+`dispatchLifecycle`. Mailbox ownership is durable, so changing an existing
+application between tiers requires an explicit state-migration procedure and
+is rejected by `initialize()` today.
 
 ### Setup
 
@@ -422,6 +428,10 @@ answer, and it stays conformance-tested — the two tiers execute the same
    run there. It stops sweeping due instances and due runs, because claiming
    them would race the cells.
 
+   `EVALUATOR_SECRET` is mandatory on the worker. When it is absent, every
+   `/cells` route fails closed with `503` instead of forwarding unauthenticated
+   traffic.
+
 ### Tuning
 
 | Setting | Why |
@@ -441,11 +451,19 @@ answer, and it stays conformance-tested — the two tiers execute the same
 >   inactive. Event, model-call, model-token, and wake budgets are unaffected
 >   and remain the rate controls. Size the fleet for unbounded key growth, or
 >   cap keys upstream in `correlate()`.
+> - **Mailbox and definition state do not migrate automatically.** Once an
+>   application initializes in `celld` mode, switching it to `store` (or the
+>   reverse) is rejected. Monitor ID migrations, destructive removals, and
+>   `compatibleWith` version moves are also rejected in `celld` mode because
+>   the store cannot rewrite cell-owned instances. Definition versions used by
+>   cells are recorded in the deployment and must remain present as inactive
+>   versions until the fleet is explicitly migrated or discarded.
 > - **celld abandons an alarm after six counted handler failures.** A cell that
 >   exhausts the ladder keeps its buffered events and its instance record but
 >   has no timer left. Mitigation: `POST /cells/<instanceKey>/rearm`, which
 >   recomputes the due time with the statechart's own derivation and re-arms.
->   Alert on runs stuck in `retry` status, and on cells whose
+>   Durable run backoff does not spend this ladder: the evaluator returns
+>   `retryAt` and the cell re-arms directly. Alert on cells whose
 >   `nextEvaluationAt` is in the past with no `pendingAlarm` in `/state`.
 > - **Deploys are fleet restarts.** celld's staged rollout is not exposed;
 >   changing the worker stops and restarts every node. Cells resume from

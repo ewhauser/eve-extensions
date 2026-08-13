@@ -10,9 +10,10 @@
  * `StoredMonitorInstance` record, and a timer for `nextEvaluationAt`.
  *
  * The cell carries no monitor configuration of its own. It learns
- * `monitorId`, `definitionVersion`, and the buffer/cooldown configuration from
- * its first append and pins them; an append that disagrees with the pin is
- * rejected with `definition-version-mismatch`, which the runtime dead-letters.
+ * `monitorId`, `definitionVersion`, and the buffer/cooldown/retention
+ * configuration from its first append and pins them; an append that disagrees
+ * with the pin is rejected with `definition-version-mismatch`, which the
+ * runtime dead-letters.
  *
  * The cell never calls a model and holds no provider credentials. On claim it
  * POSTs an evaluation request to the runtime's evaluator, which runs the
@@ -26,8 +27,8 @@
  *   POST /cells/<name>/rearm    recompute nextEvaluationAt and re-arm the alarm
  *   GET  /cells/<name>/whoami   DO id (for ownership tracing)
  *
- * Everything under /cells requires `authorization: Bearer $EVALUATOR_SECRET`
- * when that var is set.
+ * Everything under /cells requires `authorization: Bearer $EVALUATOR_SECRET`.
+ * A missing secret is a configuration error and fails closed.
  */
 
 import {
@@ -46,9 +47,11 @@ import {
 import type {
   CelldAppendOutcome,
   CelldAppendRequest,
+  CelldAppendResponse,
   CelldCellConfig,
   EvaluationRequest,
   EvaluationResponse,
+  EvaluationTerminalResponse,
 } from "./mailbox.js";
 import { scopedKey } from "./storage.js";
 import type {
@@ -62,8 +65,9 @@ import type {
   MonitorInstanceView,
 } from "./types.js";
 
-/** `DEFAULT_RETENTION.decisions`, the value the runtime refreshes by. */
-const RETENTION_MS = durationMs("30d");
+/** Backwards-compatible fallbacks for cells pinned by a pre-retention worker. */
+const DEFAULT_DECISION_RETENTION_MS = durationMs("30d");
+const DEFAULT_DEDUPE_RETENTION_MS = durationMs("7d");
 const LOG_LIMIT = 60;
 
 /** What the first append pins into the cell, and nothing else ever changes. */
@@ -92,7 +96,16 @@ interface RunCheckpoint {
   readonly batch: StoredMonitorBatch;
   readonly instanceView: MonitorInstanceView;
   readonly claimedAt: string;
-  readonly outcome?: EvaluationResponse | undefined;
+  readonly outcome?: EvaluationTerminalResponse | undefined;
+}
+
+interface AppendReceipt {
+  readonly subscriptionId: string;
+  readonly ref: string;
+  readonly outcome: CelldAppendOutcome;
+  readonly flushed: boolean;
+  readonly recordedAt: string;
+  readonly expiresAt: string;
 }
 
 interface LogEntry {
@@ -191,6 +204,22 @@ export class MonitorInstance {
     return config as unknown as MonitorDefinition<ChannelEvent>;
   }
 
+  #decisionRetentionMs(config: CelldCellConfig): number {
+    return config.retention === undefined
+      ? DEFAULT_DECISION_RETENTION_MS
+      : durationMs(config.retention.decisions);
+  }
+
+  #dedupeRetentionMs(config: CelldCellConfig): number {
+    if (config.retention === undefined) {
+      return Math.max(DEFAULT_DEDUPE_RETENTION_MS, DEFAULT_DECISION_RETENTION_MS);
+    }
+    return Math.max(
+      durationMs(config.retention.dedupe),
+      durationMs(config.retention.decisions),
+    );
+  }
+
   /**
    * Mirrors the runtime's `#newInstance`. The cell has no subscription record
    * to copy tenancy from, so those fields come off the pinned append.
@@ -208,7 +237,7 @@ export class MonitorInstance {
       evaluationGeneration: 0,
       consecutiveIgnores: 0,
       eventsSinceLastWake: 0,
-      expiresAt: addMs(now, RETENTION_MS),
+      expiresAt: addMs(now, this.#decisionRetentionMs(pin.config)),
       createdAt: now,
       updatedAt: now,
     };
@@ -220,7 +249,7 @@ export class MonitorInstance {
    *   - no due time, run active -> leave the alarm alone; it is either the
    *     alarm currently executing or celld's pending retry of it. Deleting it
    *     would strand the claimed batch.
-   *   - no due time, no run     -> deleteAlarm
+   *   - no due time, no run     -> arm instance retention cleanup
    */
   async #arm(instance: StoredMonitorInstance): Promise<number | null> {
     if (instance.nextEvaluationAt !== undefined) {
@@ -231,8 +260,41 @@ export class MonitorInstance {
     if (instance.activeRunId !== undefined) {
       return (await this.#storage.getAlarm()) ?? null;
     }
-    await this.#storage.deleteAlarm();
-    return null;
+    const expiresAt = Math.max(Date.parse(instance.expiresAt), this.#nowMs());
+    await this.#storage.setAlarm(expiresAt);
+    return expiresAt;
+  }
+
+  #isIdle(instance: StoredMonitorInstance): boolean {
+    return (
+      instance.activeRunId === undefined &&
+      instance.openBatch === undefined &&
+      instance.sealedBatches.length === 0
+    );
+  }
+
+  async #cleanupExpiredReceipts(now: string): Promise<void> {
+    const receipts = await this.#storage.list({ prefix: "append:" });
+    let nextExpiry: number | null = null;
+    for (const [key, raw] of receipts) {
+      let receipt: AppendReceipt | undefined;
+      try {
+        receipt = JSON.parse(String(raw)) as AppendReceipt;
+      } catch {
+        await this.#storage.delete(key);
+        continue;
+      }
+      if (typeof receipt.expiresAt !== "string" || receipt.expiresAt <= now) {
+        await this.#storage.delete(key);
+        continue;
+      }
+      const expiresAt = Date.parse(receipt.expiresAt);
+      if (Number.isFinite(expiresAt)) {
+        nextExpiry = nextExpiry === null ? expiresAt : Math.min(nextExpiry, expiresAt);
+      }
+    }
+    if (nextExpiry === null) await this.#storage.deleteAlarm();
+    else await this.#storage.setAlarm(Math.max(nextExpiry, this.#nowMs()));
   }
 
   async #cellName(request?: Request): Promise<string> {
@@ -267,15 +329,19 @@ export class MonitorInstance {
     if (
       typeof body?.monitorId !== "string" ||
       typeof body?.definitionVersion !== "string" ||
+      typeof body?.subscriptionId !== "string" ||
       typeof body?.ref !== "string" ||
       typeof body?.config !== "object" ||
-      body.config === null
+      body.config === null ||
+      typeof body.config.retention !== "object" ||
+      body.config.retention === null
     ) {
       return json(
         {
           ok: false,
           code: CELLD_MALFORMED_APPEND,
-          error: "append requires monitorId, definitionVersion, ref, and config",
+          error:
+            "append requires monitorId, definitionVersion, subscriptionId, ref, and config.retention",
         },
         400,
       );
@@ -323,36 +389,113 @@ export class MonitorInstance {
     const definition = this.#definition(pin.config);
 
     const existing = await this.#readJson<StoredMonitorInstance>("instance");
-    let instance = existing ?? this.#newInstance(pin, now);
+    const expiredIdle =
+      existing !== undefined &&
+      existing.expiresAt <= now &&
+      this.#isIdle(existing);
+    if (expiredIdle) {
+      await this.#storage.delete("run");
+      const events = await this.#storage.list({ prefix: "evt:" });
+      for (const key of events.keys()) await this.#storage.delete(key);
+    }
+    let instance = existing === undefined || expiredIdle ? this.#newInstance(pin, now) : existing;
 
     const bytes = typeof body.bytes === "number" ? body.bytes : 0;
     const acceptedAt = body.acceptedAt ?? now;
 
-    // A copy of the ingress payload, for this cell's own inspection surface.
-    // The evaluator reads authoritative payloads from the event store.
-    await this.#writeJson(`evt:${body.ref}`, {
-      ref: body.ref,
-      bytes,
-      acceptedAt,
-      ingressSequence: body.ingressSequence,
-      payload: body.payload ?? null,
-      storedAt: now,
-    });
+    const receiptKey = `append:${body.subscriptionId}`;
+    let receipt = await this.#readJson<AppendReceipt>(receiptKey);
+    if (receipt !== undefined && receipt.expiresAt <= now) {
+      await this.#storage.delete(receiptKey);
+      receipt = undefined;
+    }
+    if (receipt !== undefined && receipt.ref !== body.ref) {
+      return json(
+        {
+          ok: false,
+          code: "append-conflict",
+          error:
+            `subscription ${body.subscriptionId} was already appended as ${receipt.ref}; ` +
+            `request carried ${body.ref}`,
+        },
+        409,
+      );
+    }
+    if (receipt !== undefined) {
+      if (await this.#containsRef(instance, body.ref)) {
+        await this.#ensureEventMarker(body, bytes, acceptedAt, now);
+      }
+      const alarmAt = await this.#arm(instance);
+      await this.#log({
+        at: now,
+        kind: "append-duplicate",
+        subscriptionId: body.subscriptionId,
+        ref: body.ref,
+        outcome: receipt.outcome,
+      });
+      return json(
+        this.#appendResponse(name, pin, instance, receipt.outcome, receipt.flushed, alarmAt, now),
+      );
+    }
+    // Heals the only commit gap in the receipt protocol: the instance is
+    // written before the receipt. A retry that lands in that window can see
+    // the ref in either the buffered instance or the active run checkpoint,
+    // record the missing receipt, and must not dispatch APPEND again.
+    if (await this.#containsRef(instance, body.ref)) {
+      const recovered: AppendReceipt = {
+        subscriptionId: body.subscriptionId,
+        ref: body.ref,
+        outcome: "updated",
+        flushed: false,
+        recordedAt: now,
+        expiresAt: addMs(now, this.#dedupeRetentionMs(pin.config)),
+      };
+      await this.#writeJson(receiptKey, recovered);
+      await this.#ensureEventMarker(body, bytes, acceptedAt, now);
+      const alarmAt = await this.#arm(instance);
+      await this.#log({
+        at: now,
+        kind: "append-duplicate",
+        subscriptionId: body.subscriptionId,
+        ref: body.ref,
+        outcome: recovered.outcome,
+        recovered: true,
+      });
+      return json(
+        this.#appendResponse(name, pin, instance, recovered.outcome, false, alarmAt, now),
+      );
+    }
 
     const result = dispatchLifecycle(instance, definition, {
       type: "APPEND",
       ref: { ref: body.ref, bytes, acceptedAt, ingressSequence: body.ingressSequence },
       now,
     });
-    instance = { ...result.instance, expiresAt: addMs(now, RETENTION_MS), updatedAt: now };
+    instance = {
+      ...result.instance,
+      expiresAt: addMs(now, this.#decisionRetentionMs(pin.config)),
+      updatedAt: now,
+    };
     await this.#writeJson("instance", instance);
-    const alarmAt = await this.#arm(instance);
 
     const outcome: CelldAppendOutcome =
-      existing === undefined ? "opened" : result.flushed ? "flushed" : "updated";
+      existing === undefined || expiredIdle ? "opened" : result.flushed ? "flushed" : "updated";
+    await this.#writeJson(receiptKey, {
+      subscriptionId: body.subscriptionId,
+      ref: body.ref,
+      outcome,
+      flushed: result.flushed,
+      recordedAt: now,
+      expiresAt: addMs(now, this.#dedupeRetentionMs(pin.config)),
+    } satisfies AppendReceipt);
+    // Metadata only. Authoritative payloads remain solely in the event store,
+    // where payload retention and redaction are already enforced.
+    await this.#ensureEventMarker(body, bytes, acceptedAt, now);
+    const alarmAt = await this.#arm(instance);
     await this.#log({
       at: now,
       kind: "append",
+      subscriptionId: body.subscriptionId,
       ref: body.ref,
       flushed: result.flushed,
       outcome,
@@ -361,13 +504,51 @@ export class MonitorInstance {
       alarmAt,
     });
 
-    return json({
+    return json(this.#appendResponse(name, pin, instance, outcome, result.flushed, alarmAt, now));
+  }
+
+  async #containsRef(instance: StoredMonitorInstance, ref: string): Promise<boolean> {
+    if (instance.openBatch?.events.some((event) => event.ref === ref) === true) return true;
+    if (instance.sealedBatches.some((batch) => batch.events.some((event) => event.ref === ref))) {
+      return true;
+    }
+    const run = await this.#readJson<RunCheckpoint>("run");
+    return run?.batch.events.some((event) => event.ref === ref) === true;
+  }
+
+  async #ensureEventMarker(
+    body: CelldAppendRequest,
+    bytes: number,
+    acceptedAt: string,
+    now: string,
+  ): Promise<void> {
+    const key = `evt:${body.ref}`;
+    if ((await this.#storage.get(key)) !== undefined) return;
+    await this.#writeJson(key, {
+      ref: body.ref,
+      bytes,
+      acceptedAt,
+      ingressSequence: body.ingressSequence,
+      storedAt: now,
+    });
+  }
+
+  #appendResponse(
+    name: string,
+    pin: CellPin,
+    instance: StoredMonitorInstance,
+    outcome: CelldAppendOutcome,
+    flushed: boolean,
+    alarmAt: number | null,
+    now: string,
+  ): CelldAppendResponse & Record<string, unknown> {
+    return {
       ok: true,
       cellName: name,
       monitorId: pin.monitorId,
       definitionVersion: pin.definitionVersion,
       outcome,
-      flushed: result.flushed,
+      flushed,
       state: deriveLifecycleValue(instance, now),
       openBatchSize: instance.openBatch?.events.length ?? 0,
       sealedBatches: instance.sealedBatches.length,
@@ -376,7 +557,7 @@ export class MonitorInstance {
       alarmAt,
       evaluationGeneration: instance.evaluationGeneration,
       now,
-    });
+    };
   }
 
   async #state(request: Request): Promise<Response> {
@@ -518,7 +699,19 @@ export class MonitorInstance {
     const invocation = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     let now = this.#now();
     let instance = await this.#readJson<StoredMonitorInstance>("instance");
-    if (instance === undefined) return;
+    if (instance === undefined) {
+      await this.#cleanupExpiredReceipts(now);
+      return;
+    }
+    if (instance.expiresAt <= now && this.#isIdle(instance)) {
+      await this.#storage.delete("instance");
+      await this.#storage.delete("run");
+      const events = await this.#storage.list({ prefix: "evt:" });
+      for (const key of events.keys()) await this.#storage.delete(key);
+      await this.#log({ at: now, kind: "instance-expired" });
+      await this.#cleanupExpiredReceipts(now);
+      return;
+    }
     const pin = await this.#readJson<CellPin>("cell");
     if (pin === undefined) return;
     const definition = this.#definition(pin.config);
@@ -593,9 +786,24 @@ export class MonitorInstance {
 
     // --- evaluation stage ------------------------------------------------
     const claimed = run!;
-    let outcome = claimed.outcome;
+    let outcome: EvaluationTerminalResponse | undefined = claimed.outcome;
     if (outcome === undefined) {
-      outcome = await this.#callEvaluator(pin, claimed, retryCount, invocation);
+      const response = await this.#callEvaluator(pin, claimed, retryCount, invocation);
+      if (response.status === "retry") {
+        const alarmAt = Math.max(Date.parse(response.retryAt), this.#nowMs());
+        await this.#storage.setAlarm(alarmAt);
+        await this.#log({
+          inv: invocation,
+          at: this.#now(),
+          kind: "evaluation-deferred",
+          runId: claimed.runId,
+          retryAt: response.retryAt,
+          alarmAt,
+          retryCount,
+        });
+        return;
+      }
+      outcome = response;
       run = { ...claimed, outcome, stage: "complete" };
       await this.#writeJson("run", run);
     }
@@ -612,7 +820,11 @@ export class MonitorInstance {
             ...(outcome.binding === undefined ? {} : { binding: outcome.binding }),
             now,
           });
-    instance = { ...completion.instance, expiresAt: addMs(now, RETENTION_MS), updatedAt: now };
+    instance = {
+      ...completion.instance,
+      expiresAt: addMs(now, this.#decisionRetentionMs(pin.config)),
+      updatedAt: now,
+    };
     for (const reference of claimed.batch.events) {
       await this.#storage.delete(`evt:${reference.ref}`);
     }
@@ -661,7 +873,11 @@ export class MonitorInstance {
     invocation: string,
   ): Promise<EvaluationResponse> {
     const target = String(this.env.EVALUATOR_URL ?? pin.evaluatorUrl);
-    const secret = String(this.env.EVALUATOR_SECRET ?? "");
+    const configuredSecret = this.env?.EVALUATOR_SECRET;
+    if (typeof configuredSecret !== "string" || configuredSecret.length === 0) {
+      throw new Error("EVALUATOR_SECRET is required; refusing to call the evaluator");
+    }
+    const secret = configuredSecret;
     const body: Omit<EvaluationRequest, "secret"> = {
       runId: run.runId,
       instanceId: pin.cellName,
@@ -707,12 +923,62 @@ export class MonitorInstance {
       });
       throw new Error(`evaluation of ${run.runId} returned ${response.status}`);
     }
-    const parsed = (await response.json()) as EvaluationResponse;
-    if (parsed === null || typeof parsed !== "object" || typeof parsed.status !== "string") {
-      throw new Error(`evaluation of ${run.runId} returned a malformed response`);
-    }
-    return parsed;
+    return validateEvaluationResponse(await response.json(), run.runId);
   }
+}
+
+const TERMINAL_EVALUATION_STATUSES = new Set([
+  "ignored",
+  "shadowed",
+  "suppressed",
+  "delivered",
+  "unroutable",
+  "dead-lettered",
+]);
+
+function validateEvaluationResponse(value: unknown, expectedRunId: string): EvaluationResponse {
+  if (value === null || typeof value !== "object") {
+    throw new Error(`evaluation of ${expectedRunId} returned a malformed response`);
+  }
+  const response = value as Record<string, unknown>;
+  if (response.runId !== expectedRunId) {
+    throw new Error(
+      `evaluation of ${expectedRunId} returned mismatched runId ${String(response.runId)}`,
+    );
+  }
+  if (response.status === "retry") {
+    if (
+      typeof response.retryAt !== "string" ||
+      !Number.isFinite(Date.parse(response.retryAt))
+    ) {
+      throw new Error(`evaluation of ${expectedRunId} returned an invalid retryAt`);
+    }
+    return value as EvaluationResponse;
+  }
+  if (typeof response.status !== "string" || !TERMINAL_EVALUATION_STATUSES.has(response.status)) {
+    throw new Error(
+      `evaluation of ${expectedRunId} returned unknown status ${String(response.status)}`,
+    );
+  }
+  if (response.decision !== undefined) {
+    if (response.decision === null || typeof response.decision !== "object") {
+      throw new Error(`evaluation of ${expectedRunId} returned an invalid decision`);
+    }
+    const decision = response.decision as Record<string, unknown>;
+    if (
+      !["ignore", "wake"].includes(String(decision.action)) ||
+      typeof decision.reasonClass !== "string" ||
+      decision.reasonClass.length === 0 ||
+      (decision.confidence !== undefined &&
+        (typeof decision.confidence !== "number" ||
+          !Number.isFinite(decision.confidence) ||
+          decision.confidence < 0 ||
+          decision.confidence > 1))
+    ) {
+      throw new Error(`evaluation of ${expectedRunId} returned an invalid decision`);
+    }
+  }
+  return value as EvaluationResponse;
 }
 
 export default {
@@ -728,12 +994,20 @@ export default {
       );
     }
     const secret = env?.EVALUATOR_SECRET;
-    if (typeof secret === "string" && secret.length > 0) {
-      const header = request.headers.get("authorization") ?? "";
-      const match = /^Bearer[ ]+(.+)$/i.exec(header.trim());
-      if (!secretsMatch(match?.[1] ?? "", secret)) {
-        return json({ ok: false, code: "unauthorized", error: "unauthorized" }, 401);
-      }
+    if (typeof secret !== "string" || secret.length === 0) {
+      return json(
+        {
+          ok: false,
+          code: "missing-evaluator-secret",
+          error: "EVALUATOR_SECRET must be configured before cell routes are enabled",
+        },
+        503,
+      );
+    }
+    const header = request.headers.get("authorization") ?? "";
+    const match = /^Bearer[ ]+(.+)$/i.exec(header.trim());
+    if (!secretsMatch(match?.[1] ?? "", secret)) {
+      return json({ ok: false, code: "unauthorized", error: "unauthorized" }, 401);
     }
     const name = decodeURIComponent(parts[1]!);
     const action = parts[2] ?? "state";

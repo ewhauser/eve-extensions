@@ -21,11 +21,11 @@
 import type { StoredMonitorBatch, StoredMonitorInstance } from "./storage.js";
 import type {
   ChannelEvent,
-  JsonValue,
   MonitorBindingView,
   MonitorDefinition,
   MonitorDeliveryReceipt,
   MonitorInstanceView,
+  MonitorRetention,
 } from "./types.js";
 
 export interface StoreMailboxOptions {
@@ -51,7 +51,10 @@ export type MailboxOptions = StoreMailboxOptions | CelldMailboxOptions;
  * only configuration a cell needs, and the only configuration it is given: a
  * cell learns it from its first append and pins it with the definition version.
  */
-export type CelldCellConfig = Pick<MonitorDefinition<ChannelEvent>, "buffer" | "cooldown">;
+export type CelldCellConfig = Pick<MonitorDefinition<ChannelEvent>, "buffer" | "cooldown"> & {
+  /** Effective retention, made explicit so the cell matches the runtime. */
+  readonly retention: MonitorRetention;
+};
 
 export interface CelldAppendRequest {
   readonly monitorId: string;
@@ -64,16 +67,12 @@ export interface CelldAppendRequest {
   readonly applicationId: string;
   readonly correlationKey: string;
   readonly correlationKeyHash: string;
+  /** Durable idempotency key for the store-to-cell append handoff. */
+  readonly subscriptionId: string;
   readonly ref: string;
   readonly bytes: number;
   readonly ingressSequence: string;
   readonly acceptedAt: string;
-  /**
-   * A copy of the ingress payload, for the cell's own inspection surface. The
-   * evaluator never reads it: authoritative payloads live in the event store
-   * from ingress, and the cell sends refs rather than payloads on evaluation.
-   */
-  readonly payload: JsonValue;
 }
 
 export type CelldAppendOutcome = "opened" | "updated" | "flushed";
@@ -110,13 +109,42 @@ export const CELLD_MALFORMED_APPEND = "malformed-append";
 export const CELLD_UNPINNED_CELL = "unpinned-cell";
 
 /** Terminal run outcomes an evaluation can report back to a cell. */
-export type EvaluationStatus =
+export type EvaluationTerminalStatus =
   | "ignored"
   | "shadowed"
   | "suppressed"
   | "delivered"
   | "unroutable"
   | "dead-lettered";
+
+/** A terminal answer closes the claimed batch in the cell. */
+export interface EvaluationTerminalResponse {
+  readonly runId: string;
+  readonly status: EvaluationTerminalStatus;
+  /** Shaped for the cell's `RUN_COMPLETED` dispatch. */
+  readonly decision?:
+    | {
+        readonly action: "ignore" | "wake";
+        readonly confidence?: number | undefined;
+        readonly reasonClass: string;
+      }
+    | undefined;
+  readonly binding?: MonitorBindingView | undefined;
+  readonly receipt?: MonitorDeliveryReceipt | undefined;
+  readonly suppression?:
+    | { readonly cause: string; readonly scope: string }
+    | undefined;
+}
+
+/** A durable evaluator retry does not close the cell's claimed batch. */
+export interface EvaluationRetryResponse {
+  readonly runId: string;
+  readonly status: "retry";
+  readonly retryAt: string;
+}
+
+export type EvaluationResponse = EvaluationTerminalResponse | EvaluationRetryResponse;
+export type EvaluationStatus = EvaluationResponse["status"];
 
 export interface EvaluationRequest {
   /** The bearer secret; compared in constant time against the runtime's. */
@@ -133,24 +161,6 @@ export interface EvaluationRequest {
   readonly batch: StoredMonitorBatch;
   readonly instanceView: MonitorInstanceView;
   readonly claimedAt: string;
-}
-
-export interface EvaluationResponse {
-  readonly runId: string;
-  readonly status: EvaluationStatus;
-  /** Shaped for the cell's `RUN_COMPLETED` dispatch. */
-  readonly decision?:
-    | {
-        readonly action: "ignore" | "wake";
-        readonly confidence?: number | undefined;
-        readonly reasonClass: string;
-      }
-    | undefined;
-  readonly binding?: MonitorBindingView | undefined;
-  readonly receipt?: MonitorDeliveryReceipt | undefined;
-  readonly suppression?:
-    | { readonly cause: string; readonly scope: string }
-    | undefined;
 }
 
 /** The evaluator rejected the presented secret. Transports map this to 401. */

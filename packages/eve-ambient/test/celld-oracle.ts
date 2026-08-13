@@ -18,8 +18,6 @@ import type { StoredMonitorInstance } from "../src/storage.js";
 import { addMs, durationMs } from "../src/time.js";
 import type { ChannelEvent, MonitorDefinition } from "../src/types.js";
 
-/** `DEFAULT_RETENTION.decisions`, the value the cell refreshes by. */
-const RETENTION_MS = durationMs("30d");
 /** `LOG_LIMIT` in the worker. A full ring buffer makes a replay unsound. */
 const LOG_LIMIT = 60;
 
@@ -70,7 +68,7 @@ function newInstance(options: OracleOptions, now: string): StoredMonitorInstance
     evaluationGeneration: 0,
     consecutiveIgnores: 0,
     eventsSinceLastWake: 0,
-    expiresAt: addMs(now, RETENTION_MS),
+    expiresAt: addMs(now, durationMs(options.config.retention.decisions)),
     createdAt: now,
     updatedAt: now,
   };
@@ -126,7 +124,7 @@ export function replayCellLog(
         }
         instance = {
           ...result.instance,
-          expiresAt: addMs(now, RETENTION_MS),
+          expiresAt: addMs(now, durationMs(options.config.retention.decisions)),
           updatedAt: now,
         };
         return;
@@ -172,7 +170,7 @@ export function replayCellLog(
         });
         instance = {
           ...result.instance,
-          expiresAt: addMs(now, RETENTION_MS),
+          expiresAt: addMs(now, durationMs(options.config.retention.decisions)),
           updatedAt: now,
         };
         return;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
-import { MonitorInstance } from "../src/celld-worker.js";
+import worker, { MonitorInstance } from "../src/celld-worker.js";
 import {
   CELLD_DEFINITION_VERSION_MISMATCH,
   CELLD_MALFORMED_APPEND,
@@ -26,6 +26,7 @@ const DEBOUNCE_CONFIG = {
     maxBytes: 10_000,
   },
   cooldown: { afterWake: "3s" as const, during: "accumulate" as const },
+  retention: { payload: "24h" as const, decisions: "30d" as const, dedupe: "7d" as const },
 };
 
 interface Harness {
@@ -39,12 +40,16 @@ interface Harness {
   instance(): Promise<StoredMonitorInstance>;
 }
 
-function wake(status: EvaluationResponse["status"] = "delivered"): EvaluationResponse {
+function wake(runId: string, status: "delivered" | "ignored" = "delivered"): EvaluationResponse {
   return {
-    runId: "ignored-by-cell",
+    runId,
     status,
     decision: { action: "wake", reasonClass: "useful" },
   };
+}
+
+function requestedRunId(init: RequestInit): string {
+  return (JSON.parse(String(init.body)) as { runId: string }).runId;
 }
 
 /** Leaves a claimed run checkpointed mid-evaluation, the way an outage does. */
@@ -56,7 +61,7 @@ function makeHarness(options: { evaluator?: EvaluatorMock } = {}): Harness {
   const clock = new VirtualMonitorClock();
   const state = createFakeDurableObjectState(CELL);
   const evaluator: EvaluatorMock =
-    options.evaluator ?? vi.fn(async () => jsonResponse(wake(), 200));
+    options.evaluator ?? vi.fn(async (_input, init) => jsonResponse(wake(requestedRunId(init)), 200));
   const cell = new MonitorInstance(state, {
     EVALUATOR_SECRET: "s3cret",
     clock,
@@ -77,11 +82,11 @@ function makeHarness(options: { evaluator?: EvaluatorMock } = {}): Harness {
         applicationId: "app-a",
         correlationKey: "C1",
         correlationKeyHash: "hash-C1",
+        subscriptionId: `sub-${ref}`,
         ref,
         bytes: 32,
         ingressSequence: "1",
         acceptedAt: clock.now().toISOString(),
-        payload: { text: `payload for ${ref}` },
         ...overrides,
       };
       return cell.fetch(
@@ -115,6 +120,54 @@ function makeHarness(options: { evaluator?: EvaluatorMock } = {}): Harness {
 }
 
 describe("celld mailbox cell", () => {
+  it("fails closed when the public worker has no evaluator secret", async () => {
+    const forwarded = vi.fn();
+
+    const response = await worker.fetch(
+      new Request(`http://fleet.test/cells/${CELL}/state`),
+      {
+        MONITOR: {
+          idFromName: vi.fn(() => "id"),
+          get: vi.fn(() => ({ fetch: forwarded })),
+        },
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "missing-evaluator-secret" });
+    expect(forwarded).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates a retried append across the HTTP/store commit gap", async () => {
+    const harness = makeHarness();
+
+    expect(((await (await harness.append("evt-1")).json()) as any).outcome).toBe("opened");
+    const retry = await harness.append("evt-1");
+
+    expect(retry.status).toBe(200);
+    expect(((await retry.json()) as any).outcome).toBe("opened");
+    const instance = await harness.instance();
+    expect(instance.openBatch?.events.map((event) => event.ref)).toEqual(["evt-1"]);
+    expect(instance.eventsSinceLastWake).toBe(1);
+    const state = (await (await harness.route("state")).json()) as Record<string, any>;
+    expect(state.log.filter((entry: any) => entry.kind === "append")).toHaveLength(1);
+    expect(state.log.filter((entry: any) => entry.kind === "append-duplicate")).toHaveLength(1);
+    const marker = JSON.parse(harness.state.map.get("evt:evt-1") as string) as Record<string, unknown>;
+    expect(marker).not.toHaveProperty("payload");
+  });
+
+  it("recovers a missing append receipt from the persisted instance", async () => {
+    const harness = makeHarness();
+    await harness.append("evt-1");
+    // The instance write committed, but the response/receipt did not.
+    harness.state.map.delete("append:sub-evt-1");
+
+    await harness.append("evt-1");
+
+    expect((await harness.instance()).openBatch?.events).toHaveLength(1);
+    expect(harness.state.map.has("append:sub-evt-1")).toBe(true);
+  });
+
   it("appends, claims on the quiet period, evaluates, and enters cooldown", async () => {
     const harness = makeHarness();
 
@@ -153,11 +206,104 @@ describe("celld mailbox cell", () => {
       new Date(harness.clock.now().getTime() + 3_000).toISOString(),
     );
     expect(instance.eventsSinceLastWake).toBe(0);
-    // No buffered work and no run: the timer is gone.
-    expect(harness.state.alarmAt).toBeNull();
+    // No buffered work and no run: the timer now owns retention cleanup.
+    expect(harness.state.alarmAt).toBe(Date.parse(instance.expiresAt));
     expect(harness.state.map.has("evt:evt-1")).toBe(false);
     expect(harness.state.map.has("run")).toBe(false);
     expect(harness.state.blockedSections).toBe(1);
+  });
+
+  it("uses configured decision retention and resets an expired idle instance", async () => {
+    const harness = makeHarness();
+    const config = {
+      ...DEBOUNCE_CONFIG,
+      retention: { payload: "1s" as const, decisions: "2s" as const, dedupe: "3s" as const },
+    };
+    await harness.append("evt-1", { config });
+    harness.clock.advance(1_000);
+    await harness.fireAlarm();
+    const completedAt = harness.clock.now().toISOString();
+    expect((await harness.instance()).expiresAt).toBe(
+      new Date(Date.parse(completedAt) + 2_000).toISOString(),
+    );
+
+    harness.clock.advance(2_000);
+    const second = await harness.append("evt-2", { config });
+
+    expect(((await second.json()) as Record<string, unknown>).outcome).toBe("opened");
+    const reset = await harness.instance();
+    expect(reset.createdAt).toBe(harness.clock.now().toISOString());
+    expect(reset.evaluationGeneration).toBe(0);
+    expect(reset.lastDecision).toBeUndefined();
+  });
+
+  it("physically removes an idle instance when decision retention expires", async () => {
+    const harness = makeHarness();
+    const config = {
+      ...DEBOUNCE_CONFIG,
+      retention: { payload: "1s" as const, decisions: "2s" as const, dedupe: "3s" as const },
+    };
+    await harness.append("evt-1", { config });
+    harness.clock.advance(1_000);
+    await harness.fireAlarm();
+    harness.clock.advance(2_000);
+
+    expect(await harness.fireAlarm()).toBeNull();
+
+    expect(harness.state.map.has("instance")).toBe(false);
+    expect(harness.state.map.has("evt:evt-1")).toBe(false);
+    expect(harness.state.map.has("append:sub-evt-1")).toBe(false);
+    expect(harness.state.alarmAt).toBeNull();
+  });
+
+  it("schedules evaluator retry responses without throwing or completing the run", async () => {
+    let harness!: Harness;
+    let calls = 0;
+    const evaluator: EvaluatorMock = vi.fn(async (_input, init) => {
+      calls += 1;
+      const runId = requestedRunId(init);
+      return calls === 1
+        ? jsonResponse(
+            {
+              runId,
+              status: "retry",
+              retryAt: new Date(harness.clock.now().getTime() + 5_000).toISOString(),
+            },
+            200,
+          )
+        : jsonResponse(wake(runId), 200);
+    });
+    harness = makeHarness({ evaluator });
+    await harness.append("evt-1");
+    harness.clock.advance(1_000);
+
+    expect(await harness.fireAlarm()).toBeNull();
+    const deferredAt = harness.clock.now().getTime() + 5_000;
+    expect(harness.state.alarmAt).toBe(deferredAt);
+    expect((await harness.instance()).activeRunId).toBeDefined();
+    expect(JSON.parse(harness.state.map.get("run") as string).stage).toBe("evaluating");
+
+    harness.clock.advance(5_000);
+    expect(await harness.fireAlarm()).toBeNull();
+    expect(evaluator).toHaveBeenCalledTimes(2);
+    expect((await harness.instance()).activeRunId).toBeUndefined();
+  });
+
+  it.each([
+    ["a mismatched run id", { runId: "wrong", status: "delivered" }, "mismatched runId"],
+    ["an unknown status", { status: "surprise" }, "unknown status"],
+  ])("rejects %s from the evaluator", async (_name, partial, message) => {
+    const evaluator: EvaluatorMock = vi.fn(async (_input, init) =>
+      jsonResponse({ runId: requestedRunId(init), ...partial }, 200),
+    );
+    const harness = makeHarness({ evaluator });
+    await harness.append("evt-1");
+    harness.clock.advance(1_000);
+
+    const error = await harness.fireAlarm();
+
+    expect(String(error)).toContain(message);
+    expect((await harness.instance()).activeRunId).toBeDefined();
   });
 
   it("runs the evaluation inside blockConcurrencyWhile and rethrows its failure", async () => {
@@ -180,7 +326,7 @@ describe("celld mailbox cell", () => {
 
     // A later append carrying a different configuration does not repin it.
     await harness.append("evt-2", {
-      config: { buffer: { mode: "immediate" } },
+      config: { ...DEBOUNCE_CONFIG, buffer: { mode: "immediate" } },
     });
 
     const state = (await (await harness.route("state")).json()) as Record<string, any>;
@@ -225,9 +371,11 @@ describe("celld mailbox cell", () => {
 
   it("resumes an interrupted evaluation on the same run instead of re-claiming", async () => {
     let attempts = 0;
-    const evaluator: EvaluatorMock = vi.fn(async () => {
+    const evaluator: EvaluatorMock = vi.fn(async (_input, init) => {
       attempts += 1;
-      return attempts === 1 ? jsonResponse({ error: "down" }, 503) : jsonResponse(wake(), 200);
+      return attempts === 1
+        ? jsonResponse({ error: "down" }, 503)
+        : jsonResponse(wake(requestedRunId(init)), 200);
     });
     const harness = makeHarness({ evaluator });
     await harness.append("evt-1");
@@ -265,7 +413,11 @@ describe("celld mailbox cell", () => {
     const checkpoint = JSON.parse(harness.state.map.get("run") as string) as Record<string, any>;
     harness.state.map.set(
       "run",
-      JSON.stringify({ ...checkpoint, stage: "complete", outcome: wake("ignored") }),
+      JSON.stringify({
+        ...checkpoint,
+        stage: "complete",
+        outcome: wake(String(checkpoint.runId), "ignored"),
+      }),
     );
     harness.state.alarmAt = harness.clock.now().getTime();
 
@@ -339,7 +491,9 @@ describe("celld mailbox cell", () => {
     // celld gave up on the alarm mid-run; the claimed batch has no timer left.
     harness.state.alarmAt = null;
     harness.evaluator.mockClear();
-    harness.evaluator.mockImplementation(async () => jsonResponse(wake(), 200));
+    harness.evaluator.mockImplementation(async (_input, init) =>
+      jsonResponse(wake(requestedRunId(init)), 200),
+    );
 
     const body = (await (await harness.route("rearm", "POST")).json()) as Record<string, any>;
 

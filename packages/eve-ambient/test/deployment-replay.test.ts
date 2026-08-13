@@ -52,6 +52,99 @@ function event(id: string, value = "v1") {
 }
 
 describe("deployment identity, replay, and retention", () => {
+  it("refuses mailbox ownership changes that would strand durable work", async () => {
+    const clock = new VirtualMonitorClock();
+    const store = new MemoryMonitorStore();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const compiled = compileMonitor(monitor("stable", delivery), "v1");
+    const storeRuntime = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compiled] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store,
+      clock,
+    });
+    await storeRuntime.initialize();
+
+    const celldRuntime = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compiled] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store,
+      clock,
+      mailbox: {
+        mode: "celld",
+        fleetUrl: "http://fleet.test",
+        evaluatorUrl: "http://app.test/evaluate",
+        secret: "secret",
+        fetch: async () => new Response(null, { status: 503 }),
+      },
+    });
+
+    await expect(celldRuntime.initialize()).rejects.toThrow(
+      "mailbox mode cannot change from store to celld",
+    );
+
+    const otherStore = new MemoryMonitorStore();
+    const firstCelld = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compiled] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store: otherStore,
+      clock,
+      mailbox: {
+        mode: "celld",
+        fleetUrl: "http://fleet.test",
+        evaluatorUrl: "http://app.test/evaluate",
+        secret: "secret",
+        fetch: async () => new Response(null, { status: 503 }),
+      },
+    });
+    await firstCelld.initialize();
+    const backToStore = new MonitorRuntime({
+      applicationId: "app",
+      deployment: { monitors: [compiled] },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store: otherStore,
+      clock,
+    });
+    await expect(backToStore.initialize()).rejects.toThrow(
+      "mailbox mode cannot change from celld to store",
+    );
+  });
+
+  it("rejects state migrations that cannot update celld cells", async () => {
+    const clock = new VirtualMonitorClock();
+    const store = new MemoryMonitorStore();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    const runtime = new MonitorRuntime({
+      applicationId: "app",
+      deployment: {
+        monitors: [compileMonitor(monitor("new", delivery), "v1")],
+        monitorMigrations: [{ from: "old", to: "new", mode: "move-state" }],
+      },
+      channels: [source],
+      deliveryChannels: [delivery],
+      store,
+      clock,
+      mailbox: {
+        mode: "celld",
+        fleetUrl: "http://fleet.test",
+        evaluatorUrl: "http://app.test/evaluate",
+        secret: "secret",
+        fetch: async () => new Response(null, { status: 503 }),
+      },
+    });
+
+    await expect(runtime.initialize()).rejects.toThrow(
+      "celld mailbox does not support monitor migrations or removals",
+    );
+  });
+
   it("requires an explicit migration or destructive removal for a missing monitor ID", async () => {
     const clock = new VirtualMonitorClock();
     const store = new MemoryMonitorStore();

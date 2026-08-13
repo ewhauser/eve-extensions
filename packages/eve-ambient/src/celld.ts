@@ -35,7 +35,10 @@ export type {
   CelldMailboxOptions,
   EvaluationRequest,
   EvaluationResponse,
+  EvaluationRetryResponse,
   EvaluationStatus,
+  EvaluationTerminalResponse,
+  EvaluationTerminalStatus,
   MailboxOptions,
   StoreMailboxOptions,
 } from "./mailbox.js";
@@ -59,11 +62,11 @@ export interface EvaluationFetchHandlerOptions {
  *
  * | status | cause                                | cell behaviour |
  * |--------|--------------------------------------|----------------|
- * | 200    | terminal outcome                     | dispatches `RUN_COMPLETED` (or `RUN_FAILED` for `dead-lettered`) and clears its alarm |
+ * | 200    | terminal outcome or scheduled retry  | completes the run, or re-arms directly at `retryAt` without spending the failure ladder |
  * | 401    | bad or missing bearer secret         | throws; celld's alarm ladder retries |
  * | 400    | malformed or misaddressed request    | throws; retries will keep failing — an operator has to intervene |
  * | 409    | the runId belongs to another instance| as above |
- * | 503    | non-terminal (budget backoff, transient failure) | throws; the ladder retries, which is the intent |
+ * | 503    | evaluator could not record a durable outcome      | throws; the cell's failure ladder retries |
  *
  * Everything non-2xx is a retry from the cell's point of view; the codes are
  * for operators reading fleet logs.

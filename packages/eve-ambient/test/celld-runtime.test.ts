@@ -91,7 +91,12 @@ function ambientMonitor(delivery: MemoryConversationChannel<{ channel: string }>
 }
 
 async function createWorld(
-  options: { readonly compile?: (delivery: MemoryConversationChannel<{ channel: string }>) => CompiledMonitor } = {},
+  options: {
+    readonly compile?: (
+      delivery: MemoryConversationChannel<{ channel: string }>,
+    ) => CompiledMonitor;
+    readonly wrapFleetFetch?: (fleetFetch: typeof fetch) => typeof fetch;
+  } = {},
 ): Promise<World> {
   const clock = new VirtualMonitorClock();
   const store = new MemoryMonitorStore();
@@ -123,7 +128,7 @@ async function createWorld(
       fleetUrl: fleet.baseUrl,
       evaluatorUrl: EVALUATOR_URL,
       secret: SECRET,
-      fetch: fleet.fetch,
+      fetch: options.wrapFleetFetch?.(fleet.fetch) ?? fleet.fetch,
     },
   });
   await runtime.initialize();
@@ -199,6 +204,74 @@ describe("MonitorRuntime with the celld mailbox", () => {
       world.observer.named("monitor.buffer.opened").length +
         world.observer.named("monitor.buffer.updated").length,
     ).toBe(2);
+  });
+
+  it("retries a lost append response without appending the event twice", async () => {
+    let loseFirstResponse = true;
+    const retried = await createWorld({
+      wrapFleetFetch: (fleetFetch) => async (input, init) => {
+        const response = await fleetFetch(input, init);
+        if (new URL(String(input)).pathname.endsWith("/append") && loseFirstResponse) {
+          loseFirstResponse = false;
+          return jsonResponse({ ok: false, error: "response lost after commit" }, 503);
+        }
+        return response;
+      },
+    });
+    await retried.runtime.publish(slack, "message", publishInput("1", "please wake me"));
+    await retried.runtime.drain();
+    const pending = await retried.store.listSubscriptions({
+      applicationId: "app-a",
+      statuses: ["pending"],
+      availableBefore: "9999-01-01T00:00:00.000Z",
+      limit: 10,
+    });
+    expect(pending).toHaveLength(1);
+    retried.clock.advance(Date.parse(pending[0]!.availableAt) - retried.clock.now().getTime());
+
+    await retried.runtime.drain();
+
+    const state = await cellState(retried, retried.fleet.cellNames[0]!);
+    expect(state.instance.openBatch.events.map((event: any) => event.ref)).toHaveLength(1);
+    expect(state.log.filter((entry: any) => entry.kind === "append")).toHaveLength(1);
+    expect(state.log.filter((entry: any) => entry.kind === "append-duplicate")).toHaveLength(1);
+    expect(
+      retried.observer.named("monitor.buffer.opened").length +
+        retried.observer.named("monitor.buffer.updated").length,
+    ).toBe(1);
+  });
+
+  it("persists cell definition pins and requires pinned versions on later deploys", async () => {
+    await world.runtime.publish(slack, "message", publishInput("1", "please wake me"));
+    await world.runtime.drain();
+
+    const deployment = await world.store.transaction("inspect-deployment", (tx) =>
+      tx.getDeployment("app-a"),
+    );
+    expect(deployment).toMatchObject({
+      mailboxMode: "celld",
+      celldDefinitionPins: { ambient: ["v1"] },
+    });
+
+    const replacement = new MonitorRuntime({
+      applicationId: "app-a",
+      deployment: { monitors: [compileMonitor(ambientMonitor(world.delivery), "v2")] },
+      channels: [slack],
+      deliveryChannels: [world.delivery],
+      store: world.store,
+      clock: world.clock,
+      mailbox: {
+        mode: "celld",
+        fleetUrl: world.fleet.baseUrl,
+        evaluatorUrl: EVALUATOR_URL,
+        secret: SECRET,
+        fetch: world.fleet.fetch,
+      },
+    });
+
+    await expect(replacement.initialize()).rejects.toThrow(
+      "durable celld mailbox requires pinned definition ambient@v1",
+    );
   });
 
   it("delivers a batch the cell's alarm claims and records the run", async () => {
@@ -289,6 +362,7 @@ describe("MonitorRuntime with the celld mailbox", () => {
 
     expect(repeat.runId).toBe(first.id);
     expect(repeat.status).toBe("delivered");
+    if (repeat.status === "retry") throw new Error("completed run unexpectedly deferred");
     expect(repeat.decision).toMatchObject({ action: "wake", reasonClass: "useful" });
     expect(repeat.binding).toBeDefined();
     expect(world.delivery.deliveries).toHaveLength(1);
@@ -348,6 +422,62 @@ describe("MonitorRuntime with the celld mailbox", () => {
     expect((world.fleet.evaluations[0] as { runId: string }).runId).toBe(
       (world.fleet.evaluations[1] as { runId: string }).runId,
     );
+  });
+
+  it("honors a durable run retryAt without spending the cell failure ladder", async () => {
+    await world.runtime.publish(slack, "message", publishInput("1", "please wake me"));
+    await world.runtime.drain();
+    world.clock.advance(1_000);
+    const retryAt = new Date(world.clock.now().getTime() + 5_000).toISOString();
+    let seeded = false;
+    world.fleet.evaluator = async (request) => {
+      const body = (await request.clone().json()) as any;
+      if (!seeded) {
+        seeded = true;
+        const now = world.clock.now().toISOString();
+        await world.store.transaction(`instance:${body.instanceId}`, async (tx) => {
+          await tx.putRun({
+            id: body.runId,
+            instanceId: body.instanceId,
+            tenantId: body.tenantId,
+            applicationId: body.applicationId,
+            monitorId: body.monitorId,
+            definitionVersion: body.definitionVersion,
+            correlationKeyHash: body.correlationKeyHash,
+            batch: body.batch,
+            mode: "active",
+            instanceView: body.instanceView,
+            status: "retry",
+            stage: "decision",
+            attempt: 1,
+            availableAt: retryAt,
+            replayExpiresAt: now,
+            createdAt: now,
+            updatedAt: now,
+            expiresAt: new Date(world.clock.now().getTime() + 30 * 86_400_000).toISOString(),
+          });
+        });
+      }
+      return world.evaluator(request);
+    };
+
+    const deferred = await world.fleet.fireDueAlarms();
+
+    expect(deferred[0]!.error).toBeNull();
+    expect(world.delivery.deliveries).toHaveLength(0);
+    const cell = world.fleet.state(world.fleet.cellNames[0]!)!;
+    expect(cell.alarmAt).toBe(Date.parse(retryAt));
+    expect((await world.runtime.listRuns())[0]).toMatchObject({
+      status: "retry",
+      attempt: 1,
+      availableAt: retryAt,
+    });
+
+    world.clock.advance(5_000);
+    const completed = await world.fleet.fireDueAlarms();
+    expect(completed[0]!.error).toBeNull();
+    expect(world.delivery.deliveries).toHaveLength(1);
+    expect((await world.runtime.listRuns())[0]).toMatchObject({ status: "delivered", attempt: 2 });
   });
 
   it("suppresses delivery for a shadow-mode monitor but still starts its cooldown", async () => {
