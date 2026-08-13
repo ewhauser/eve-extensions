@@ -16,7 +16,7 @@ pnpm add eve@0.31.3 eve-openai-connectors
 
 ### Install the required Eve patch
 
-Provider-native deferred discovery requires a small patch to Eve 0.31.3. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
+Client-executed and provider-native deferred discovery require a small patch to Eve 0.31.3. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
 
 ```sh
 mkdir -p patches
@@ -36,7 +36,7 @@ Then apply it:
 pnpm install
 ```
 
-The patch forwards per-tool `providerOptions` through Eve and injects the native tool-search implementation for Anthropic or OpenAI when deferred tools are present. It is version-specific: keep Eve pinned to `0.31.3` and revalidate or replace the patch before upgrading. The corresponding upstream work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
+The patch forwards per-tool `providerOptions` through Eve. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.31.3` and revalidate or replace the patch before upgrading. The corresponding upstream work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
 
 ## Mount the extension
 
@@ -46,7 +46,6 @@ Create `agent/extensions/openai.ts`:
 import openaiConnectors from "eve-openai-connectors";
 
 export default openaiConnectors({
-  discovery: "deferred",
   getToken: async (ctx) => {
     const userId = ctx.session.auth.current?.attributes?.user_id;
     return userId ? await mySecretStore.get(userId) : null;
@@ -88,17 +87,19 @@ Do not ask users to paste access tokens into chat messages. Acquire and store th
 
 ## How discovery works
 
-The connector catalog can contain hundreds of tools. In the default `deferred` mode, the extension advertises the complete mapped catalog with each schema marked for deferred loading. The patched Eve runtime adds the provider's native tool-search tool, so Anthropic or OpenAI searches the catalog and loads only the schemas needed for the current request.
+The connector catalog can contain hundreds of tools. In the default `client` mode, the initial OpenAI request advertises one fixed, client-executed `tool_search` marker instead of the catalog's names, descriptions, and schemas. When the model searches, the extension queries the current user's authorized catalog and returns a count- and byte-bounded set of exact function definitions linked to that search call. Initial request size therefore stays constant as the catalog grows.
 
-Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. `openai__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
+Loaded definitions carry a full-catalog version tag and are rebuilt from durable tool-result history on the next step. A definition is accepted only when its name, schema, version, and current per-user authorization all still match. Invocation then goes through the normal connector path, which rechecks authorization and applies the same read/write approval policy.
 
-If the catalog is temporarily unavailable, the extension automatically falls back to progressive search:
+Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. In search/deferred modes, `openai__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
+
+On providers without OpenAI client-executed tool search, the same marker remains a bounded progressive search function. It uses the same flow as ordinary progressive search:
 
 1. The agent calls `openai__search` with a service and keywords.
 2. The result identifies matching connector tools.
 3. On the next step, those tools are materialized under the `openai__` namespace and become callable.
 
-Set `discovery: "search"` to use that path all the time. Search-mode tools discovered earlier in the conversation are rebuilt from history without another catalog request.
+Set `discovery: "search"` to use ordinary progressive extension search all the time. Search-mode tools discovered earlier in the conversation are rebuilt from history without another catalog request. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
 
 Ask the agent, for example:
 
@@ -123,13 +124,15 @@ The extension never logs or persists the token. It holds tokens only in a bounde
 | `getPrincipal(ctx)` | derived from Eve auth | Return a stable per-user cache key. Useful for auth-less local development. |
 | `enabled` | `true` | Disable all connector contributions when false. |
 | `allowedServices` | all authorized services | Restrict discovery and calls to service names such as `github` or `google_drive`. |
-| `discovery` | `"deferred"` | Use provider-native deferred tool search. Set to `"search"` for progressive extension search. |
+| `discovery` | `"client"` | Use OpenAI client-executed tool search with a bounded progressive fallback. Use `"search"` for ordinary progressive search or `"deferred"` for full-catalog hosted search compatibility. |
 | `baseUrl` | OpenAI connector service | Override the connector endpoint. |
 | `inventoryTtlMs` | `300000` | Per-user connector catalog cache lifetime in milliseconds. |
 | `maxMaterializedTools` | `30` | Maximum previously discovered tools restored on each step. |
 | `searchLimitDefault` | `8` | Default number of search matches. |
 | `searchLimitMax` | `25` | Maximum number of search matches. |
-| `includeStatus` | `true` | Include the `openai__status` diagnostic tool. |
+| `clientSearchMaxBytes` | `65536` | Maximum serialized bytes returned by one client tool-search call. |
+| `clientSearchTimeoutMs` | `5000` | Wall-clock budget for client tool search, including catalog lookup. |
+| `includeStatus` | `true` | Include `openai__status` in search/deferred modes. Client mode keeps the cold tool set to one search tool. |
 | `approvals` | simple policy | Configure declarative write-tool approval rules. |
 | `approvalFor(item)` | none | Supply a fully custom Eve approval function for each tool. |
 | `logger` | `console` | Receive operational warnings; arguments, results, and tokens are never logged. |
@@ -201,7 +204,7 @@ The unit suite is offline. Connector-service integration tests are gated by `COD
 CODEX_ACCESS_TOKEN="<token>" pnpm --filter eve-openai-connectors test:integration
 ```
 
-Wire-level deferred-mode tests also run when `ANTHROPIC_API_KEY` or `AI_GATEWAY_API_KEY` is set.
+Wire-level provider tests also run when `ANTHROPIC_API_KEY` or `AI_GATEWAY_API_KEY` is set.
 
 ## License
 

@@ -180,7 +180,7 @@ describe("begin() — the step.started contract (never throws)", () => {
     expect(fallback?.searchToolDescription).toContain("temporarily unavailable");
   });
 
-  test("search mode never populates deferred", async () => {
+  test("client mode is the default and never exposes the full deferred catalog", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
     const connectors = createConnectors({
       getToken: () => "tok",
@@ -189,6 +189,8 @@ describe("begin() — the step.started contract (never throws)", () => {
     });
     const session = await connectors.begin(makeCtx());
     expect(session?.deferred).toHaveLength(0);
+    expect(session?.clientSearchEnabled).toBe(true);
+    expect(session?.loaded).toEqual([]);
   });
 
   test("getPrincipal override enables auth-less deployments", async () => {
@@ -205,6 +207,99 @@ describe("begin() — the step.started contract (never throws)", () => {
 });
 
 describe("search / call / status against a live (fake) catalog", () => {
+  test("client search loads a bounded exact subset and durable replay rebuilds it", async () => {
+    server = await startFakeMcpServer({ tools: CATALOG });
+    const connectors = createConnectors({
+      getToken: () => "tok",
+      baseUrl: server.url,
+      searchLimitMax: 2,
+      logger: silentLogger,
+    });
+    const output = await connectors.clientSearch(
+      makeCtx(),
+      {
+        arguments: { keywords: "search github", service: "github", limit: 25 },
+        call_id: "call_123",
+      },
+      "openai__",
+    );
+    expect(output.tools).toHaveLength(2);
+    expect(output.tools.every((tool) => tool.name.startsWith("openai__apps_github_"))).toBe(true);
+    expect(output.tools.every((tool) => tool.description.includes("[eve catalog: "))).toBe(true);
+
+    const replay = await connectors.begin(
+      makeCtx([
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "call_123",
+              toolName: "tool_search",
+              output: { type: "json", value: output },
+            },
+          ],
+        },
+      ]),
+    );
+    expect(replay?.loaded.map((entry) => entry.providerName)).toEqual(
+      output.tools.map((tool) => tool.name),
+    );
+  });
+
+  test("client search handles no matches, malformed input, authorization, and output budgets", async () => {
+    server = await startFakeMcpServer({ tools: CATALOG });
+    const connectors = createConnectors({
+      getToken: () => "tok",
+      baseUrl: server.url,
+      clientSearchMaxBytes: 12,
+      logger: silentLogger,
+    });
+    await expect(
+      connectors.clientSearch(makeCtx(), { keywords: "no-such-capability" }, "openai__"),
+    ).resolves.toEqual({ tools: [] });
+    await expect(
+      connectors.clientSearch(
+        makeCtx(),
+        { arguments: { keywords: "search" }, call_id: "" },
+        "openai__",
+      ),
+    ).rejects.toThrow(/call_id/);
+    await expect(
+      connectors.clientSearch(makeCtx(), { keywords: "search", service: "slack" }, "openai__"),
+    ).rejects.toThrow(/Unknown service/);
+    await expect(
+      connectors.clientSearch(makeCtx(), { keywords: "search" }, "openai__"),
+    ).resolves.toEqual({ tools: [] });
+
+    const noToken = createConnectors({ getToken: () => null, logger: silentLogger });
+    await expect(
+      noToken.clientSearch(makeCtx(), { keywords: "search" }, "openai__"),
+    ).rejects.toThrow(/no access token/);
+  });
+
+  test("client search failures and latency overruns fail without exposing a catalog", async () => {
+    const failing = createConnectors({
+      getToken: () => "tok",
+      baseUrl: DEAD_URL,
+      logger: silentLogger,
+    });
+    await expect(
+      failing.clientSearch(makeCtx(), { keywords: "search" }, "openai__"),
+    ).rejects.toThrow();
+
+    server = await startFakeMcpServer({ tools: CATALOG, listDelayMs: 50 });
+    const slow = createConnectors({
+      getToken: () => "tok",
+      baseUrl: server.url,
+      clientSearchTimeoutMs: 5,
+      logger: silentLogger,
+    });
+    await expect(
+      slow.clientSearch(makeCtx(), { keywords: "search" }, "openai__"),
+    ).rejects.toThrow(/5ms latency budget/);
+  });
+
   test("search maps names, tags writes, and filters by service", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
     const connectors = createConnectors({

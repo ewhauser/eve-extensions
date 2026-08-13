@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  eve@0.31.3: 473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9
+  eve@0.31.3: 44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b
 
 importers:
 
@@ -18,7 +18,7 @@ importers:
         version: 3.1075.0
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -59,7 +59,7 @@ importers:
         version: 7.0.56(zod@4.4.3)
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
@@ -83,7 +83,7 @@ importers:
         version: 7.0.56(zod@4.4.3)
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -111,7 +111,7 @@ importers:
         version: 7.0.56(zod@4.4.3)
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -130,7 +130,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -149,7 +149,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -168,7 +168,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 0.31.3
-        version: 0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -1946,7 +1946,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.31.3(patch_hash=473efa4ecf6cf07ff62a561dfd7545d8fc83b5aa8cafe39f2b32e023deb026d9)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
+  eve@0.31.3(patch_hash=44ea9c9287d20c41adcef0958b882d081c2f6c8c61089e0470d74c27c033f58b)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
       ai: 7.0.56(zod@4.4.3)
       nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))

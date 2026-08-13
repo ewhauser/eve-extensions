@@ -31,12 +31,14 @@ const config = z
       .optional(),
     enabled: z.boolean().default(true),
     allowedServices: z.array(z.string().trim().min(1)).optional(),
-    discovery: z.enum(["search", "deferred"]).default("deferred"),
+    discovery: z.enum(["client", "search", "deferred"]).default("client"),
     baseUrl: z.string().url().optional(),
     inventoryTtlMs: z.number().int().positive().optional(),
     maxMaterializedTools: z.number().int().nonnegative().optional(),
     searchLimitDefault: z.number().int().positive().optional(),
     searchLimitMax: z.number().int().positive().optional(),
+    clientSearchMaxBytes: z.number().int().positive().optional(),
+    clientSearchTimeoutMs: z.number().int().positive().optional(),
     includeStatus: z.boolean().default(true),
     approvals: z
       .object({
