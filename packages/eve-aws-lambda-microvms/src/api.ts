@@ -92,8 +92,6 @@ export interface AwsLambdaMicrovmApi {
   listManagedImageVersions(
     imageArn: string,
   ): Promise<readonly { readonly imageArn: string; readonly imageVersion: string }[]>;
-  resumeMicrovm(microvmId: string): Promise<void>;
   runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord>;
-  suspendMicrovm(microvmId: string): Promise<void>;
   terminateMicrovm(microvmId: string): Promise<void>;
 }
