@@ -4,12 +4,11 @@ import { describe, expect, test } from "vitest";
 import { buildInventory } from "../extension/lib/catalog.js";
 import {
   clientToolDescription,
-  clientToolSearchResultsFromMessages,
   materializeClientToolSearchOutput,
   namespaceFromClientMarkerToolName,
   parseClientToolSearchInput,
 } from "../extension/lib/client-search.js";
-import type { ClientFunctionTool, UpstreamTool } from "../extension/lib/types.js";
+import type { UpstreamTool } from "../extension/lib/types.js";
 
 const TOOLS: UpstreamTool[] = [
   {
@@ -39,21 +38,6 @@ const TOOLS: UpstreamTool[] = [
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
 ];
-
-function toolResult(toolName: string, tools: readonly unknown[], wrap = true) {
-  const value = { tools };
-  return {
-    role: "tool",
-    content: [
-      {
-        type: "tool-result",
-        toolCallId: "call_1",
-        toolName,
-        output: wrap ? { type: "json", value } : value,
-      },
-    ],
-  };
-}
 
 describe("client tool-search input", () => {
   test("accepts OpenAI's call_id wrapper and the progressive fallback input", () => {
@@ -125,123 +109,6 @@ describe("client tool-search materialization", () => {
     ).toHaveLength(1);
     expect(
       materializeClientToolSearchOutput(inventory, [searchIssues], "openai__", 12).tools,
-    ).toEqual([]);
-  });
-});
-
-describe("durable client tool-search replay", () => {
-  const inventory = buildInventory(TOOLS, "", undefined, 56);
-  const definitions = materializeClientToolSearchOutput(
-    inventory,
-    inventory.items,
-    "openai__",
-    64 * 1024,
-  ).tools;
-
-  test("rebuilds exact authorized definitions from tool_search_output history", () => {
-    const loaded = clientToolSearchResultsFromMessages(
-      [toolResult("tool_search", definitions)],
-      inventory,
-      30,
-    );
-    expect(loaded.map((entry) => entry.item.upstream)).toEqual([
-      "github.create_issue",
-      "github.search_issues",
-      "google_drive.search_files",
-    ]);
-    expect(loaded[0]?.providerName).toBe("openai__github_create_issue");
-  });
-
-  test("supports namespaced marker results, JSON strings, multi-step dedupe, and caps", () => {
-    const older = definitions[0]!;
-    const newer = definitions[1]!;
-    const messages = [
-      toolResult("openai__client_tool_search", [older]),
-      {
-        role: "tool",
-        content: [
-          {
-            type: "tool-result",
-            toolName: "tool_search",
-            output: JSON.stringify({ tools: [older, newer] }),
-          },
-        ],
-      },
-    ];
-    const loaded = clientToolSearchResultsFromMessages(messages, inventory, 2);
-    expect(loaded.map((entry) => entry.item.upstream)).toEqual([
-      "github.create_issue",
-      "github.search_issues",
-    ]);
-  });
-
-  test("preserves relevance order within the newest result when capped", () => {
-    const loaded = clientToolSearchResultsFromMessages(
-      [toolResult("tool_search", definitions)],
-      inventory,
-      1,
-    );
-    expect(loaded.map((entry) => entry.providerName)).toEqual([definitions[0]!.name]);
-  });
-
-  test("tries every matching namespace suffix before rejecting a definition", () => {
-    const ambiguous = buildInventory(
-      [
-        { name: "alpha", description: "Same descriptor.", inputSchema: { type: "object" } },
-        { name: "z__alpha", description: "Same descriptor.", inputSchema: { type: "object" } },
-      ],
-      "",
-    );
-    const target = ambiguous.byName.get("z__alpha")!;
-    const [definition] = materializeClientToolSearchOutput(
-      ambiguous,
-      [target],
-      "openai__",
-      64 * 1024,
-    ).tools;
-    expect(
-      clientToolSearchResultsFromMessages(
-        [toolResult("tool_search", [definition])],
-        ambiguous,
-        30,
-      ).map((entry) => entry.item.name),
-    ).toEqual(["z__alpha"]);
-  });
-
-  test("drops malformed, unauthorized, schema-tampered, and stale definitions", () => {
-    const current = definitions[0]!;
-    const unauthorized: ClientFunctionTool = {
-      ...current,
-      name: "openai__github_admin_secret",
-    };
-    const schemaTampered: ClientFunctionTool = {
-      ...current,
-      parameters: { type: "object", properties: { admin: { type: "boolean" } } },
-    };
-    const stale: ClientFunctionTool = {
-      ...current,
-      description: `${current.description} stale`,
-    };
-    const loaded = clientToolSearchResultsFromMessages(
-      [
-        toolResult("not_tool_search", [current]),
-        toolResult("tool_search", [unauthorized, schemaTampered, stale, { type: "function" }]),
-      ],
-      inventory,
-      30,
-    );
-    expect(loaded).toEqual([]);
-  });
-
-  test("invalidates every loaded definition when the authorized catalog changes", () => {
-    const changed = buildInventory(
-      [...TOOLS, { ...TOOLS[0]!, name: "github.get_issue" }],
-      "",
-      undefined,
-      56,
-    );
-    expect(
-      clientToolSearchResultsFromMessages([toolResult("tool_search", definitions)], changed, 30),
     ).toEqual([]);
   });
 });

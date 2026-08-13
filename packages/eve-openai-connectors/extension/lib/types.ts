@@ -45,12 +45,7 @@ export interface UpstreamCallResult {
   isError?: boolean;
 }
 
-/**
- * One discoverable connector tool. This exact object travels through
- * search results in conversation history and is everything needed to
- * rebuild a callable tool offline — including `upstream`, the authoritative
- * reverse mapping. Never reconstruct the dotted name from the mapped one.
- */
+/** One discoverable connector tool from the current authorized inventory. */
 export interface ConnectorToolItem {
   /** Mapped, API-legal tool name, e.g. `github_search_repositories`. */
   readonly name: string;
@@ -73,6 +68,23 @@ export interface SearchInput {
   limit?: number;
 }
 
+export interface ConnectorSearchSummary {
+  readonly name: string;
+  readonly summary: string;
+}
+
+/** Compact ordinary-search result sent to the model. Never contains schemas. */
+export interface ConnectorSearchOutput {
+  readonly loaded: readonly ConnectorSearchSummary[];
+}
+
+export interface ConnectorSearchResult {
+  readonly output: ConnectorSearchOutput;
+  readonly items: readonly ConnectorToolItem[];
+  readonly authority: string;
+  readonly catalogFingerprint: string;
+}
+
 /** Raw input emitted by OpenAI for a client-executed `tool_search_call`. */
 export interface ClientToolSearchInput {
   arguments?: unknown;
@@ -92,12 +104,38 @@ export interface ClientToolSearchOutput {
   readonly tools: readonly ClientFunctionTool[];
 }
 
+export interface ClientToolSearchResult {
+  readonly output: ClientToolSearchOutput;
+  readonly items: readonly ConnectorToolItem[];
+  readonly authority: string;
+  readonly catalogFingerprint: string;
+}
+
+export type ConnectorWorkingSetSource = "search" | "client";
+
+export interface ConnectorWorkingSetEntry {
+  readonly name: string;
+  readonly upstream: string;
+  readonly source: ConnectorWorkingSetSource;
+}
+
+/** Versioned, bounded, per-session references. It intentionally contains no schemas. */
+export interface ConnectorWorkingSet {
+  readonly version: 1;
+  readonly authority: string;
+  readonly catalogFingerprint: string;
+  readonly tools: readonly ConnectorWorkingSetEntry[];
+}
+
+export interface MaterializedWorkingSetEntry {
+  readonly item: ConnectorToolItem;
+  readonly source: ConnectorWorkingSetSource;
+}
+
 /** A client-loaded definition matched back to the current authorized catalog. */
 export interface LoadedConnectorTool {
   readonly item: ConnectorToolItem;
-  /** Exact provider-visible name recorded in `tool_search_output`. */
-  readonly providerName: string;
-  /** Version-tagged description recorded in `tool_search_output`. */
+  /** Version-tagged description reconstructed from the current catalog. */
   readonly description: string;
 }
 
@@ -211,13 +249,12 @@ export interface ConnectorSession {
   statusToolName: string;
   statusToolDescription: string;
   statusInputSchema: JsonObject;
-  /**
-   * Tools previously discovered via search in this conversation, rebuilt from
-   * history (no network), capped at `maxMaterializedTools`, most recent first.
-   */
+  /** Ordinary-search tools revalidated from the durable working set. */
   discovered: readonly ConnectorToolItem[];
-  /** Definitions loaded by prior client tool-search outputs and revalidated against the current catalog. */
+  /** Client-search definitions revalidated from the durable working set. */
   loaded: readonly LoadedConnectorTool[];
+  /** Bound used when atomically updating the durable working set. */
+  maxMaterializedTools: number;
   /** Whether this step should contribute the client-search marker tool. */
   clientSearchEnabled: boolean;
   /**
