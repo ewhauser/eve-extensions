@@ -8,6 +8,7 @@ import {
   ignore,
   MonitorRuntime,
   TransientMonitorError,
+  validateMonitorDefinition,
   wake,
   type ChannelEvent,
   type MonitorDeliveryChannel,
@@ -49,7 +50,7 @@ describe("buffering, cooldown, quotas, and failures", () => {
     const monitor = baseMonitor(delivery, {
       id: "threshold",
       correlate: () => "same",
-      buffer: { mode: "debounce", quietPeriod: "10s", maxWait: "1m", maxEvents: 2, maxBytes: 10_000 },
+      buffer: { mode: "debounce", quietPeriod: "10s", maxWait: "15s", maxEvents: 2, maxBytes: 10_000 },
     });
     const runtime = await createRuntime(clock, delivery, monitor);
 
@@ -469,6 +470,50 @@ describe("chat dispatch and binding conformance", () => {
     });
     expect(refreshed.binding.bindingRef).not.toBe(first.binding.bindingRef);
     expect(refreshed.binding.status).toBe("active");
+  });
+});
+
+describe("definition validation", () => {
+  function debounceDefinition(buffer: { quietPeriod: string; maxWait: string; maxEvents: number }) {
+    const clock = new VirtualMonitorClock();
+    const delivery = new MemoryConversationChannel({ id: "delivery", clock });
+    return {
+      ...defaultDefinition(delivery),
+      buffer: { mode: "debounce", maxBytes: 10_000, ...buffer },
+    } as MonitorDefinition<TestEvent>;
+  }
+
+  it("warns when debounce maxWait can never fire", () => {
+    // maxEvents closes the batch within maxEvents × quietPeriod of opening,
+    // so any maxWait at or beyond that ceiling is dead configuration.
+    const atCeiling = validateMonitorDefinition(
+      debounceDefinition({ quietPeriod: "10s", maxWait: "20s", maxEvents: 2 }),
+    );
+    expect(atCeiling).toHaveLength(1);
+    expect(atCeiling[0]).toMatch(/maxWait \(20000ms\) can never fire/);
+
+    const beyondCeiling = validateMonitorDefinition(
+      debounceDefinition({ quietPeriod: "10s", maxWait: "1m", maxEvents: 2 }),
+    );
+    expect(beyondCeiling).toHaveLength(1);
+  });
+
+  it("does not warn when maxWait can fire before the maxEvents ceiling", () => {
+    const warnings = validateMonitorDefinition(
+      debounceDefinition({ quietPeriod: "10s", maxWait: "15s", maxEvents: 2 }),
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("surfaces the unreachable maxWait warning through defineMonitor", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      defineMonitor(debounceDefinition({ quietPeriod: "10s", maxWait: "20s", maxEvents: 2 }));
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("maxWait (20000ms) can never fire"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

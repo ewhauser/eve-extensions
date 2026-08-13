@@ -183,7 +183,9 @@ export function defineMonitor<
 >(
   definition: MonitorDefinition<TEvent, TIgnore, TWake>,
 ): MonitorDefinition<TEvent, TIgnore, TWake> {
-  validateMonitorDefinition(definition);
+  for (const warning of validateMonitorDefinition(definition)) {
+    console.warn(`eve-ambient: ${warning}`);
+  }
   return Object.freeze(definition);
 }
 
@@ -218,13 +220,19 @@ export function compileMonitor<TEvent extends ChannelEvent, TIgnore, TWake>(
   }) as unknown as CompiledMonitor;
 }
 
+/**
+ * Throws on invalid definitions and returns non-fatal warnings for
+ * configurations that are valid but partially dead (e.g. an unreachable
+ * debounce maxWait).
+ */
 export function validateMonitorDefinition<
   TEvent extends ChannelEvent,
   TIgnore,
   TWake,
 >(
   definition: MonitorDefinition<TEvent, TIgnore, TWake>,
-): void {
+): readonly string[] {
+  const warnings: string[] = [];
   assertIdentifier(definition.id, "monitor id");
   if (!["active", "shadow", "disabled"].includes(definition.mode ?? "active")) {
     throw new TypeError("monitor mode must be active, shadow, or disabled");
@@ -270,6 +278,18 @@ export function validateMonitorDefinition<
     if (quiet > maximum) throw new TypeError("buffer quietPeriod must not exceed maxWait");
     assertPositiveSafeInteger(definition.buffer.maxEvents, "buffer maxEvents");
     assertPositiveSafeInteger(definition.buffer.maxBytes, "buffer maxBytes");
+    // Each buffered event extends the quiet deadline by at most quietPeriod,
+    // and maxEvents closes the batch after N events, so a batch can never stay
+    // open past openedAt + maxEvents × quietPeriod. A maxWait at or beyond
+    // that ceiling can never fire.
+    if (maximum >= definition.buffer.maxEvents * quiet) {
+      warnings.push(
+        `monitor ${definition.id} buffer maxWait (${maximum}ms) can never fire: ` +
+          `maxEvents (${definition.buffer.maxEvents}) closes the batch within ` +
+          `maxEvents × quietPeriod (${definition.buffer.maxEvents * quiet}ms) of opening; ` +
+          `lower maxWait or raise maxEvents`,
+      );
+    }
   }
   if (
     (definition.buffer?.mode === "debounce" ||
@@ -303,6 +323,7 @@ export function validateMonitorDefinition<
   if (typeof definition.decision !== "function") {
     modelDecision(definition.decision);
   }
+  return warnings;
 }
 
 function validateLimits(

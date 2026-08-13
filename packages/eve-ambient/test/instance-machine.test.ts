@@ -57,13 +57,13 @@ const CONFIGS: readonly { readonly name: string; readonly definition: MonitorDef
   {
     name: "debounce",
     definition: makeDefinition({
-      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "10s", maxEvents: 3, maxBytes: 100 },
+      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "5s", maxEvents: 3, maxBytes: 100 },
     }),
   },
   {
     name: "debounce+cooldown",
     definition: makeDefinition({
-      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "10s", maxEvents: 3, maxBytes: 100 },
+      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "5s", maxEvents: 3, maxBytes: 100 },
       cooldown: { afterWake: "10s", during: "accumulate" },
     }),
   },
@@ -466,7 +466,7 @@ const SCENARIOS: readonly {
   {
     name: "debounce wake, cooldown accumulation, expiry evaluation",
     overrides: {
-      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "10s", maxEvents: 5, maxBytes: 10_000 },
+      buffer: { mode: "debounce", quietPeriod: "2s", maxWait: "8s", maxEvents: 5, maxBytes: 10_000 },
       cooldown: { afterWake: "30s", during: "accumulate" },
     },
     steps: [
