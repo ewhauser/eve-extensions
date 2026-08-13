@@ -50,6 +50,12 @@ export default openaiConnectors({
     const userId = ctx.session.auth.current?.attributes?.user_id;
     return userId ? await mySecretStore.get(userId) : null;
   },
+  excludedServices: ["internal_service"],
+  protocolClientLifetime: "operation",
+  onAuthError: async (ctx) => {
+    const userId = ctx.session.auth.current?.attributes?.user_id;
+    if (userId) await myTokenCache.evict(userId);
+  },
 });
 ```
 
@@ -116,7 +122,7 @@ The token must be one of:
 - A Codex access token created for the user in the ChatGPT admin console under Access tokens. These are long-lived, admin-governed, revocable, and work as raw bearer tokens.
 - A ChatGPT session access token obtained through an OAuth or device-code flow owned by your application. These are short-lived, so your application must handle refresh.
 
-The extension never logs or persists the token. It holds tokens only in a bounded in-process per-user protocol-client cache. A changed token immediately invalidates that user's protocol session and authorization inventory; unchanged immutable catalog content can still be reused.
+The extension never logs or persists the token. By default it holds tokens only in a bounded in-process per-user protocol-client cache. Set `protocolClientLifetime: "operation"` when the application already owns credential caching: each network operation creates a client and closes it in `finally`, while the package retains only a token hash, immutable interned catalog content, and bounded authorization inventory. A changed token immediately invalidates that user's protocol session and authorization inventory; unchanged immutable catalog content can still be reused.
 
 ## Configuration
 
@@ -126,7 +132,9 @@ The extension never logs or persists the token. It holds tokens only in a bounde
 | `getPrincipal(ctx)` | derived from Eve auth | Return a stable per-user cache key. Useful for auth-less local development. |
 | `enabled` | `true` | Disable all connector contributions when false. |
 | `allowedServices` | all authorized services | Restrict discovery and calls to service names such as `github` or `google_drive`. |
+| `excludedServices` | none | Case-insensitive service denylist applied before catalog fingerprinting, discovery, status, durable materialization, and calls. It may be combined with `allowedServices`. |
 | `discovery` | `"client"` | Use OpenAI client-executed tool search with a bounded progressive fallback. Use `"search"` for ordinary progressive search or `"deferred"` for full-catalog hosted search compatibility. |
+| `protocolClientLifetime` | `"principal"` | Use `"operation"` to avoid retaining credential-bearing protocol clients between network operations. |
 | `baseUrl` | OpenAI connector service | Override the connector endpoint. |
 | `inventoryTtlMs` | `300000` | Per-user connector catalog cache lifetime in milliseconds. |
 | `maxMaterializedTools` | `30` | Maximum discovered references retained and materialized on each step. |
@@ -137,7 +145,22 @@ The extension never logs or persists the token. It holds tokens only in a bounde
 | `includeStatus` | `true` | Include `openai__status` in search/deferred modes. Client mode keeps the cold tool set to one search tool. |
 | `approvals` | simple policy | Configure declarative write-tool approval rules. |
 | `approvalFor(item)` | none | Supply a fully custom Eve approval function for each tool. |
+| `transformCallInput(ctx, item, input)` | identity | Transform arguments after current-catalog reauthorization and immediately before `tools/call`. It cannot change routing. |
+| `onAuthError(ctx, error)` | none | Evict application credential state after the package invalidates its own state for a 401/403. Callback failures never replace the connector error. |
+| `onResolution(ctx, summary)` | none | Receive at most one schema-free, count-only diagnostic for each `begin()` resolution. Callback failures never break resolution. |
 | `logger` | `console` | Receive operational warnings; arguments, results, and tokens are never logged. |
+
+`ConnectorContext.abortSignal` is propagated through catalog listing, ordinary and client search, status, and connector calls. An aborted catalog load does not enter the negative inventory cache, and operation-scoped clients are still closed.
+
+For applications that compose the lower-level resolver directly, import the same typed surface without reaching into package internals:
+
+```ts
+import {
+  ConnectorAuthError,
+  createConnectors,
+  type CreateConnectorsOptions,
+} from "eve-openai-connectors/connectors";
+```
 
 ## Approvals
 
@@ -183,7 +206,10 @@ Add `--call` to make one read-only live call. The probe reports catalog health a
 - Connector output is untrusted input. A GitHub issue, Drive document, or Notion page can contain instruction-shaped text. Treat retrieved content as data and keep writes behind approval.
 - Cross-service chains deserve extra scrutiny: content read from one service must not silently authorize a write to another.
 - Durable connector state contains bounded references only. A principal or catalog mismatch clears it, and an unavailable catalog materializes no connector tools.
+- `excludedServices` is enforced before catalog fingerprinting and again before direct calls. Excluded dotted names, generated underscore names, and stale durable references fail closed without an upstream request.
 - Every connector call revalidates current per-user catalog membership and the policy-relevant descriptor. A tool removed or changed after discovery fails closed before any upstream `tools/call` request.
+- `transformCallInput` receives the freshly authorized frozen descriptor and a shallow-frozen argument snapshot. It may normalize arguments only; throwing stops the call before the network request.
+- Authentication callbacks receive only the Eve context and a typed `ConnectorAuthError`, never the bearer token, call arguments, result, or response body. Resolution summaries contain only status, discovery mode, and bounded counts.
 - The connector endpoint is an OpenAI backend used by Codex, not a documented public OpenAI API. OpenAI can change or gate it without notice. Review this dependency with your security team before production use.
 - Connector traffic residency through this endpoint is undocumented. Verify it against any residency obligations.
 - The extension does not authorize new connectors. Users authorize services in ChatGPT.

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Approval } from "eve/tools";
 import {
   buildInventory,
@@ -37,6 +38,19 @@ import type {
   CreateConnectorsOptions,
   SearchInput,
 } from "./types.js";
+export type {
+  ConnectorContext,
+  ConnectorDiscovery,
+  ConnectorResolutionStatus,
+  ConnectorResolutionSummary,
+  ConnectorSearchResult,
+  ConnectorStatus,
+  ConnectorToolItem,
+  CreateConnectorsOptions,
+  ProtocolClientLifetime,
+  SearchInput,
+} from "./types.js";
+export { ConnectorAuthError, ConnectorProtocolError, ConnectorToolError } from "./errors.js";
 import {
   compactConnectorSearchOutput,
   materializeConnectorWorkingSet,
@@ -94,13 +108,16 @@ function firstErrorLine(error: unknown): string {
   return message.split("\n", 1)[0] ?? message;
 }
 
-function normalizeAllowedServices(services: readonly string[] | undefined): ReadonlySet<string> | undefined {
+function normalizeServices(
+  option: "allowedServices" | "excludedServices",
+  services: readonly string[] | undefined,
+): ReadonlySet<string> | undefined {
   if (services === undefined) return undefined;
   const normalized = new Set<string>();
   for (const service of services) {
     const value = service.trim().toLowerCase();
     if (!value) {
-      throw new Error("eve-openai-connectors: allowedServices entries must be non-empty strings.");
+      throw new Error(`eve-openai-connectors: ${option} entries must be non-empty strings.`);
     }
     normalized.add(value);
   }
@@ -115,18 +132,50 @@ const MAX_PRINCIPAL_CACHE_ENTRIES = 1_000;
 const DEFAULT_CLIENT_SEARCH_MAX_BYTES = 64 * 1024;
 const DEFAULT_CLIENT_SEARCH_TIMEOUT_MS = 5_000;
 
-async function within<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+async function within<T>(
+  externalSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  message: string,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-        timer.unref?.();
-      }),
-    ]);
+    timer = setTimeout(() => controller.abort(new Error(message)), timeoutMs);
+    timer.unref?.();
+    const signal = externalSignal
+      ? AbortSignal.any([externalSignal, controller.signal])
+      : controller.signal;
+    try {
+      return await operation(signal);
+    } catch (error) {
+      if (controller.signal.aborted && !externalSignal?.aborted) {
+        throw new Error(message, { cause: error });
+      }
+      throw error;
+    }
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function waitWithSignal<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error("Connector operation aborted.");
+  }
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<T>((_resolve, reject) => {
+    onAbort = () =>
+      reject(
+        signal.reason instanceof Error ? signal.reason : new Error("Connector operation aborted."),
+      );
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
   }
 }
 
@@ -135,7 +184,8 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
     throw new Error("eve-openai-connectors: createConnectors requires a getToken(ctx) function.");
   }
   const enabled = options.enabled ?? true;
-  const allowedServices = normalizeAllowedServices(options.allowedServices);
+  const allowedServices = normalizeServices("allowedServices", options.allowedServices);
+  const excludedServices = normalizeServices("excludedServices", options.excludedServices);
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const toolPrefix = options.toolPrefix ?? "apps_";
   validateToolPrefix(toolPrefix);
@@ -160,13 +210,21 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
   }
   const logger = options.logger ?? console;
   const discovery = options.discovery ?? "client";
+  const protocolClientLifetime = options.protocolClientLifetime ?? "principal";
+  if (protocolClientLifetime !== "principal" && protocolClientLifetime !== "operation") {
+    throw new Error(
+      "eve-openai-connectors: protocolClientLifetime must be \"principal\" or \"operation\".",
+    );
+  }
 
   const searchToolName = buildSearchToolName(toolPrefix);
   const statusToolName = buildStatusToolName(toolPrefix);
   const approvalPolicy = options.approvalFor ?? buildApprovalPolicy(options.approvals);
 
   const cache = new InventoryCache(inventoryTtlMs, MAX_PRINCIPAL_CACHE_ENTRIES);
-  const clients = new Map<string, { client: ProtocolClient; token: string }>();
+  const clients = new Map<string, { client: ProtocolClient; credentialFingerprint: string }>();
+  /** Per-principal credential hashes only; raw tokens are never retained here. */
+  const credentialFingerprints = new Map<string, string>();
   /** Principals whose most recent failure has already been logged. */
   const loggedFailures = new Set<string>();
 
@@ -181,10 +239,48 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
     return true;
   }
 
-  function invalidatePrincipal(principal: string): void {
+  function credentialCacheKey(principal: string, fingerprint: string): string {
+    return `${principal}:${fingerprint}`;
+  }
+
+  function closeRetainedClient(principal: string): void {
+    const retained = clients.get(principal);
     clients.delete(principal);
-    cache.invalidate(principal);
+    if (retained) void retained.client.close();
+  }
+
+  function invalidatePrincipal(principal: string): void {
+    closeRetainedClient(principal);
+    const fingerprint = credentialFingerprints.get(principal);
+    credentialFingerprints.delete(principal);
+    if (fingerprint) cache.invalidate(credentialCacheKey(principal, fingerprint));
     loggedFailures.delete(`catalog:${principal}`);
+  }
+
+  function accessFor(
+    principal: string,
+    token: string,
+  ): { token: string; credentialFingerprint: string; cacheKey: string } {
+    const credentialFingerprint = createHash("sha256").update(token, "utf8").digest("hex");
+    const previous = credentialFingerprints.get(principal);
+    if (previous !== undefined && previous !== credentialFingerprint) {
+      closeRetainedClient(principal);
+      cache.invalidate(credentialCacheKey(principal, previous));
+      loggedFailures.delete(`catalog:${principal}`);
+    }
+    credentialFingerprints.delete(principal);
+    credentialFingerprints.set(principal, credentialFingerprint);
+    while (credentialFingerprints.size > MAX_PRINCIPAL_CACHE_ENTRIES) {
+      const oldest = credentialFingerprints.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      invalidatePrincipal(oldest);
+      loggedFailures.delete(`token:${oldest}`);
+    }
+    return {
+      token,
+      credentialFingerprint,
+      cacheKey: credentialCacheKey(principal, credentialFingerprint),
+    };
   }
 
   function principalOf(ctx: ConnectorContext): string | null {
@@ -222,21 +318,22 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
     }
   }
 
-  function clientFor(principal: string, token: string): ProtocolClient {
+  function retainedClientFor(
+    principal: string,
+    token: string,
+    credentialFingerprint: string,
+  ): ProtocolClient {
     const existing = clients.get(principal);
-    if (existing && existing.token === token) {
+    if (existing && existing.credentialFingerprint === credentialFingerprint) {
       clients.delete(principal);
       clients.set(principal, existing);
       return existing.client;
     }
     if (existing) {
-      // A rotated credential gets a fresh protocol session and authorization
-      // inventory. The immutable catalog it returns may still be interned.
-      cache.invalidate(principal);
-      loggedFailures.delete(`catalog:${principal}`);
+      closeRetainedClient(principal);
     }
     const client = createProtocolClient({ baseUrl, token });
-    clients.set(principal, { client, token });
+    clients.set(principal, { client, credentialFingerprint });
     while (clients.size > MAX_PRINCIPAL_CACHE_ENTRIES) {
       const oldest = clients.keys().next().value as string | undefined;
       if (oldest === undefined) break;
@@ -246,18 +343,94 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
     return client;
   }
 
-  function loadInventory(principal: string, token: string): Promise<Inventory> {
-    const client = clientFor(principal, token);
-    return cache.get(principal, async () => {
-      const tools = await client.listTools();
-      const inventory = buildInventory(
-        tools,
-        toolPrefix,
-        (message) => logger.warn(message),
-        maxToolNameLength,
-        allowedServices,
+  async function notifyAuthError(
+    ctx: ConnectorContext,
+    principal: string,
+    credentialFingerprint: string,
+    error: ConnectorAuthError,
+  ): Promise<void> {
+    // A request started before credential rotation must not evict the newer
+    // credential's client/inventory or notify the application about a token
+    // it no longer owns.
+    if (credentialFingerprints.get(principal) !== credentialFingerprint) return;
+    invalidatePrincipal(principal);
+    try {
+      await options.onAuthError?.(ctx, error);
+    } catch {
+      logger.warn("eve-openai-connectors: onAuthError callback failed.");
+    }
+  }
+
+  async function withProtocolClient<T>(
+    ctx: ConnectorContext,
+    principal: string,
+    access: ReturnType<typeof accessFor>,
+    operation: (client: ProtocolClient) => Promise<T>,
+  ): Promise<T> {
+    try {
+      if (protocolClientLifetime === "operation") {
+        const client = createProtocolClient({ baseUrl, token: access.token });
+        try {
+          return await operation(client);
+        } finally {
+          await client.close();
+        }
+      }
+      return await operation(
+        retainedClientFor(principal, access.token, access.credentialFingerprint),
       );
-      loggedFailures.delete(`catalog:${principal}`);
+    } catch (error) {
+      if (error instanceof ConnectorAuthError) {
+        await notifyAuthError(ctx, principal, access.credentialFingerprint, error);
+      }
+      throw error;
+    }
+  }
+
+  function loadInventory(
+    ctx: ConnectorContext,
+    principal: string,
+    access: ReturnType<typeof accessFor>,
+    signal = ctx.abortSignal,
+  ): Promise<Inventory> {
+    if (signal?.aborted) {
+      return Promise.reject(
+        signal.reason instanceof Error ? signal.reason : new Error("Connector operation aborted."),
+      );
+    }
+    const joinsSharedLoad = cache.isLoading(access.cacheKey);
+    const loading = cache.get(
+      access.cacheKey,
+      async () => {
+        const tools = await withProtocolClient(ctx, principal, access, (client) =>
+          client.listTools(signal),
+        );
+        const inventory = buildInventory(
+          tools,
+          toolPrefix,
+          (message) => logger.warn(message),
+          maxToolNameLength,
+          allowedServices,
+          excludedServices,
+        );
+        loggedFailures.delete(`catalog:${principal}`);
+        return inventory;
+      },
+      {
+        cacheFailure: () => !signal?.aborted,
+        cacheSuccess: () => !signal?.aborted,
+      },
+    );
+    // The load owner awaits protocol cleanup in its normal finally path. A
+    // later waiter can stop waiting independently without cancelling that
+    // shared request for everyone else.
+    if (joinsSharedLoad) return waitWithSignal(loading, signal);
+    return loading.then((inventory) => {
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new Error("Connector operation aborted.");
+      }
       return inventory;
     });
   }
@@ -278,6 +451,26 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       .map(([service, count]) => `${service} (${count})`)
       .join(", ");
     return `${header} Available services: ${services}.`;
+  }
+
+  function identifierMatchesService(identifier: string, service: string): boolean {
+    const value = identifier.trim().toLowerCase();
+    const relative = toolPrefix && value.startsWith(toolPrefix.toLowerCase())
+      ? value.slice(toolPrefix.length)
+      : value;
+    return (
+      relative === service ||
+      relative.startsWith(`${service}.`) ||
+      relative.startsWith(`${service}_`)
+    );
+  }
+
+  function excludedServiceFor(identifier: string): string | null {
+    if (excludedServices === undefined) return null;
+    for (const service of excludedServices) {
+      if (identifierMatchesService(identifier, service)) return service;
+    }
+    return null;
   }
 
   const searchInputSchema: ConnectorSession["searchInputSchema"] = {
@@ -308,21 +501,58 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
 
   return {
     async begin(ctx, workingSet): Promise<ConnectorSession | null> {
+      let resolutionEmitted = false;
+      const emitResolution = (
+        status: "available" | "degraded" | "unavailable",
+        resolvedDiscovery: "client" | "search" | "deferred",
+        catalogToolCount: number,
+        materializedToolCount: number,
+      ): void => {
+        if (resolutionEmitted) return;
+        resolutionEmitted = true;
+        try {
+          const callback = options.onResolution?.(
+            ctx,
+            Object.freeze({
+              status,
+              discovery: resolvedDiscovery,
+              catalogToolCount,
+              materializedToolCount,
+            }),
+          );
+          if (callback) {
+            void callback.catch(() => {
+              logger.warn("eve-openai-connectors: onResolution callback failed.");
+            });
+          }
+        } catch {
+          logger.warn("eve-openai-connectors: onResolution callback failed.");
+        }
+      };
       try {
-        if (!enabled) return null;
+        if (!enabled) {
+          emitResolution("unavailable", discovery, 0, 0);
+          return null;
+        }
         const principal = principalOf(ctx);
-        if (!principal) return null;
+        if (!principal) {
+          emitResolution("unavailable", discovery, 0, 0);
+          return null;
+        }
         const token = await tokenFor(ctx, principal);
-        if (!token) return null;
+        if (!token) {
+          emitResolution("unavailable", discovery, 0, 0);
+          return null;
+        }
 
         // Detect credential rotation before consulting principal-scoped state.
-        clientFor(principal, token);
-        let inventory: Inventory | null = cache.peek(principal);
+        const access = accessFor(principal, token);
+        let inventory: Inventory | null = cache.peek(access.cacheKey);
         if (!inventory) {
           // Bounded attempt; the load keeps running and fills the cache for
           // the next step. Failure degrades the search description only.
           inventory = await Promise.race([
-            loadInventory(principal, token).catch((error: unknown) => {
+            loadInventory(ctx, principal, access).catch((error: unknown) => {
               if (shouldLogFailure(`catalog:${principal}`)) {
                 logger.warn(
                   `eve-openai-connectors: connector catalog load failed — continuing with previously discovered tools. ${firstErrorLine(error)}`,
@@ -355,8 +585,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
             }),
           );
         const deferred = discovery === "deferred" && inventory ? inventory.items : [];
-
-        return {
+        const session: ConnectorSession = {
           principal,
           searchToolName,
           searchToolDescription: searchDescription(inventory),
@@ -372,7 +601,15 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           deferred,
           catalogFingerprint: inventory?.fingerprint ?? null,
         };
+        emitResolution(
+          inventory ? "available" : "degraded",
+          discovery === "deferred" && !inventory ? "search" : discovery,
+          inventory?.items.length ?? 0,
+          discovered.length + loaded.length + deferred.length,
+        );
+        return session;
       } catch (error) {
+        emitResolution("unavailable", discovery, 0, 0);
         // The resolver must never throw.
         logger.error(
           `eve-openai-connectors: begin() failed unexpectedly — connectors disabled for this step. ${firstErrorLine(error)}`,
@@ -386,7 +623,8 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       if (!principal) throw new Error("Connector search is unavailable: no authenticated user.");
       const token = await tokenFor(ctx, principal);
       if (!token) throw new Error("Connector search is unavailable: the current user has no access token.");
-      const inventory = await loadInventory(principal, token);
+      const access = accessFor(principal, token);
+      const inventory = await loadInventory(ctx, principal, access);
       const items = searchInventory(
         inventory,
         (input ?? { keywords: "" }) as SearchInput,
@@ -405,7 +643,10 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
 
     async clientSearch(ctx, input, namespace): Promise<ClientToolSearchResult> {
       return within(
-        (async () => {
+        ctx.abortSignal,
+        clientSearchTimeoutMs,
+        `Connector tool search exceeded its ${clientSearchTimeoutMs}ms latency budget.`,
+        async (signal) => {
           const parsed = parseClientToolSearchInput(input);
           const principal = principalOf(ctx);
           if (!principal) {
@@ -417,7 +658,8 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
               "Connector tool search is unavailable: the current user has no access token.",
             );
           }
-          const inventory = await loadInventory(principal, token);
+          const access = accessFor(principal, token);
+          const inventory = await loadInventory(ctx, principal, access, signal);
           const matches = searchInventory(inventory, parsed, {
             limitDefault: searchLimitDefault,
             limitMax: searchLimitMax,
@@ -436,9 +678,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
             authority: principal,
             catalogFingerprint: inventory.fingerprint,
           });
-        })(),
-        clientSearchTimeoutMs,
-        `Connector tool search exceeded its ${clientSearchTimeoutMs}ms latency budget.`,
+        },
       );
     },
 
@@ -446,10 +686,17 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       if (typeof upstream !== "string" || upstream.length === 0) {
         throw new Error("Connector call requires the stored upstream tool name.");
       }
+      const excludedService = excludedServiceFor(upstream);
+      if (excludedService !== null) {
+        throw new Error(
+          `Connector service ${JSON.stringify(excludedService)} is excluded by this extension.`,
+        );
+      }
       const principal = principalOf(ctx);
       if (!principal) throw new Error("Connector call is unavailable: no authenticated user.");
       const token = await tokenFor(ctx, principal);
       if (!token) throw new Error("Connector call is unavailable: the current user has no access token.");
+      const access = accessFor(principal, token);
       const service = serviceFromUpstream(upstream);
       if (allowedServices !== undefined && !allowedServices.has(service)) {
         throw new Error(`Connector service ${JSON.stringify(service)} is not allowed by this extension.`);
@@ -458,7 +705,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       // Tool definitions may outlive a credential/catalog rotation. Always
       // revalidate membership and policy-relevant descriptor content before
       // crossing the network with the current principal's token.
-      const inventory = await loadInventory(principal, token);
+      const inventory = await loadInventory(ctx, principal, access);
       const authorized = inventory.byUpstream.get(upstream);
       if (!authorized) {
         throw new Error(
@@ -471,14 +718,26 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
         );
       }
 
-      const signal = (ctx as { abortSignal?: AbortSignal }).abortSignal;
       const startedAt = Date.now();
       let outcome = "ok";
       try {
-        const result = await clientFor(principal, token).callTool(
-          upstream,
-          input ?? {},
-          signal ? { signal } : {},
+        const originalInput = Object.freeze({ ...(input ?? {}) });
+        const transformedInput = options.transformCallInput
+          ? options.transformCallInput(ctx, authorized, originalInput)
+          : originalInput;
+        if (
+          typeof transformedInput !== "object" ||
+          transformedInput === null ||
+          Array.isArray(transformedInput)
+        ) {
+          throw new Error("Connector call input transformation must return an object.");
+        }
+        const result = await withProtocolClient(ctx, principal, access, (client) =>
+          client.callTool(
+            upstream,
+            transformedInput,
+            ctx.abortSignal ? { signal: ctx.abortSignal } : {},
+          ),
         );
         if (result.isError) {
           outcome = "tool-error";
@@ -510,7 +769,8 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
         };
       }
       try {
-        const inventory = await loadInventory(principal, token);
+        const access = accessFor(principal, token);
+        const inventory = await loadInventory(ctx, principal, access);
         return {
           enabled,
           tokenPresent: true,

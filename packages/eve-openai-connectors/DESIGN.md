@@ -155,7 +155,7 @@ The package is a built Eve extension. Its authored contribution lives in `extens
 
 A minimal streamable-HTTP MCP client with no dependencies beyond `fetch`.
 
-- `initialize()`, `listTools()`, `callTool(name, args, { signal })`.
+- `initialize()`, `listTools()`, `callTool(name, args, { signal })`, `close()`.
 - Request shape exactly as §2.1. If the server returns an `Mcp-Session-Id` header, echo it on subsequent requests; tolerate its absence (*(validated)* the observed deployment did not return one).
 - **Response bodies may be `application/json` or `text/event-stream`.** Handle both — for SSE, scan `data:` lines and take the frame carrying `result` or `error`. This is not optional; it varies by deployment and is a silent failure if missed.
 - Map JSON-RPC errors to a typed `ConnectorProtocolError` with `code` and `message`. Map HTTP 401/403 to a distinct `ConnectorAuthError` so callers can surface "token invalid or expired" instead of a generic failure.
@@ -166,7 +166,9 @@ A minimal streamable-HTTP MCP client with no dependencies beyond `fetch`.
 
 The extension validates mount configuration with a synchronous Zod schema, then passes the connector-specific options to `createConnectors`. The only required option is `getToken(ctx)`.
 
-`getToken` is the single credential surface. It is called per operation, so integrators can rotate tokens without a restart. It returns `string | null`; `null` means "this user has no access," which must flow through as a clean no-op rather than an error. Failures inside `getToken` are caught, logged once per principal, and treated as `null` — a broken credential lookup must never break the agent.
+`getToken` is the single credential surface. It is called per operation, so integrators can rotate tokens without a restart. It returns `string | null`; `null` means "this user has no access," which must flow through as a clean no-op rather than an error. Failures inside `getToken` are caught, logged once per principal, and treated as `null` — a broken credential lookup must never break the agent. `protocolClientLifetime: "operation"` retains only a credential hash and authorization inventory between calls; every network operation creates and closes its token-bearing client in `finally`.
+
+The bounded integration hooks are lifecycle-specific: `transformCallInput` can alter arguments only after current-catalog reauthorization; `onAuthError` runs after package state invalidation and receives no token, arguments, results, or response body; `onResolution` runs at most once per step with status, discovery mode, and counts only. Hook failures cannot replace connector errors or break resolution. Eve's `abortSignal` is threaded through every network path, and cancellation is never negatively cached.
 
 The package must not read files, environment variables, or secret stores for credentials. That belongs to the integrator.
 
@@ -174,7 +176,7 @@ The package must not read files, environment variables, or secret stores for cre
 
 **Split authorization and immutable content caches.** Per-user state is keyed by a principal identifier — derived by default from `ctx.session.auth` using Eve's convention (`user:<issuer>:<principalId>`), overridable via `getPrincipal(ctx)` — with `inventoryTtlMs` (default 5 minutes). It retains only the current token/client state and a reference to that principal's authorized catalog. Concurrent loads are deduplicated; failures are cached briefly (~30s); principal and client maps are size-bounded. Credential rotation invalidates only that principal's protocol session and inventory, and stale in-flight loads cannot repopulate it.
 
-Normalized catalogs are SHA-256 content-addressed after applying the tool prefix, name limit, service filter, and complete upstream tool metadata. A process-wide bounded interner retains frozen descriptor arrays and deeply frozen raw input-schema objects. Equivalent catalogs therefore hit Eve's schema identity cache even when they came from different principals or tokens; annotation, filter, prefix, or metadata divergence produces a distinct content address. A second bounded cache reuses connector-scoped `defineTool()` records for an unchanged catalog, avoiding per-step rematerialization without sharing execution clients or approval policies across connector configurations. Aggregate hit, miss, entry, eviction, and estimated-byte metrics contain no principal, token, or schema labels.
+Normalized catalogs are SHA-256 content-addressed after applying the tool prefix, name limit, service allowlist/denylist, and complete upstream tool metadata. Both service policies run before fingerprinting and materialization, so an excluded service cannot be recovered through search, deferred discovery, status, direct generated names, or stale durable state. A process-wide bounded interner retains frozen descriptor arrays and deeply frozen raw input-schema objects. Equivalent catalogs therefore hit Eve's schema identity cache even when they came from different principals or tokens; annotation, filter, prefix, or metadata divergence produces a distinct content address. A second bounded cache reuses connector-scoped `defineTool()` records for an unchanged catalog, avoiding per-step rematerialization without sharing execution clients or approval policies across connector configurations. Aggregate hit, miss, entry, eviction, and estimated-byte metrics contain no principal, token, or schema labels.
 
 **Name mapping — the load-bearing part.**
 
@@ -241,6 +243,7 @@ Composed inside the extension from `connectors.begin`, `connectors.search`, `con
 4. Outside client mode, emit relative `search` and optional `status` entries. Eve qualifies them as `openai__search` and `openai__status`. Search results explain that returned names receive the same `openai__` namespace on the next step. Client mode omits both so its cold extension contribution is exactly one search tool.
 5. Read the extension-owned working set, require its authority and catalog fingerprint to match, and join each mapped/upstream reference against the current catalog. Keep the manifest and materialized set capped at `maxMaterializedTools` (default 30), deterministically ordered with the newest search's relevance order first. The manifest contains no schemas, descriptions, credentials, arguments, or results.
 6. Every connector `execute` re-loads current per-principal authorization, verifies that the stored upstream tool is still present, and compares all policy/schema-relevant descriptor fields before calling `callTool(item.upstream, input)` — the stored upstream string, never a derived one. Catalog removal or credential-driven descriptor changes fail closed before the network call. Successful calls return `structuredContent ?? content`; `isError: true` becomes a thrown error carrying returned text so the model can adapt.
+7. Emit one bounded `onResolution` summary for the completed path. It contains no principals, names, schemas, credentials, arguments, results, or upstream error text.
 
 **Why step-scoped**, given session- and turn-scoped resolvers are cheaper: only step scope refreshes between model calls within a turn, which is what makes discover-then-call work in a single turn; and only step scope honors `approval`.
 
@@ -254,7 +257,7 @@ Eve makes dynamic tools replay-safe by transforming `execute` arrows at build ti
 
 Eve's extension build now provides the correct distribution boundary for this requirement. The package owns the authored `defineDynamic` contribution and keeps every `execute` arrow inline in `extension/tools/connectors.ts`; `eve extension build` transforms and packages that source for consumers.
 
-The consumer only mounts the built extension from `agent/extensions/openai.ts` and supplies configuration. No hand-copied tools file is required. The package also contributes an instruction fragment that explains discovery and treats connector output as untrusted data.
+The consumer only mounts the built extension from `agent/extensions/openai.ts` and supplies configuration. No hand-copied tools file is required. The package also contributes an instruction fragment that explains discovery and treats connector output as untrusted data. Consumers that need the lower-level composition boundary use the public `eve-openai-connectors/connectors` export rather than vendoring `extension/lib` source.
 
 ---
 
@@ -297,8 +300,9 @@ Ordered so failures surface as early and cheaply as possible.
 3. **Resolver resilience.** With a catalog stub that throws, the resolver returns search metadata but no tools from durable state or synthetic transcript history, and never throws. With `getToken` returning `null`, it returns `null` without touching the network.
 4. **Protocol client.** Against a local fake MCP server: JSON and SSE response bodies both parse; `Mcp-Session-Id` is echoed when present and omitted when absent; 401 maps to `ConnectorAuthError`; `isError: true` results throw with the upstream text.
 5. **Client tool search and durable working set.** Assert the patched Eve bridge emits `openai.tool_search` with `execution: "client"`, the initial serialized provider tool is identical for synthetic 10- and 200-tool catalogs, malformed/no-match/oversized/unauthorized/stale/failing searches fail closed, and latency is bounded. Assert the reference-only manifest survives Eve serialization, opaque transcript compaction, turns, and cold-worker replay; principal/catalog changes, removed tools, outages, duplicate discoveries, and caps fail closed or remain bounded as appropriate.
-6. **Live integration.** A probe script against a real token: initialize, list, namespace counts, one read-only call. Not a unit test — an operational tool for verifying a token and endpoint health.
-7. **End-to-end in a real Eve agent.** Mount the package as `openai`, drive a session that performs `tool_search` and then calls a loaded read-only tool, and **assert on the complete tools payload the model API actually receives**. The first request must contain no connector catalog names or schemas; the subsequent request must contain only the selected definitions.
+6. **Bounded integration hooks.** Assert service exclusion before fingerprint/materialization and direct network calls; live-descriptor transform ordering; auth invalidation before a callback that cannot replace the original error; one schema-free resolution summary; cancellation without negative caching; and operation-client cleanup after success, tool error, auth rejection, and abort.
+7. **Live integration.** A probe script against a real token: initialize, list, namespace counts, one read-only call. Not a unit test — an operational tool for verifying a token and endpoint health.
+8. **End-to-end in a real Eve agent.** Mount the package as `openai`, drive a session that performs `tool_search` and then calls a loaded read-only tool, and **assert on the complete tools payload the model API actually receives**. The first request must contain no connector catalog names or schemas; the subsequent request must contain only the selected definitions.
 
 ---
 

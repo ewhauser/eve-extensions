@@ -1,5 +1,6 @@
 import type { DynamicResolveContext, Approval } from "eve/tools";
 import type { CacheMetrics } from "./cache.js";
+import type { ConnectorAuthError } from "./errors.js";
 
 /** The auth shape Eve provides on both resolve and tool contexts. */
 export type SessionAuth = DynamicResolveContext["session"]["auth"];
@@ -25,6 +26,8 @@ export interface ConnectorContext {
     readonly id: string;
     readonly auth: SessionAuth;
   };
+  /** Eve's step/tool cancellation signal, when one is available. */
+  readonly abortSignal?: AbortSignal;
 }
 
 /** A tool as returned by the upstream `tools/list`. */
@@ -177,6 +180,18 @@ export interface ConnectorsLogger {
   error(message: string): void;
 }
 
+export type ConnectorDiscovery = "client" | "search" | "deferred";
+export type ConnectorResolutionStatus = "available" | "degraded" | "unavailable";
+export type ProtocolClientLifetime = "principal" | "operation";
+
+/** Count-bounded, schema-free diagnostic emitted once per `begin()` call. */
+export interface ConnectorResolutionSummary {
+  readonly status: ConnectorResolutionStatus;
+  readonly discovery: ConnectorDiscovery;
+  readonly catalogToolCount: number;
+  readonly materializedToolCount: number;
+}
+
 export interface CreateConnectorsOptions {
   /**
    * Return the current user's ChatGPT workspace bearer token, or `null` when
@@ -190,6 +205,8 @@ export interface CreateConnectorsOptions {
    * as `github` or `google_drive`. Omit to expose every authorized service.
    */
   allowedServices?: readonly string[];
+  /** Static, case-insensitive connector service denylist. */
+  excludedServices?: readonly string[];
   /** Endpoint override. */
   baseUrl?: string;
   /** Prefix on generated tool names. May be empty; otherwise must contain only API-legal name characters. */
@@ -214,6 +231,25 @@ export interface CreateConnectorsOptions {
   /** Fully custom approval policy per tool. Overrides `approvals`. */
   approvalFor?(item: ConnectorToolItem): Approval;
   /**
+   * Transform arguments after live-catalog authorization succeeds and
+   * immediately before the upstream `tools/call` request. The hook cannot
+   * change routing or the upstream tool name.
+   */
+  transformCallInput?(
+    ctx: ConnectorContext,
+    tool: ConnectorToolItem,
+    input: Readonly<Record<string, unknown>>,
+  ): Record<string, unknown>;
+  /** Called after credential-scoped client and inventory state is invalidated. */
+  onAuthError?(ctx: ConnectorContext, error: ConnectorAuthError): Promise<void> | void;
+  /** Called at most once for each `begin()` resolution. Callback failures are ignored. */
+  onResolution?(
+    ctx: ConnectorContext,
+    summary: ConnectorResolutionSummary,
+  ): Promise<void> | void;
+  /** Retain protocol clients per principal, or close one after each network operation. */
+  protocolClientLifetime?: ProtocolClientLifetime;
+  /**
    * Stable per-user cache key. Defaults to Eve's convention over
    * `ctx.session.auth`: `user:<issuer>:<principalId>`. Supply your own when
    * running without auth (e.g. return a constant in development).
@@ -234,7 +270,7 @@ export interface CreateConnectorsOptions {
    *   Eve 0.31.3 patch shipped with this package. Falls back to search when
    *   the catalog is unavailable.
    */
-  discovery?: "client" | "search" | "deferred";
+  discovery?: ConnectorDiscovery;
 }
 
 /** What `begin()` returns for a step with connector access. */

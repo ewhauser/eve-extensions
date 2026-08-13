@@ -45,6 +45,18 @@ function serviceOf(upstream: string): string {
   return dot === -1 ? upstream : upstream.slice(0, dot);
 }
 
+function serviceIncluded(
+  upstream: string,
+  allowedServices: ReadonlySet<string> | undefined,
+  excludedServices: ReadonlySet<string> | undefined,
+): boolean {
+  const service = serviceOf(upstream).toLowerCase();
+  return (
+    (allowedServices === undefined || allowedServices.has(service)) &&
+    (excludedServices === undefined || !excludedServices.has(service))
+  );
+}
+
 function decorateDescription(
   description: string,
   flags: { readOnly: boolean; destructive: boolean },
@@ -124,13 +136,14 @@ function fingerprintCatalog(
   prefix: string,
   maxToolNameLength: number,
   allowedServices: ReadonlySet<string> | undefined,
+  excludedServices: ReadonlySet<string> | undefined,
 ): { fingerprint: string; estimatedBytes: number } {
   const normalizedTools = tools
     .filter(
       (tool): tool is UpstreamTool & { name: string } =>
         typeof tool?.name === "string" &&
         tool.name.length > 0 &&
-        (allowedServices === undefined || allowedServices.has(serviceOf(tool.name).toLowerCase())),
+        serviceIncluded(tool.name, allowedServices, excludedServices),
     )
     .map((tool) => ({ tool, encoded: stableJson(tool) ?? "{}" }))
     .sort((a, b) => a.tool.name.localeCompare(b.tool.name) || a.encoded.localeCompare(b.encoded));
@@ -139,6 +152,7 @@ function fingerprintCatalog(
     prefix,
     maxToolNameLength,
     allowedServices: allowedServices === undefined ? null : [...allowedServices].sort(),
+    excludedServices: excludedServices === undefined ? null : [...excludedServices].sort(),
     tools: normalizedTools.map(({ tool }) => tool),
   }) ?? "{}";
   return {
@@ -153,12 +167,14 @@ export function buildInventory(
   warn?: (message: string) => void,
   maxToolNameLength = 64,
   allowedServices?: ReadonlySet<string>,
+  excludedServices?: ReadonlySet<string>,
 ): Inventory {
   const { fingerprint, estimatedBytes } = fingerprintCatalog(
     tools,
     prefix,
     maxToolNameLength,
     allowedServices,
+    excludedServices,
   );
   const catalog = catalogInternCache.getOrCreate(fingerprint, estimatedBytes, () =>
     materializeCatalog(
@@ -167,6 +183,7 @@ export function buildInventory(
       warn,
       maxToolNameLength,
       allowedServices,
+      excludedServices,
       fingerprint,
       estimatedBytes,
     ),
@@ -180,6 +197,7 @@ function materializeCatalog(
   warn: ((message: string) => void) | undefined,
   maxToolNameLength: number,
   allowedServices: ReadonlySet<string> | undefined,
+  excludedServices: ReadonlySet<string> | undefined,
   fingerprint: string,
   estimatedBytes: number,
 ): InternedCatalog {
@@ -187,7 +205,7 @@ function materializeCatalog(
     (tool): tool is UpstreamTool & { name: string } =>
       typeof tool?.name === "string" &&
       tool.name.length > 0 &&
-      (allowedServices === undefined || allowedServices.has(serviceOf(tool.name).toLowerCase())),
+      serviceIncluded(tool.name, allowedServices, excludedServices),
   );
   const nameMap = buildNameMap(
     named.map((tool) => tool.name),
@@ -341,6 +359,11 @@ export class InventoryCache {
     return null;
   }
 
+  /** Whether another caller currently owns the shared load for this key. */
+  isLoading(principal: string): boolean {
+    return this.inflight.has(principal);
+  }
+
   /** Invalidate only this principal; stale in-flight loads cannot repopulate it. */
   invalidate(principal: string): void {
     if (this.inflight.has(principal)) {
@@ -353,7 +376,14 @@ export class InventoryCache {
     this.inflight.delete(principal);
   }
 
-  async get(principal: string, loader: () => Promise<Inventory>): Promise<Inventory> {
+  async get(
+    principal: string,
+    loader: () => Promise<Inventory>,
+    options: {
+      cacheFailure?: (error: unknown) => boolean;
+      cacheSuccess?: (inventory: Inventory) => boolean;
+    } = {},
+  ): Promise<Inventory> {
     const cached = this.peek(principal);
     if (cached) return cached;
 
@@ -371,7 +401,10 @@ export class InventoryCache {
     const load = (async () => {
       try {
         const inventory = await loader();
-        if ((this.generations.get(principal) ?? 0) === generation) {
+        if (
+          (this.generations.get(principal) ?? 0) === generation &&
+          (options.cacheSuccess?.(inventory) ?? true)
+        ) {
           this.positive.set(principal, {
             inventory,
             expiresAt: Date.now() + this.ttlMs,
@@ -381,7 +414,10 @@ export class InventoryCache {
         }
         return inventory;
       } catch (error) {
-        if ((this.generations.get(principal) ?? 0) === generation) {
+        if (
+          (this.generations.get(principal) ?? 0) === generation &&
+          (options.cacheFailure?.(error) ?? true)
+        ) {
           this.negative.set(principal, {
             error,
             expiresAt: Date.now() + NEGATIVE_TTL_MS,

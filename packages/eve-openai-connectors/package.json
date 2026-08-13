@@ -26,6 +26,10 @@
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "default": "./dist/tools/index.mjs"
+    },
+    "./connectors": {
+      "types": "./dist/extension/lib/connectors.d.ts",
+      "default": "./dist/extension/lib/connectors.mjs"
     }
   },
   "scripts": {
