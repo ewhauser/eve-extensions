@@ -6,6 +6,25 @@ import {
   validateMonitorDefinition,
 } from "./definition.js";
 import { dispatchLifecycle } from "./instance-machine.js";
+import {
+  CELLD_DEFINITION_VERSION_MISMATCH,
+  EvaluationAuthError,
+  EvaluationRequestError,
+  cellUrl,
+  projectInstanceView,
+  secretsMatch,
+} from "./mailbox.js";
+import type {
+  CelldAppendOutcome,
+  CelldAppendRequest,
+  CelldAppendResponse,
+  CelldErrorResponse,
+  CelldMailboxOptions,
+  EvaluationRequest,
+  EvaluationResponse,
+  EvaluationTerminalStatus,
+  MailboxOptions,
+} from "./mailbox.js";
 import type {
   BufferedEventRef,
   MonitorStore,
@@ -33,6 +52,7 @@ import type {
   JsonValue,
   MonitorBatchClosedBy,
   MonitorBatchView,
+  MonitorBindingView,
   MonitorBudgetCeilings,
   MonitorBudgetPolicy,
   MonitorClock,
@@ -105,6 +125,12 @@ export interface MonitorRuntimeOptions {
   readonly budgets?: MonitorBudgetPolicy | undefined;
   readonly maxEvidenceBytes?: number | undefined;
   readonly idGenerator?: ((prefix: string) => string) | undefined;
+  /**
+   * Where the correlation mailbox lives. Defaults to `{ mode: "store" }`, the
+   * store-backed buffer swept by `drain()`. See `./mailbox.js` and the celld
+   * section of the README for the experimental cell-backed tier.
+   */
+  readonly mailbox?: MailboxOptions | undefined;
 }
 
 export interface DrainResult {
@@ -152,6 +178,9 @@ export class MonitorRuntime {
   readonly #activeDefinitions = new Map<string, CompiledMonitor>();
   readonly #deliveryDefinitions = new Map<string, CompiledMonitor>();
   readonly #deployment: MonitorDeployment;
+  readonly #mailbox: MailboxOptions;
+  readonly #fetch: typeof fetch;
+  readonly #recordedCelldDefinitionPins = new Set<string>();
   #initialized = false;
 
   constructor(options: MonitorRuntimeOptions) {
@@ -179,6 +208,19 @@ export class MonitorRuntime {
     }
     validateDeploymentChanges(options.deployment);
     this.#deployment = options.deployment;
+    this.#mailbox = options.mailbox ?? { mode: "store" };
+    if (this.#mailbox.mode === "celld") {
+      assertNonEmpty(this.#mailbox.fleetUrl, "mailbox fleetUrl");
+      assertNonEmpty(this.#mailbox.evaluatorUrl, "mailbox evaluatorUrl");
+      assertNonEmpty(this.#mailbox.secret, "mailbox secret");
+      const injected = this.#mailbox.fetch;
+      if (injected === undefined && typeof globalThis.fetch !== "function") {
+        throw new TypeError("celld mailbox requires a global fetch or an injected one");
+      }
+      this.#fetch = injected ?? ((...args) => globalThis.fetch(...args));
+    } else {
+      this.#fetch = (...args) => globalThis.fetch(...args);
+    }
 
     for (const channel of options.channels) {
       if (this.#channels.has(channel.id)) throw new TypeError(`duplicate channel id ${channel.id}`);
@@ -214,6 +256,21 @@ export class MonitorRuntime {
     const removals = new Set(
       (this.#deployment.monitorRemovals ?? []).map((removal) => removal.id),
     );
+    if (this.#mailbox.mode === "celld") {
+      if (migrations.size > 0 || removals.size > 0) {
+        throw new Error(
+          "celld mailbox does not support monitor migrations or removals; drain or migrate the fleet before changing durable identity",
+        );
+      }
+      const compatible = this.#deployment.monitors.find(
+        (monitor) => (monitor.compatibleWith?.length ?? 0) > 0,
+      );
+      if (compatible !== undefined) {
+        throw new Error(
+          `celld mailbox does not support compatibleWith migrations (${compatible.definition.id}@${compatible.version}); cells must be migrated explicitly`,
+        );
+      }
+    }
     for (const migration of migrations.values()) {
       if (activeIds.includes(migration.from)) {
         throw new Error(`migration source ${migration.from} must not remain active`);
@@ -228,6 +285,12 @@ export class MonitorRuntime {
       async (tx) => {
       const previous = await tx.getDeployment(this.#applicationId);
       if (previous !== null) {
+        const previousMailboxMode = previous.mailboxMode ?? "store";
+        if (previousMailboxMode !== this.#mailbox.mode) {
+          throw new Error(
+            `mailbox mode cannot change from ${previousMailboxMode} to ${this.#mailbox.mode} without an explicit durable-state migration`,
+          );
+        }
         for (const id of previous.activeMonitorIds) {
           if (!activeIds.includes(id) && !migrations.has(id) && !removals.has(id)) {
             throw new Error(
@@ -244,6 +307,14 @@ export class MonitorRuntime {
     for (const id of removals) await this.#removeMonitorState(id);
     await this.#migrateCompatibleVersions();
     await this.#validatePinnedDefinitions();
+    this.#validateCelldDefinitionPins(expectedDeployment?.celldDefinitionPins);
+    for (const [monitorId, versions] of Object.entries(
+      expectedDeployment?.celldDefinitionPins ?? {},
+    )) {
+      for (const version of versions) {
+        this.#recordedCelldDefinitionPins.add(definitionKey(monitorId, version));
+      }
+    }
 
     await this.#store.transaction(`deployment:${this.#applicationId}`, async (tx) => {
       const current = await tx.getDeployment(this.#applicationId);
@@ -252,8 +323,12 @@ export class MonitorRuntime {
       }
       await tx.putDeployment({
         applicationId: this.#applicationId,
+        mailboxMode: this.#mailbox.mode,
         activeMonitorIds: activeIds,
         activeVersions,
+        ...(expectedDeployment?.celldDefinitionPins === undefined
+          ? {}
+          : { celldDefinitionPins: expectedDeployment.celldDefinitionPins }),
         updatedAt: this.#now(),
       });
     });
@@ -313,9 +388,18 @@ export class MonitorRuntime {
     }
   }
 
-  /** Runs all currently due work. It never advances the supplied clock. */
+  /**
+   * Runs all currently due work. It never advances the supplied clock.
+   *
+   * Under the celld mailbox the ingress half is unchanged — subscriptions are
+   * still preprocessed and appended here — but the evaluation half is not
+   * swept: due batches are held by cells and evaluated when their alarms fire
+   * and call {@link handleEvaluation}. Claiming them here would race the cell
+   * for the same batch.
+   */
   async drain(): Promise<DrainResult> {
     this.#assertInitialized();
+    const sweepsEvaluations = this.#mailbox.mode !== "celld";
     let subscriptions = 0;
     let evaluations = 0;
     let runs = 0;
@@ -352,27 +436,29 @@ export class MonitorRuntime {
         progressed = true;
       }
 
-      const dueInstances = await this.#store.listDueInstances({
-        applicationId: this.#applicationId,
-        availableBefore: this.#now(),
-        limit: this.#limits.evaluationConcurrency,
-      });
-      if (dueInstances.length > 0) {
-        const claims = await Promise.all(dueInstances.map((instance) => this.#claimEvaluation(instance.id)));
-        const claimed = claims.filter((value): value is string => value !== null);
-        evaluations += claimed.length;
-        progressed ||= claimed.length > 0;
-      }
+      if (sweepsEvaluations) {
+        const dueInstances = await this.#store.listDueInstances({
+          applicationId: this.#applicationId,
+          availableBefore: this.#now(),
+          limit: this.#limits.evaluationConcurrency,
+        });
+        if (dueInstances.length > 0) {
+          const claims = await Promise.all(dueInstances.map((instance) => this.#claimEvaluation(instance.id)));
+          const claimed = claims.filter((value): value is string => value !== null);
+          evaluations += claimed.length;
+          progressed ||= claimed.length > 0;
+        }
 
-      const dueRuns = await this.#store.listDueRuns({
-        applicationId: this.#applicationId,
-        availableBefore: this.#now(),
-        limit: this.#limits.evaluationConcurrency,
-      });
-      if (dueRuns.length > 0) {
-        await Promise.all(dueRuns.map((run) => this.#processRun(run.id)));
-        runs += dueRuns.length;
-        progressed = true;
+        const dueRuns = await this.#store.listDueRuns({
+          applicationId: this.#applicationId,
+          availableBefore: this.#now(),
+          limit: this.#limits.evaluationConcurrency,
+        });
+        if (dueRuns.length > 0) {
+          await Promise.all(dueRuns.map((run) => this.#processRun(run.id)));
+          runs += dueRuns.length;
+          progressed = true;
+        }
       }
       iterations += 1;
     }
@@ -385,8 +471,12 @@ export class MonitorRuntime {
         availableBefore: now,
         limit: 1,
       }),
-      this.#store.listDueInstances({ applicationId: this.#applicationId, availableBefore: now, limit: 1 }),
-      this.#store.listDueRuns({ applicationId: this.#applicationId, availableBefore: now, limit: 1 }),
+      sweepsEvaluations
+        ? this.#store.listDueInstances({ applicationId: this.#applicationId, availableBefore: now, limit: 1 })
+        : [],
+      sweepsEvaluations
+        ? this.#store.listDueRuns({ applicationId: this.#applicationId, availableBefore: now, limit: 1 })
+        : [],
     ]);
     return {
       subscriptions,
@@ -1044,6 +1134,18 @@ export class MonitorRuntime {
       );
       return;
     }
+    if (this.#mailbox.mode === "celld") {
+      await this.#appendSubscriptionToCell(
+        subscription,
+        event,
+        monitor,
+        correlationKey,
+        keyHash,
+        instanceId,
+        this.#mailbox,
+      );
+      return;
+    }
     const now = this.#now();
     let instanceExists = (await this.#store.getInstance(instanceId)) !== null;
     let outcome: "opened" | "updated" | "flushed";
@@ -1128,6 +1230,277 @@ export class MonitorRuntime {
           ? "monitor.buffer.flushed"
           : "monitor.buffer.updated",
       this.#eventDetails(subscription, { correlationKeyHash: keyHash }),
+    );
+  }
+
+  /**
+   * The celld-mode append: the buffered ref is forwarded to the cell named by
+   * the instance key instead of being written into an instance row. The cell
+   * holds the `StoredMonitorInstance`, runs the same statechart over it, and
+   * arms its own durable alarm for `nextEvaluationAt`.
+   *
+   * Deliberately not enforced here: the per-tenant correlation-cardinality cap.
+   * It is a `countInstances` under a tenant-wide lock, and celld mode has no
+   * instance table to count. Event, model, and wake budgets are unaffected and
+   * remain the rate controls. See the README's limitations box.
+   */
+  async #appendSubscriptionToCell(
+    subscription: StoredSubscription,
+    event: StoredEvent,
+    monitor: CompiledMonitor,
+    correlationKey: string,
+    keyHash: string,
+    instanceId: string,
+    mailbox: CelldMailboxOptions,
+  ): Promise<void> {
+    const body: CelldAppendRequest = {
+      monitorId: subscription.monitorId,
+      definitionVersion: subscription.definitionVersion,
+      config: {
+        ...(monitor.definition.buffer === undefined ? {} : { buffer: monitor.definition.buffer }),
+        ...(monitor.definition.cooldown === undefined
+          ? {}
+          : { cooldown: monitor.definition.cooldown }),
+        retention: monitor.definition.retention ?? DEFAULT_RETENTION,
+      },
+      evaluatorUrl: mailbox.evaluatorUrl,
+      tenantId: subscription.tenantId,
+      applicationId: subscription.applicationId,
+      correlationKey,
+      correlationKeyHash: keyHash,
+      subscriptionId: subscription.id,
+      ref: event.ref,
+      bytes: event.bytes,
+      ingressSequence: event.ingressSequence,
+      acceptedAt: event.acceptedAt,
+    };
+    let outcome: CelldAppendOutcome;
+    try {
+      outcome = await this.#postCellAppend(mailbox, instanceId, body);
+      try {
+        await this.#recordCelldDefinitionPin(subscription.monitorId, subscription.definitionVersion);
+      } catch (error) {
+        throw new TransientMonitorError(
+          `could not record celld definition pin: ${errorMessage(error)}`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof CelldAppendRejected) {
+        await this.#deadLetterSubscription(subscription, "buffer", error.message);
+        return;
+      }
+      if (!(error instanceof TransientMonitorError)) throw error;
+      // The existing subscription retry ladder: back to `pending` behind a
+      // backoff, and `#claimSubscription` dead-letters it once the attempt
+      // budget is spent.
+      const backoff = Math.min(
+        this.#retry.maxBackoffMs,
+        this.#retry.initialBackoffMs * 2 ** Math.max(0, subscription.attempt - 1),
+      );
+      await this.#retrySubscription(
+        subscription,
+        addMs(this.#now(), backoff),
+        boundedReason(errorMessage(error)),
+      );
+      return;
+    }
+    const now = this.#now();
+    await this.#store.transaction(`subscription:${subscription.id}`, async (tx) => {
+      const current = await tx.getSubscription(subscription.id);
+      if (current === null) return;
+      await tx.putSubscription({
+        ...current,
+        status: "buffered",
+        correlationKeyHash: keyHash,
+        outcome: "appended",
+        leaseExpiresAt: undefined,
+        updatedAt: now,
+      });
+    });
+    await this.#emit(
+      outcome === "opened"
+        ? "monitor.buffer.opened"
+        : outcome === "flushed"
+          ? "monitor.buffer.flushed"
+          : "monitor.buffer.updated",
+      this.#eventDetails(subscription, { correlationKeyHash: keyHash }),
+    );
+  }
+
+  async #postCellAppend(
+    mailbox: CelldMailboxOptions,
+    instanceId: string,
+    body: CelldAppendRequest,
+  ): Promise<CelldAppendOutcome> {
+    let response: Response;
+    try {
+      response = await this.#fetch(cellUrl(mailbox.fleetUrl, instanceId, "append"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${mailbox.secret}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw new TransientMonitorError(
+        `celld append for ${instanceId} could not reach the fleet: ${errorMessage(error)}`,
+      );
+    }
+    if (response.ok) {
+      const parsed = (await response.json()) as CelldAppendResponse;
+      return parsed.outcome ?? "updated";
+    }
+    const detail = await readCellError(response);
+    if (response.status >= 500 || response.status === 408 || response.status === 429) {
+      throw new TransientMonitorError(
+        `celld append for ${instanceId} returned ${response.status}: ${detail.error}`,
+      );
+    }
+    if (detail.code === CELLD_DEFINITION_VERSION_MISMATCH) {
+      throw new CelldAppendRejected(
+        `celld cell for ${instanceId} is pinned to a different definition version: ${detail.error}`,
+      );
+    }
+    throw new CelldAppendRejected(
+      `celld append for ${instanceId} returned ${response.status}: ${detail.error}`,
+    );
+  }
+
+  /**
+   * Runs one cell-claimed batch through the decision pipeline and records it.
+   *
+   * Transport-agnostic — a plain object in, a plain object out. See
+   * `createEvaluationFetchHandler` in `./celld.js` for the fetch wrapper.
+   *
+   * Idempotent by `runId`: a terminal run record short-circuits to its recorded
+   * outcome, so a cell retrying after a lost response gets the same answer and
+   * nothing is delivered twice. A non-terminal record resumes from its last
+   * checkpoint exactly as `#processRun` does for a store-mode run.
+   *
+   * A retry scheduled by the durable run record is returned as a successful
+   * `retry` answer. The cell moves its alarm to `retryAt`, so ordinary budget
+   * and transient backoff do not consume celld's finite failure ladder.
+   */
+  async handleEvaluation(request: EvaluationRequest): Promise<EvaluationResponse> {
+    this.#assertInitialized();
+    const mailbox = this.#mailbox;
+    if (mailbox.mode !== "celld") {
+      throw new Error('handleEvaluation requires the runtime to run mailbox mode "celld"');
+    }
+    if (!secretsMatch(request?.secret ?? "", mailbox.secret)) throw new EvaluationAuthError();
+    validateEvaluationRequest(request);
+    if (request.applicationId !== this.#applicationId) {
+      throw new EvaluationRequestError(
+        `evaluation for application ${request.applicationId} reached the runtime for ${this.#applicationId}`,
+        "wrong-application",
+      );
+    }
+    let monitor: CompiledMonitor;
+    try {
+      monitor = this.#definition(request.monitorId, request.definitionVersion);
+    } catch (error) {
+      throw new EvaluationRequestError(errorMessage(error), "unknown-definition");
+    }
+    const now = this.#now();
+    const existing = await this.#store.getRun(request.runId);
+    if (existing !== null) {
+      if (
+        existing.applicationId !== this.#applicationId ||
+        existing.instanceId !== request.instanceId ||
+        existing.tenantId !== request.tenantId ||
+        existing.monitorId !== request.monitorId ||
+        existing.definitionVersion !== request.definitionVersion
+      ) {
+        throw new EvaluationRequestError(
+          `run ${request.runId} is recorded against another monitor instance`,
+          "run-conflict",
+        );
+      }
+      if (isTerminalRunStatus(existing.status)) return recordedEvaluation(existing);
+      const retryAt = evaluationUnavailableUntil(existing, now);
+      if (retryAt !== null) return scheduledEvaluation(existing.id, retryAt);
+    }
+    const retention = monitor.definition.retention ?? DEFAULT_RETENTION;
+    let run: StoredMonitorRun;
+    if (existing === null) {
+      const replayExpiries: string[] = [];
+      for (const reference of request.batch.events) {
+        const record = await this.#store.getEvent(reference.ref);
+        if (record !== null) replayExpiries.push(record.payloadExpiresAt);
+      }
+      run = {
+        id: request.runId,
+        instanceId: request.instanceId,
+        tenantId: request.tenantId,
+        applicationId: request.applicationId,
+        monitorId: request.monitorId,
+        definitionVersion: request.definitionVersion,
+        correlationKeyHash: request.correlationKeyHash,
+        batch: structuredClone(request.batch),
+        mode: monitor.definition.mode ?? "active",
+        instanceView: structuredClone(request.instanceView),
+        status: "processing",
+        stage: "decision",
+        attempt: 1,
+        availableAt: now,
+        leaseExpiresAt: addMs(now, this.#retry.leaseMs),
+        replayExpiresAt: replayExpiries.sort()[0] ?? now,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: addMs(now, durationMs(retention.decisions)),
+      };
+    } else if (existing.attempt >= this.#retry.maxAttempts) {
+      await this.#store.transaction(`instance:${existing.instanceId}`, async (tx) => {
+        const current = await tx.getRun(existing.id);
+        if (current === null) return;
+        await this.#deadLetterRunInTransaction(
+          tx,
+          current,
+          null,
+          "retry",
+          "maximum retry attempts exceeded",
+        );
+      });
+      await this.#emit("monitor.evaluation.failed", {
+        ...this.#runDetails(existing),
+        attributes: { error: "maximum retry attempts exceeded" },
+      });
+      return { runId: existing.id, status: "dead-lettered" };
+    } else {
+      run = {
+        ...existing,
+        status: "processing",
+        attempt: existing.attempt + 1,
+        leaseExpiresAt: addMs(now, this.#retry.leaseMs),
+        updatedAt: now,
+      };
+    }
+    const claimed = run;
+    await this.#store.transaction(`instance:${claimed.instanceId}`, async (tx) => {
+      await tx.putRun(claimed);
+    });
+    if (existing === null) await this.#emit("monitor.evaluation.started", this.#runDetails(run));
+
+    const context: CelldEvaluationContext = {
+      correlationKey: request.correlationKey,
+      binding: request.instanceView.binding,
+      outcome: undefined,
+    };
+    try {
+      await this.#continueRun(run, context);
+    } catch (error) {
+      await this.#failRun(run, error, context);
+    }
+    if (context.outcome !== undefined) return context.outcome;
+    const deferred = await this.#store.getRun(run.id);
+    if (deferred !== null) {
+      if (isTerminalRunStatus(deferred.status)) return recordedEvaluation(deferred);
+      const retryAt = evaluationUnavailableUntil(deferred, this.#now());
+      if (retryAt !== null) return scheduledEvaluation(deferred.id, retryAt);
+    }
+    throw new TransientMonitorError(
+      `monitor run ${run.id} has not reached a terminal outcome; retry the evaluation`,
     );
   }
 
@@ -1263,7 +1636,18 @@ export class MonitorRuntime {
     });
   }
 
-  async #continueRun(initial: StoredMonitorRun): Promise<void> {
+  /**
+   * The decision → evidence → route → delivery pipeline for one claimed batch,
+   * checkpointed at every stage so an interrupted run resumes instead of
+   * repeating work.
+   *
+   * `context` is present exactly for celld-mode evaluations. It supplies the
+   * instance facts the store-mode path reads from the instance row (the
+   * correlation key and the current binding, both of which live in the cell)
+   * and collects the terminal outcome for the cell's `RUN_COMPLETED` dispatch.
+   * The pipeline itself is identical in both modes.
+   */
+  async #continueRun(initial: StoredMonitorRun, context?: CelldEvaluationContext): Promise<void> {
     let run = initial;
     const monitor = this.#definition(run.monitorId, run.definitionVersion);
     const events = await this.#loadRunEvents(run);
@@ -1307,7 +1691,7 @@ export class MonitorRuntime {
           );
           if (invocation.initialLimit !== undefined) {
             const limited = invocation.initialLimit;
-            await this.#handleLimit(run, limited.cause, limited.scope, limited.retryAt);
+            await this.#handleLimit(run, limited.cause, limited.scope, limited.retryAt, context);
             return;
           }
           run = await this.#checkpointRun(run, {
@@ -1333,13 +1717,13 @@ export class MonitorRuntime {
 
     const decisionValue = run.decision!;
     if (decisionValue.action === "ignore") {
-      await this.#completeRun(run, "ignored");
+      await this.#completeRun(run, "ignored", undefined, context);
       return;
     }
 
     const wakeLimit = await this.#reserveWakeLimits(run, monitor.definition);
     if (!wakeLimit.allowed) {
-      await this.#handleLimit(run, wakeLimit.cause, wakeLimit.scope, wakeLimit.retryAt);
+      await this.#handleLimit(run, wakeLimit.cause, wakeLimit.scope, wakeLimit.retryAt, context);
       return;
     }
 
@@ -1355,7 +1739,7 @@ export class MonitorRuntime {
     if (run.route === undefined) {
       const route = this.#callPure("route", () => monitor.definition.route(wakeContext));
       if (route === null) {
-        await this.#completeRun(run, "unroutable");
+        await this.#completeRun(run, "unroutable", undefined, context);
         return;
       }
       if (route.auth !== "app") throw new TypeError('monitor routes must use auth: "app"');
@@ -1371,16 +1755,25 @@ export class MonitorRuntime {
     }
 
     if (run.mode === "shadow") {
-      await this.#completeRun(run, "shadowed");
+      await this.#completeRun(run, "shadowed", undefined, context);
       return;
     }
     if (run.mode === "disabled") {
-      await this.#completeRun(run, "suppressed", { cause: "disabled", scope: "monitor" });
+      await this.#completeRun(run, "suppressed", { cause: "disabled", scope: "monitor" }, context);
       return;
     }
-    const instance = await this.#store.getInstance(run.instanceId);
-    if (instance === null || instance.applicationId !== run.applicationId) {
-      throw new Error(`monitor instance ${run.instanceId} disappeared`);
+    let delivery: {
+      readonly correlationKey: string;
+      readonly binding: MonitorBindingView | undefined;
+    };
+    if (context === undefined) {
+      const instance = await this.#store.getInstance(run.instanceId);
+      if (instance === null || instance.applicationId !== run.applicationId) {
+        throw new Error(`monitor instance ${run.instanceId} disappeared`);
+      }
+      delivery = { correlationKey: instance.correlationKey, binding: instance.binding };
+    } else {
+      delivery = { correlationKey: context.correlationKey, binding: context.binding };
     }
     const channel = this.#deliveryChannels.get(run.route!.channelId)!;
     await this.#emit("monitor.delivery.started", this.#runDetails(run));
@@ -1391,13 +1784,15 @@ export class MonitorRuntime {
       idempotencyKey: `monitor:${run.id}:0`,
       auth: "app",
       target: run.route!.target,
-      ...(instance.binding?.bindingRef === undefined ? {} : { bindingRef: instance.binding.bindingRef }),
+      ...(delivery.binding?.bindingRef === undefined
+        ? {}
+        : { bindingRef: delivery.binding.bindingRef }),
       session: {
         strategy: monitor.definition.session?.strategy ?? "channel",
         ...(idleTimeout === undefined ? {} : { idleTimeoutMs: durationMs(idleTimeout) }),
       },
       ...(monitor.definition.session?.strategy === "correlation"
-        ? { correlationSubject: { namespace: "monitor", key: instance.correlationKey } }
+        ? { correlationSubject: { namespace: "monitor", key: delivery.correlationKey } }
         : {}),
       taskInstructions: monitor.definition.task.instructions,
       evidence: run.snapshot!,
@@ -1405,7 +1800,7 @@ export class MonitorRuntime {
       concurrency: "coalesce",
     });
     run = await this.#checkpointRun(run, { receipt, stage: "complete" });
-    await this.#completeRun(run, "delivered");
+    await this.#completeRun(run, "delivered", undefined, context);
     await this.#emit("monitor.delivery.completed", {
       ...this.#runDetails(run),
       attributes: { outcome: receipt.outcome },
@@ -1755,6 +2150,7 @@ export class MonitorRuntime {
     cause: string,
     scope: string,
     retryAt: string,
+    context?: CelldEvaluationContext,
   ): Promise<void> {
     const definition = this.#definition(run.monitorId, run.definitionVersion).definition;
     await this.#emit("monitor.wake.suppressed", {
@@ -1762,9 +2158,12 @@ export class MonitorRuntime {
       attributes: { cause, scope },
     });
     if (this.#overflow(definition) === "buffer") {
+      // In celld mode this leaves the run non-terminal on purpose: the caller
+      // answers 5xx and the cell's alarm ladder brings the same runId back,
+      // which is the cell's equivalent of the store tier's `availableAt`.
       await this.#retryRun(run, retryAt, cause);
     } else {
-      await this.#completeRun(run, "suppressed", { cause, scope });
+      await this.#completeRun(run, "suppressed", { cause, scope }, context);
     }
   }
 
@@ -1790,9 +2189,36 @@ export class MonitorRuntime {
     run: StoredMonitorRun,
     status: "ignored" | "shadowed" | "suppressed" | "delivered" | "unroutable",
     suppression?: { readonly cause: string; readonly scope: string },
+    context?: CelldEvaluationContext,
   ): Promise<void> {
     const monitor = this.#definition(run.monitorId, run.definitionVersion);
     const now = this.#now();
+    if (context !== undefined) {
+      // celld mode: the instance lives in the cell, so the terminal
+      // `RUN_COMPLETED` transition is dispatched there, from the outcome this
+      // records and returns. The run record is written identically either way,
+      // which is what keeps `replay()` mode-independent.
+      const completed = await this.#store.transaction(
+        `instance:${run.instanceId}`,
+        async (tx) => {
+          const currentRun = await tx.getRun(run.id);
+          if (currentRun === null) return null;
+          const next: StoredMonitorRun = {
+            ...currentRun,
+            status,
+            stage: "complete",
+            leaseExpiresAt: undefined,
+            ...(suppression === undefined ? {} : { suppression }),
+            updatedAt: now,
+          };
+          await tx.putRun(next);
+          return next;
+        },
+      );
+      if (completed !== null) context.outcome = recordedEvaluation(completed);
+      await this.#emitCompletion(run, status);
+      return;
+    }
     await this.#store.transaction(`instance:${run.instanceId}`, async (tx) => {
       const currentRun = await tx.getRun(run.id);
       const instance = await tx.getInstance(run.instanceId);
@@ -1833,6 +2259,10 @@ export class MonitorRuntime {
         updatedAt: now,
       });
     });
+    await this.#emitCompletion(run, status);
+  }
+
+  async #emitCompletion(run: StoredMonitorRun, status: string): Promise<void> {
     await this.#emit("monitor.evaluation.completed", {
       ...this.#runDetails(run),
       attributes: {
@@ -1866,7 +2296,11 @@ export class MonitorRuntime {
     });
   }
 
-  async #failRun(run: StoredMonitorRun, error: unknown): Promise<void> {
+  async #failRun(
+    run: StoredMonitorRun,
+    error: unknown,
+    context?: CelldEvaluationContext,
+  ): Promise<void> {
     const transient = error instanceof TransientMonitorError;
     const bindingConflict = error instanceof BindingConflictError;
     if (transient && run.attempt < this.#retry.maxAttempts) {
@@ -1889,8 +2323,10 @@ export class MonitorRuntime {
     if (observed === null) return;
     await this.#store.transaction(`instance:${run.instanceId}`, async (tx) => {
       const current = await tx.getRun(run.id);
-      const instance = await tx.getInstance(run.instanceId);
-      if (current === null || instance === null) return;
+      // celld mode holds the instance in the cell; the cell dispatches
+      // `RUN_FAILED` itself when this evaluation answers `dead-lettered`.
+      const instance = context === undefined ? await tx.getInstance(run.instanceId) : null;
+      if (current === null || (context === undefined && instance === null)) return;
       await this.#deadLetterRunInTransaction(
         tx,
         current,
@@ -1899,16 +2335,22 @@ export class MonitorRuntime {
         errorMessage(error),
       );
     });
+    if (context !== undefined) context.outcome = { runId: run.id, status: "dead-lettered" };
     await this.#emit(bindingConflict ? "monitor.binding.conflict" : "monitor.evaluation.failed", {
       ...this.#runDetails(run),
       attributes: { error: errorMessage(error).slice(0, 500) },
     });
   }
 
+  /**
+   * `instance` is null exactly for celld-mode runs, where the record lives in
+   * the cell: the run row and the dead letter are written here, and the cell
+   * applies the matching `RUN_FAILED` transition when it sees the outcome.
+   */
   async #deadLetterRunInTransaction(
     tx: MonitorStoreTransaction,
     run: StoredMonitorRun,
-    instance: StoredMonitorInstance,
+    instance: StoredMonitorInstance | null,
     stage: string,
     reason: string,
   ): Promise<void> {
@@ -1922,16 +2364,18 @@ export class MonitorRuntime {
       error: reason,
       updatedAt: now,
     });
-    const failure = dispatchLifecycle(
-      instance,
-      this.#definition(run.monitorId, run.definitionVersion).definition,
-      { type: "RUN_FAILED", now },
-    );
-    const nextInstance: StoredMonitorInstance = {
-      ...failure.instance,
-      updatedAt: now,
-    };
-    await tx.putInstance(nextInstance);
+    if (instance !== null) {
+      const failure = dispatchLifecycle(
+        instance,
+        this.#definition(run.monitorId, run.definitionVersion).definition,
+        { type: "RUN_FAILED", now },
+      );
+      const nextInstance: StoredMonitorInstance = {
+        ...failure.instance,
+        updatedAt: now,
+      };
+      await tx.putInstance(nextInstance);
+    }
     await tx.putDeadLetter({
       id: this.#id("dlq"),
       tenantId: run.tenantId,
@@ -2329,6 +2773,40 @@ export class MonitorRuntime {
     }
   }
 
+  #validateCelldDefinitionPins(
+    pins: Readonly<Record<string, readonly string[]>> | undefined,
+  ): void {
+    for (const [monitorId, versions] of Object.entries(pins ?? {})) {
+      for (const version of versions) {
+        if (!this.#definitions.has(definitionKey(monitorId, version))) {
+          throw new Error(
+            `durable celld mailbox requires pinned definition ${monitorId}@${version}; retain it as inactive until the fleet state is explicitly migrated or discarded`,
+          );
+        }
+      }
+    }
+  }
+
+  async #recordCelldDefinitionPin(monitorId: string, version: string): Promise<void> {
+    const definition = definitionKey(monitorId, version);
+    if (this.#recordedCelldDefinitionPins.has(definition)) return;
+    await this.#store.transaction(`deployment:${this.#applicationId}`, async (tx) => {
+      const deployment = await tx.getDeployment(this.#applicationId);
+      if (deployment === null || (deployment.mailboxMode ?? "store") !== "celld") {
+        throw new Error("celld deployment record disappeared while appending to a cell");
+      }
+      const pins: Record<string, readonly string[]> = {
+        ...(deployment.celldDefinitionPins ?? {}),
+      };
+      const versions = new Set(pins[monitorId] ?? []);
+      if (versions.has(version)) return;
+      versions.add(version);
+      pins[monitorId] = [...versions].sort();
+      await tx.putDeployment({ ...deployment, celldDefinitionPins: pins, updatedAt: this.#now() });
+    });
+    this.#recordedCelldDefinitionPins.add(definition);
+  }
+
   #monitorScope(input: { readonly tenantId: string; readonly applicationId: string; readonly monitorId: string }) {
     return scopedKey(input.tenantId, input.applicationId, input.monitorId);
   }
@@ -2427,6 +2905,114 @@ class CardinalityDenied extends Error {
   constructor(retryAt: string) {
     super("correlation cardinality limit reached");
     this.retryAt = retryAt;
+  }
+}
+
+/** A cell refused an append for a reason retrying cannot fix. */
+class CelldAppendRejected extends Error {}
+
+/**
+ * The instance facts a celld-mode evaluation needs but cannot read from the
+ * store, plus the terminal outcome it must report back to the cell.
+ */
+interface CelldEvaluationContext {
+  readonly correlationKey: string;
+  readonly binding: MonitorBindingView | undefined;
+  outcome: EvaluationResponse | undefined;
+}
+
+async function readCellError(response: Response): Promise<{ code: string; error: string }> {
+  try {
+    const body = (await response.json()) as Partial<CelldErrorResponse>;
+    return {
+      code: typeof body.code === "string" ? body.code : "",
+      error: typeof body.error === "string" ? body.error : `HTTP ${response.status}`,
+    };
+  } catch {
+    return { code: "", error: `HTTP ${response.status}` };
+  }
+}
+
+function isTerminalRunStatus(status: StoredMonitorRun["status"]): boolean {
+  return (
+    status === "ignored" ||
+    status === "shadowed" ||
+    status === "suppressed" ||
+    status === "delivered" ||
+    status === "unroutable" ||
+    status === "dead-lettered"
+  );
+}
+
+function evaluationUnavailableUntil(run: StoredMonitorRun, now: string): string | null {
+  if (run.availableAt > now) return run.availableAt;
+  if (
+    run.status === "processing" &&
+    run.leaseExpiresAt !== undefined &&
+    run.leaseExpiresAt > now
+  ) {
+    return run.leaseExpiresAt;
+  }
+  return null;
+}
+
+function scheduledEvaluation(runId: string, retryAt: string): EvaluationResponse {
+  return { runId, status: "retry", retryAt };
+}
+
+/** Projects a recorded run into the answer a cell needs to close its run. */
+function recordedEvaluation(run: StoredMonitorRun): EvaluationResponse {
+  return {
+    runId: run.id,
+    status: run.status as EvaluationTerminalStatus,
+    ...(run.decision === undefined
+      ? {}
+      : {
+          decision: {
+            action: run.decision.action,
+            ...(run.decision.confidence === undefined
+              ? {}
+              : { confidence: run.decision.confidence }),
+            reasonClass: reasonClass(run.decision.reason),
+          },
+        }),
+    ...(run.receipt === undefined
+      ? {}
+      : { receipt: run.receipt, binding: run.receipt.binding }),
+    ...(run.suppression === undefined
+      ? {}
+      : { suppression: { cause: run.suppression.cause, scope: run.suppression.scope } }),
+  };
+}
+
+function validateEvaluationRequest(request: EvaluationRequest): void {
+  if (request === null || typeof request !== "object") {
+    throw new EvaluationRequestError("evaluation request must be an object");
+  }
+  const required: readonly (readonly [string, unknown])[] = [
+    ["runId", request.runId],
+    ["instanceId", request.instanceId],
+    ["tenantId", request.tenantId],
+    ["applicationId", request.applicationId],
+    ["monitorId", request.monitorId],
+    ["definitionVersion", request.definitionVersion],
+    ["correlationKey", request.correlationKey],
+    ["correlationKeyHash", request.correlationKeyHash],
+  ];
+  for (const [name, value] of required) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new EvaluationRequestError(`evaluation ${name} must be a non-empty string`);
+    }
+  }
+  const batch = request.batch as StoredMonitorBatch | undefined;
+  if (batch === undefined || batch === null || !Array.isArray(batch.events)) {
+    throw new EvaluationRequestError("evaluation batch must carry an event list");
+  }
+  if (batch.events.length === 0) {
+    throw new EvaluationRequestError("evaluation batch must not be empty");
+  }
+  if (request.instanceView === null || typeof request.instanceView !== "object") {
+    throw new EvaluationRequestError("evaluation instanceView must be an object");
   }
 }
 
@@ -2609,15 +3195,9 @@ function batchView(batch: StoredMonitorBatch): MonitorBatchView {
 }
 
 function instanceView(instance: StoredMonitorInstance): MonitorInstanceView {
-  return freeze({
-    correlationKeyHash: instance.correlationKeyHash,
-    ...(instance.lastDecision === undefined ? {} : { lastDecision: structuredClone(instance.lastDecision) }),
-    ...(instance.lastWakeAt === undefined ? {} : { lastWakeAt: instance.lastWakeAt }),
-    ...(instance.cooldownUntil === undefined ? {} : { cooldownUntil: instance.cooldownUntil }),
-    consecutiveIgnores: instance.consecutiveIgnores,
-    eventsSinceLastWake: instance.eventsSinceLastWake,
-    ...(instance.binding === undefined ? {} : { binding: structuredClone(instance.binding) }),
-  });
+  // The projection itself lives in `./mailbox.js` so the cell worker computes
+  // exactly the same view for the runs it hands back to the evaluator.
+  return freeze(projectInstanceView(instance));
 }
 
 function reasonClass(reason: string): string {

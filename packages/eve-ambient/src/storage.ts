@@ -203,8 +203,12 @@ export interface StoredDeadLetter {
 
 export interface StoredDeployment {
   readonly applicationId: string;
+  /** Mailbox ownership is durable; changing it without migration strands work. */
+  readonly mailboxMode?: "store" | "celld" | undefined;
   readonly activeMonitorIds: readonly string[];
   readonly activeVersions: Readonly<Record<string, readonly string[]>>;
+  /** Definition versions pinned by cells, which are not visible in store tables. */
+  readonly celldDefinitionPins?: Readonly<Record<string, readonly string[]>> | undefined;
   readonly updatedAt: string;
 }
 
@@ -338,7 +342,15 @@ export function instanceStoreKey(input: {
   );
 }
 
-/** Collision-free encoding for durable compound key and lock components. */
+const UTF8 = new TextEncoder();
+
+/**
+ * Collision-free encoding for durable compound key and lock components.
+ *
+ * `TextEncoder` rather than `Buffer.byteLength(part, "utf8")` — identical byte
+ * counts, but no Node built-in, so this module stays bundleable for non-Node
+ * hosts alongside the lifecycle statechart.
+ */
 export function scopedKey(...parts: readonly string[]): string {
-  return parts.map((part) => `${Buffer.byteLength(part, "utf8")}:${part}`).join("|");
+  return parts.map((part) => `${UTF8.encode(part).length}:${part}`).join("|");
 }

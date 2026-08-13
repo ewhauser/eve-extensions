@@ -7,6 +7,7 @@
   "files": [
     "dist",
     "migrations",
+    "celld-worker",
     "README.md",
     "LICENSE"
   ],
@@ -15,6 +16,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./celld": {
+      "types": "./dist/celld.d.ts",
+      "import": "./dist/celld.js",
+      "default": "./dist/celld.js"
+    },
+    "./celld-worker": {
+      "types": "./dist/celld-worker.d.ts",
+      "import": "./dist/celld-worker.js",
+      "default": "./dist/celld-worker.js"
     },
     "./ai-sdk": {
       "types": "./dist/ai-sdk.d.ts",
