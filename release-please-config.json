@@ -5,11 +5,6 @@
   "force-tag-creation": true,
   "include-component-in-tag": true,
   "packages": {
-    "packages/eve-ambient": {
-      "component": "eve-ambient",
-      "package-name": "eve-ambient",
-      "release-type": "node"
-    },
     "packages/eve-project-link": {
       "component": "eve-project-link",
       "package-name": "eve-project-link",
