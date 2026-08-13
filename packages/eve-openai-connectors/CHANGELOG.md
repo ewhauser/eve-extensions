@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.3.0...eve-openai-connectors-v0.4.0) (2026-08-13)
+
+
+### Features
+
+* **openai-connectors:** expose bounded integration hooks ([#58](https://github.com/ewhauser/eve-extensions/issues/58)) ([6194770](https://github.com/ewhauser/eve-extensions/commit/6194770ca89a32a79e6759ee4b7e4c567d4b0403))
+
 ## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.2.1...eve-openai-connectors-v0.3.0) (2026-08-13)
 
 
