@@ -630,7 +630,11 @@ export class MonitorInstance {
       kind: outcome.status === "dead-lettered" ? "dead-lettered" : "completed",
       runId: claimed.runId,
       status: outcome.status,
+      // decision and binding are the two RUN_COMPLETED inputs that come from
+      // outside the cell; logging them is what lets the conformance oracle
+      // replay this timeline through the machine and diff the result.
       decision: outcome.decision ?? null,
+      binding: outcome.binding ?? null,
       closedBy: claimed.batch.closedBy,
       refs: claimed.batch.events.map((event) => event.ref),
       state: deriveLifecycleValue(instance, now),
