@@ -19,6 +19,22 @@ export {
   type ReplayOptions,
   type ReplayResult,
 } from "./runtime.js";
+/**
+ * Mailbox wire types only. The celld adapter itself — the fetch handler and
+ * the cell worker — lives behind the `eve-ambient/celld` entry point so the
+ * core bundle never pulls it in.
+ */
+export type {
+  CelldAppendRequest,
+  CelldAppendResponse,
+  CelldCellConfig,
+  CelldMailboxOptions,
+  EvaluationRequest,
+  EvaluationResponse,
+  EvaluationStatus,
+  MailboxOptions,
+  StoreMailboxOptions,
+} from "./mailbox.js";
 export type {
   BufferedEventRef,
   MonitorStore,

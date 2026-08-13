@@ -16,6 +16,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./celld": {
+      "types": "./dist/celld.d.ts",
+      "import": "./dist/celld.js",
+      "default": "./dist/celld.js"
+    },
     "./ai-sdk": {
       "types": "./dist/ai-sdk.d.ts",
       "import": "./dist/ai-sdk.js",
