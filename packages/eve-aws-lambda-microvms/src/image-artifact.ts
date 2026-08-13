@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { CONTROLLER_ASSETS } from "./controller-assets.generated.js";
 import { createDeterministicZip } from "./deterministic-zip.js";
 
-export const AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION = 1;
+export const AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION = 2;
 
 /** Builds the deterministic Docker context uploaded for a Lambda MicroVM image. */
 export async function buildAwsLambdaMicrovmImageArtifact(): Promise<{

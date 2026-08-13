@@ -23,7 +23,7 @@ describe("AWS Lambda MicroVM controller client", () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("forbidden", { status: 403 }))
-      .mockResolvedValueOnce(jsonResponse({ protocolVersion: 1, status: "ready" }));
+      .mockResolvedValueOnce(jsonResponse({ protocolVersion: 2, status: "ready" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const controller = new HttpAwsLambdaMicrovmController({ api, microvm: MICROVM });
@@ -181,11 +181,9 @@ function fakeApi(): AwsLambdaMicrovmApi & { readonly createAuthToken: ReturnType
     async listManagedImageVersions() {
       return [];
     },
-    async resumeMicrovm() {},
     async runMicrovm() {
       return MICROVM;
     },
-    async suspendMicrovm() {},
     async terminateMicrovm() {},
   };
 }

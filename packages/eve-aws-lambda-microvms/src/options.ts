@@ -66,7 +66,7 @@ export function resolveAwsLambdaMicrovmOptions(
     );
   }
 
-  const idlePolicy: AwsLambdaMicrovmIdlePolicy = {
+  let idlePolicy: AwsLambdaMicrovmIdlePolicy = {
     autoResumeEnabled: options.idlePolicy?.autoResumeEnabled ?? true,
     maxIdleDurationSeconds: options.idlePolicy?.maxIdleDurationSeconds ?? 300,
     suspendedDurationSeconds: options.idlePolicy?.suspendedDurationSeconds ?? 1800,
@@ -101,6 +101,11 @@ export function resolveAwsLambdaMicrovmOptions(
       (networkingMode === "customer-managed" ? [] : [internetEgress]),
   );
   if (networkingMode === "customer-managed") {
+    idlePolicy = {
+      autoResumeEnabled: false,
+      maxIdleDurationSeconds: maximumDurationSeconds,
+      suspendedDurationSeconds: 1,
+    };
     const account = accountFromBuildRoleArn(buildRoleArn);
     validateCustomerManagedConnector(
       "buildEgressNetworkConnectorArns",

@@ -7,6 +7,10 @@ export type AwsLambdaMicrovmState =
   | "TERMINATING";
 
 export interface AwsLambdaMicrovmRecord {
+  readonly activationId?: string;
+  readonly capabilitySha256?: string;
+  readonly controllerCaSha256?: string;
+  readonly controllerSessionToken?: string;
   readonly egressNetworkConnectorArns: readonly string[];
   readonly endpoint: string;
   readonly imageArn: string;
@@ -88,8 +92,6 @@ export interface AwsLambdaMicrovmApi {
   listManagedImageVersions(
     imageArn: string,
   ): Promise<readonly { readonly imageArn: string; readonly imageVersion: string }[]>;
-  resumeMicrovm(microvmId: string): Promise<void>;
   runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord>;
-  suspendMicrovm(microvmId: string): Promise<void>;
   terminateMicrovm(microvmId: string): Promise<void>;
 }

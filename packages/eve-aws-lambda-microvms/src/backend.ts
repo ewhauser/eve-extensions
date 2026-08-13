@@ -15,6 +15,11 @@ import type {
   AwsLambdaMicrovmRecord,
 } from "./api.js";
 import {
+  hashAwsLambdaMicrovmCapability,
+  serializeAwsLambdaMicrovmActivationEnvelope,
+  type AwsLambdaMicrovmActivationIssuer,
+} from "./activation.js";
+import {
   restoreAwsLambdaMicrovmCheckpoint,
   uploadAwsLambdaMicrovmCheckpoint,
 } from "./checkpoint.js";
@@ -42,6 +47,7 @@ import type { AwsLambdaMicrovmSandboxOptions } from "./types.js";
 export const AWS_LAMBDA_MICROVM_BACKEND_NAME = "aws-lambda-microvms";
 
 export interface AwsLambdaMicrovmBackendServices {
+  readonly activationIssuer?: AwsLambdaMicrovmActivationIssuer;
   readonly api: AwsLambdaMicrovmApi;
   readonly createController: (microvm: AwsLambdaMicrovmRecord) => AwsLambdaMicrovmController;
   readonly storage: AwsLambdaMicrovmStorage;
@@ -98,6 +104,7 @@ function createDefaultServices(
   const api = new SdkAwsLambdaMicrovmApi(options.region);
   return {
     api,
+    activationIssuer: undefined,
     createController: (microvm) => new HttpAwsLambdaMicrovmController({ api, microvm }),
     storage: new SdkAwsLambdaMicrovmStorage({
       bucket: options.artifactBucket,
@@ -305,36 +312,23 @@ async function createLeasedSessionHandle(input: {
   }
 
   const source = persistedSession ?? template;
-  let microvm = await reattachMicrovm(input.services.api, persistedSession);
-  let launchedMicrovm = false;
-  if (
-    microvm !== null &&
-    (microvm.imageArn !== source.imageArn ||
-      microvm.imageVersion !== source.imageVersion ||
-      !matchesRuntimeNetworkBinding(microvm, persistedSession, input.options))
-  ) {
-    await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
-    microvm = null;
-  }
-  if (microvm === null) {
-    microvm = await runMicrovm({
-      egressNetworkConnectorArns: input.options.runtimeEgressNetworkConnectorArns,
-      imageArn: source.imageArn,
-      imageVersion: source.imageVersion,
-      options: input.options,
-      purposeKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
-      sessionKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
-      services: input.services,
-      templateHash: source.templateHash,
-    });
-    launchedMicrovm = true;
-  } else if (microvm.state === "SUSPENDED" || microvm.state === "SUSPENDING") {
-    await input.services.api.resumeMicrovm(microvm.microvmId);
-  }
+  const microvm = await runMicrovm({
+    egressNetworkConnectorArns: input.options.runtimeEgressNetworkConnectorArns,
+    imageArn: source.imageArn,
+    imageVersion: source.imageVersion,
+    options: input.options,
+    purposeKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
+    replacementOf: persistedSession?.activationId,
+    sessionKey: stabilizeSessionKey(input.options, input.createInput.sessionKey),
+    services: input.services,
+    templateHash: source.templateHash,
+  });
+  const launchedMicrovm = true;
   const activeMicrovm = microvm;
 
   const controller = input.services.createController(activeMicrovm);
   try {
+    assertFreshReplacement(activeMicrovm, persistedSession, input.options);
     await controller.waitUntilReady();
     if (persistedSession === undefined || persistedSession.microvmId !== activeMicrovm.microvmId) {
       if (source.checkpoint !== undefined) {
@@ -370,18 +364,9 @@ async function createLeasedSessionHandle(input: {
   async function ensureActive(): Promise<void> {
     await ensureLease();
     if (!controllerPaused) return;
-    const current = await input.services.api.getMicrovm(activeMicrovm.microvmId);
-    if (current === null || current.state === "TERMINATED" || current.state === "TERMINATING") {
-      throw new Error(
-        "AWS Lambda MicroVM was terminated after this handle captured state. Open a new sandbox handle to restore its checkpoint.",
-      );
-    }
-    if (current.state === "SUSPENDED" || current.state === "SUSPENDING") {
-      await input.services.api.resumeMicrovm(activeMicrovm.microvmId);
-    }
-    controller.resumeHeartbeats();
-    await controller.waitUntilReady();
-    controllerPaused = false;
+    throw new Error(
+      "AWS Lambda MicroVM authority ended after checkpoint termination. Open a new sandbox handle for a fresh activation and restore.",
+    );
   }
 
   const session = createAwsLambdaMicrovmSession({
@@ -408,6 +393,13 @@ async function createLeasedSessionHandle(input: {
     });
     const checkpoint = pending?.checkpoint ?? previousCheckpoint;
     const body: Omit<AwsLambdaMicrovmSessionMetadata, "manifestEtag"> = {
+      ...(activeMicrovm.activationId === undefined
+        ? {}
+        : {
+            activationId: activeMicrovm.activationId,
+            capabilitySha256: activeMicrovm.capabilitySha256!,
+            controllerCaSha256: activeMicrovm.controllerCaSha256!,
+          }),
       checkpoint,
       configHash: source.configHash,
       controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
@@ -436,14 +428,15 @@ async function createLeasedSessionHandle(input: {
       metadata = nextMetadata;
       await pending?.commit();
       controller.pauseHeartbeats();
-      try {
-        await input.services.api.suspendMicrovm(activeMicrovm.microvmId);
-      } catch (error) {
-        controller.resumeHeartbeats();
-        await controller.checkpointRelease().catch(() => undefined);
-        throw error;
-      }
       controllerPaused = true;
+      try {
+        await input.services.api.terminateMicrovm(activeMicrovm.microvmId);
+      } catch (error) {
+        throw new Error(
+          "AWS Lambda MicroVM checkpoint is durable, but terminating the retired MicroVM failed; stale authority remains unusable.",
+          { cause: error },
+        );
+      }
       captured = true;
       await activeLease.release();
       lease = undefined;
@@ -473,31 +466,27 @@ async function createLeasedSessionHandle(input: {
   };
 }
 
-async function reattachMicrovm(
-  api: AwsLambdaMicrovmApi,
-  metadata: AwsLambdaMicrovmSessionMetadata | undefined,
-): Promise<AwsLambdaMicrovmRecord | null> {
-  if (metadata === undefined) return null;
-  const microvm = await api.getMicrovm(metadata.microvmId);
-  if (microvm === null || microvm.state === "TERMINATED" || microvm.state === "TERMINATING") {
-    return null;
-  }
-  return microvm;
-}
-
-function matchesRuntimeNetworkBinding(
+function assertFreshReplacement(
   microvm: AwsLambdaMicrovmRecord,
   metadata: AwsLambdaMicrovmSessionMetadata | undefined,
   options: ResolvedAwsLambdaMicrovmOptions,
-): boolean {
-  if (options.networkingMode !== "customer-managed") return true;
+): void {
+  if (metadata === undefined || options.networkingMode !== "customer-managed") return;
   const expectedConnector = options.runtimeEgressNetworkConnectorArns[0]!;
-  return (
-    metadata?.networkLaneId === options.runtimeNetworkLaneId &&
-    metadata?.egressNetworkConnectorArn === expectedConnector &&
+  const valid =
     microvm.egressNetworkConnectorArns.length === 1 &&
-    microvm.egressNetworkConnectorArns[0] === expectedConnector
-  );
+    microvm.egressNetworkConnectorArns[0] === expectedConnector &&
+    microvm.activationId !== undefined &&
+    microvm.activationId !== metadata.activationId &&
+    microvm.capabilitySha256 !== undefined &&
+    microvm.capabilitySha256 !== metadata.capabilitySha256 &&
+    microvm.controllerCaSha256 !== undefined &&
+    microvm.controllerCaSha256 === metadata.controllerCaSha256;
+  if (!valid) {
+    throw new Error(
+      "AWS Lambda MicroVM replacement rejected stale activation, capability, CA, or connector authority.",
+    );
+  }
 }
 
 async function runMicrovm(input: {
@@ -506,14 +495,36 @@ async function runMicrovm(input: {
   readonly imageVersion: string;
   readonly options: ResolvedAwsLambdaMicrovmOptions;
   readonly purposeKey: string;
+  readonly replacementOf?: string;
   readonly sessionKey?: string;
   readonly services: AwsLambdaMicrovmBackendServices;
   readonly templateHash: string;
 }): Promise<AwsLambdaMicrovmRecord> {
+  if (input.options.networkingMode === "customer-managed" && input.services.activationIssuer === undefined) {
+    throw new Error("AWS Lambda MicroVM customer-managed networking requires an activation issuer.");
+  }
   const ingressNetworkConnectorArns = [input.options.httpIngressNetworkConnectorArn];
   if (input.options.shellIngressNetworkConnectorArn !== undefined) {
     ingressNetworkConnectorArns.push(input.options.shellIngressNetworkConnectorArn);
   }
+  const activation =
+    input.options.networkingMode === "customer-managed"
+      ? await input.services.activationIssuer!.issueActivation({
+          networkLaneId:
+            input.sessionKey === undefined
+              ? input.options.buildNetworkLaneId!
+              : input.options.runtimeNetworkLaneId!,
+          purposeHash: hashKey(input.purposeKey),
+          replacementOf: input.replacementOf,
+        })
+      : undefined;
+  const runHookPayload =
+    activation === undefined
+      ? JSON.stringify({
+          controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+          eveSession: hashKey(input.purposeKey),
+        })
+      : serializeAwsLambdaMicrovmActivationEnvelope(activation);
   const microvm = await input.services.api.runMicrovm({
     clientToken: randomUUID(),
     egressNetworkConnectorArns: input.egressNetworkConnectorArns,
@@ -524,10 +535,7 @@ async function runMicrovm(input: {
     ingressNetworkConnectorArns,
     logging: resolveLogging(input.options),
     maximumDurationSeconds: input.options.maximumDurationSeconds,
-    runHookPayload: JSON.stringify({
-      controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
-      eveSession: hashKey(input.purposeKey),
-    }),
+    runHookPayload,
   });
   if (input.options.networkingMode === "customer-managed") {
     const expectedConnector = input.egressNetworkConnectorArns[0]!;
@@ -542,6 +550,14 @@ async function runMicrovm(input: {
         `AWS Lambda MicroVM activation did not match the requested image and customer-managed connector; terminated ${microvm.microvmId} before controller traffic.`,
       );
     }
+    Object.defineProperties(microvm, {
+      activationId: { value: activation!.activationId },
+      capabilitySha256: { value: hashAwsLambdaMicrovmCapability(activation!.capability) },
+      controllerCaSha256: { value: activation!.controllerCaSha256 },
+      controllerSessionToken: {
+        value: hashKey(`${activation!.activationId}.${activation!.capability}`),
+      },
+    });
   }
   return microvm;
 }
