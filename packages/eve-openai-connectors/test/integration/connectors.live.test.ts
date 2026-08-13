@@ -38,11 +38,14 @@ describe.skipIf(!token)("live connector service (CODEX_ACCESS_TOKEN)", () => {
 
   test("begin → search → call round-trip with a read-only tool", async () => {
     const c = connectors();
-    const session = await c.begin({ ...ctx, messages: [] });
+    const session = await c.begin(ctx);
     expect(session?.searchToolName).toBe("apps_search");
     expect(session?.searchToolDescription).toContain("github");
 
-    const results = await c.search(ctx, { keywords: "search repositories", service: "github" });
+    const { items: results } = await c.search(ctx, {
+      keywords: "search repositories",
+      service: "github",
+    });
     expect(results.length).toBeGreaterThan(0);
     const target = results.find((item) => item.readOnly);
     expect(target).toBeDefined();
@@ -57,7 +60,7 @@ describe.skipIf(!token)("live connector service (CODEX_ACCESS_TOKEN)", () => {
       getPrincipal: () => "integration-deferred",
       discovery: "deferred",
     });
-    const session = await c.begin({ ...ctx, messages: [] });
+    const session = await c.begin(ctx);
     expect(session?.deferred.length).toBeGreaterThan(50);
     for (const item of session!.deferred.slice(0, 10)) {
       expect(item.name).toMatch(TOOL_NAME_PATTERN);

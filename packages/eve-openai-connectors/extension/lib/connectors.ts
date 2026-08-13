@@ -7,14 +7,13 @@ import {
   type Inventory,
 } from "./catalog.js";
 import {
-  clientToolSearchResultsFromMessages,
+  clientToolDescription,
   materializeClientToolSearchOutput,
   MIN_CLIENT_SEARCH_OUTPUT_BYTES,
   parseClientToolSearchInput,
 } from "./client-search.js";
 import { getConnectorCacheMetrics } from "./cache.js";
 import { ConnectorAuthError, ConnectorToolError } from "./errors.js";
-import { searchResultsFromMessages } from "./messages.js";
 import {
   searchToolName as buildSearchToolName,
   statusToolName as buildStatusToolName,
@@ -31,12 +30,17 @@ import type {
   ConnectorContext,
   ConnectorSession,
   ConnectorStatus,
+  ClientToolSearchResult,
   ClientToolSearchInput,
-  ClientToolSearchOutput,
+  ConnectorSearchResult,
   ConnectorToolItem,
   CreateConnectorsOptions,
   SearchInput,
 } from "./types.js";
+import {
+  compactConnectorSearchOutput,
+  materializeConnectorWorkingSet,
+} from "./working-set.js";
 
 /** Overall budget for the catalog load inside `begin()` (the resolver runs
  * before every model call and must stay fast). The load continues in the
@@ -57,21 +61,21 @@ export interface Connectors {
   /**
    * Call from the `step.started` resolver. Returns `null` when disabled,
    * when there is no principal, or when `getToken` yields no token —
-   * otherwise a session describing the discovery tool plus previously
-   * discovered tools rebuilt from history. Never throws.
+   * otherwise a session describing the discovery tool plus working-set tools
+   * revalidated against the current catalog. Never throws.
    */
-  begin(ctx: ConnectorContext & { messages?: readonly unknown[] }): Promise<ConnectorSession | null>;
+  begin(ctx: ConnectorContext, workingSet?: unknown): Promise<ConnectorSession | null>;
   /** Execute body for the search tool. Accepts the raw tool input object. */
   search(
     ctx: ConnectorContext,
     input: SearchInput | Record<string, unknown>,
-  ): Promise<ConnectorToolItem[]>;
+  ): Promise<ConnectorSearchResult>;
   /** Execute OpenAI client tool search, or the bounded progressive provider fallback. */
   clientSearch(
     ctx: ConnectorContext,
     input: ClientToolSearchInput | Record<string, unknown>,
     namespace: string,
-  ): Promise<ClientToolSearchOutput>;
+  ): Promise<ClientToolSearchResult>;
   /** Execute a materialized connector tool after revalidating current catalog membership. */
   call(
     ctx: ConnectorContext,
@@ -266,7 +270,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
     if (!inventory) {
       return (
         header +
-        " NOTE: the connector catalog is temporarily unavailable — previously discovered tools remain visible and will be revalidated when called; retry the search later."
+        " NOTE: the connector catalog is temporarily unavailable, so no discovered tool is callable; retry the search later."
       );
     }
     const services = [...inventory.services.entries()]
@@ -303,7 +307,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
   };
 
   return {
-    async begin(ctx): Promise<ConnectorSession | null> {
+    async begin(ctx, workingSet): Promise<ConnectorSession | null> {
       try {
         if (!enabled) return null;
         const principal = principalOf(ctx);
@@ -333,20 +337,23 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           ]);
         }
 
-        const discovered = searchResultsFromMessages(ctx.messages ?? [], {
-          searchToolName,
-          max: maxMaterializedTools,
-        }).filter(
-          (item) =>
-            allowedServices === undefined || allowedServices.has(serviceFromUpstream(item.upstream)),
+        const materialized = materializeConnectorWorkingSet(
+          workingSet,
+          principal,
+          inventory,
+          maxMaterializedTools,
         );
-        const loaded = inventory
-          ? clientToolSearchResultsFromMessages(
-              ctx.messages ?? [],
-              inventory,
-              maxMaterializedTools,
-            )
-          : [];
+        const discovered = materialized
+          .filter((entry) => entry.source === "search")
+          .map((entry) => entry.item);
+        const loaded = materialized
+          .filter((entry) => entry.source === "client")
+          .map(({ item }) =>
+            Object.freeze({
+              item,
+              description: clientToolDescription(item, inventory!.fingerprint),
+            }),
+          );
         const deferred = discovery === "deferred" && inventory ? inventory.items : [];
 
         return {
@@ -360,6 +367,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           statusInputSchema,
           discovered,
           loaded,
+          maxMaterializedTools,
           clientSearchEnabled: discovery === "client",
           deferred,
           catalogFingerprint: inventory?.fingerprint ?? null,
@@ -373,19 +381,29 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
       }
     },
 
-    async search(ctx, input): Promise<ConnectorToolItem[]> {
+    async search(ctx, input): Promise<ConnectorSearchResult> {
       const principal = principalOf(ctx);
       if (!principal) throw new Error("Connector search is unavailable: no authenticated user.");
       const token = await tokenFor(ctx, principal);
       if (!token) throw new Error("Connector search is unavailable: the current user has no access token.");
       const inventory = await loadInventory(principal, token);
-      return searchInventory(inventory, (input ?? { keywords: "" }) as SearchInput, {
-        limitDefault: searchLimitDefault,
-        limitMax: searchLimitMax,
+      const items = searchInventory(
+        inventory,
+        (input ?? { keywords: "" }) as SearchInput,
+        {
+          limitDefault: searchLimitDefault,
+          limitMax: searchLimitMax,
+        },
+      ).slice(0, maxMaterializedTools);
+      return Object.freeze({
+        output: compactConnectorSearchOutput(items),
+        items,
+        authority: principal,
+        catalogFingerprint: inventory.fingerprint,
       });
     },
 
-    async clientSearch(ctx, input, namespace): Promise<ClientToolSearchOutput> {
+    async clientSearch(ctx, input, namespace): Promise<ClientToolSearchResult> {
       return within(
         (async () => {
           const parsed = parseClientToolSearchInput(input);
@@ -403,13 +421,21 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           const matches = searchInventory(inventory, parsed, {
             limitDefault: searchLimitDefault,
             limitMax: searchLimitMax,
-          });
-          return materializeClientToolSearchOutput(
+          }).slice(0, maxMaterializedTools);
+          const output = materializeClientToolSearchOutput(
             inventory,
             matches,
             namespace,
             clientSearchMaxBytes,
           );
+          const returnedNames = new Set(output.tools.map((tool) => tool.name));
+          const items = matches.filter((item) => returnedNames.has(`${namespace}${item.name}`));
+          return Object.freeze({
+            output,
+            items,
+            authority: principal,
+            catalogFingerprint: inventory.fingerprint,
+          });
         })(),
         clientSearchTimeoutMs,
         `Connector tool search exceeded its ${clientSearchTimeoutMs}ms latency budget.`,

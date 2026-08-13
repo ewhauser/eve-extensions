@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { stableJson, type Inventory } from "./catalog.js";
+import type { Inventory } from "./catalog.js";
 import { TOOL_NAME_PATTERN } from "./naming.js";
 import type {
   ClientFunctionTool,
@@ -8,7 +8,6 @@ import type {
   ClientToolSearchOutput,
   ConnectorToolItem,
   JsonObject,
-  LoadedConnectorTool,
   SearchInput,
 } from "./types.js";
 
@@ -158,101 +157,4 @@ export function materializeClientToolSearchOutput(
     bytes += definitionBytes;
   }
   return Object.freeze({ tools: Object.freeze(tools) });
-}
-
-function unwrapToolOutput(output: unknown): unknown {
-  let value = output;
-  if (isRecord(value) && "type" in value && "value" in value) value = value.value;
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value) as unknown;
-    } catch {
-      return null;
-    }
-  }
-  return value;
-}
-
-function isClientSearchResultName(toolName: unknown): boolean {
-  return (
-    toolName === "tool_search" ||
-    (typeof toolName === "string" && toolName.endsWith(`__${CLIENT_TOOL_SEARCH_MARKER_NAME}`)) ||
-    toolName === CLIENT_TOOL_SEARCH_MARKER_NAME
-  );
-}
-
-function matchLoadedDefinition(
-  candidate: unknown,
-  inventory: Inventory,
-): LoadedConnectorTool | null {
-  if (!isRecord(candidate)) return null;
-  if (
-    candidate.type !== "function" ||
-    typeof candidate.name !== "string" ||
-    typeof candidate.description !== "string" ||
-    candidate.defer_loading !== true ||
-    !isRecord(candidate.parameters) ||
-    !TOOL_NAME_PATTERN.test(candidate.name) ||
-    candidate.name.length > PROVIDER_TOOL_NAME_MAX
-  ) {
-    return null;
-  }
-
-  const candidateName = candidate.name;
-  const exact = inventory.byName.get(candidateName);
-  const candidates = exact
-    ? [exact]
-    : inventory.items
-        .filter((entry) => candidateName.endsWith(`__${entry.name}`))
-        .sort((a, b) => b.name.length - a.name.length);
-  for (const item of candidates) {
-    if (candidate.description !== clientToolDescription(item, inventory.fingerprint)) continue;
-    if (stableJson(candidate.parameters) !== stableJson(item.inputSchema)) continue;
-    return Object.freeze({ item, providerName: candidateName, description: candidate.description });
-  }
-  return null;
-}
-
-/**
- * Rebuild loaded functions from durable conversation history. Definitions are
- * accepted only when they still exactly match the current authorized catalog
- * and its full content fingerprint.
- */
-export function clientToolSearchResultsFromMessages(
-  messages: readonly unknown[],
-  inventory: Inventory,
-  max: number,
-): LoadedConnectorTool[] {
-  const resultGroups: LoadedConnectorTool[][] = [];
-  for (const message of messages) {
-    if (!isRecord(message) || message.role !== "tool" || !Array.isArray(message.content)) continue;
-    for (const part of message.content) {
-      if (!isRecord(part) || part.type !== "tool-result" || !isClientSearchResultName(part.toolName)) {
-        continue;
-      }
-      const value = unwrapToolOutput(part.output);
-      if (!isRecord(value) || !Array.isArray(value.tools)) continue;
-      const group: LoadedConnectorTool[] = [];
-      for (const candidate of value.tools) {
-        const loaded = matchLoadedDefinition(candidate, inventory);
-        if (!loaded) continue;
-        group.push(loaded);
-      }
-      if (group.length > 0) resultGroups.push(group);
-    }
-  }
-
-  const limit = Math.floor(Math.max(0, max));
-  if (!(limit > 0)) return [];
-  const loaded: LoadedConnectorTool[] = [];
-  const seen = new Set<string>();
-  for (const group of resultGroups.reverse()) {
-    for (const candidate of group) {
-      if (seen.has(candidate.item.name)) continue;
-      seen.add(candidate.item.name);
-      loaded.push(candidate);
-      if (loaded.length >= limit) return loaded;
-    }
-  }
-  return loaded;
 }

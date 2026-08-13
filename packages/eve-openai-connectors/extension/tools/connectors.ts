@@ -15,6 +15,11 @@ import {
 } from "../lib/client-search.js";
 import { getOrCreateDeferredToolSet } from "../lib/tool-cache.js";
 import type { ApprovalsConfig, CreateConnectorsOptions } from "../lib/types.js";
+import {
+  connectorWorkingSet,
+  mergeConnectorWorkingSet,
+  shouldClearConnectorWorkingSet,
+} from "../lib/working-set.js";
 
 let configuredFor: object | undefined;
 let configuredConnectors: Connectors | undefined;
@@ -70,8 +75,18 @@ export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
       const connectors = getConnectors();
-      const session = await connectors.begin(ctx);
+      const workingSet = connectorWorkingSet.get();
+      const session = await connectors.begin(ctx, workingSet);
       if (!session) return null;
+      if (
+        shouldClearConnectorWorkingSet(
+          workingSet,
+          session.principal,
+          session.catalogFingerprint,
+        )
+      ) {
+        connectorWorkingSet.update(() => null);
+      }
 
       const tools: Record<string, DynamicToolEntry<any, any>> = {};
 
@@ -106,12 +121,23 @@ export default defineDynamic({
           description: CLIENT_TOOL_SEARCH_DESCRIPTION,
           inputSchema: CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
           providerOptions: CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
-          execute: async (input, toolCtx) =>
-            connectors.clientSearch(
+          execute: async (input, toolCtx) => {
+            const result = await connectors.clientSearch(
               toolCtx,
               input,
               namespaceFromClientMarkerToolName(toolCtx.toolName),
-            ),
+            );
+            connectorWorkingSet.update((current) =>
+              mergeConnectorWorkingSet(current, {
+                authority: result.authority,
+                catalogFingerprint: result.catalogFingerprint,
+                items: result.items,
+                source: "client",
+                max: session.maxMaterializedTools,
+              }),
+            );
+            return result.output;
+          },
         });
       }
 
@@ -122,7 +148,19 @@ export default defineDynamic({
         tools[session.searchToolName] = defineTool({
           description: session.searchToolDescription + namespaceGuidance,
           inputSchema: session.searchInputSchema,
-          execute: async (input, toolCtx) => connectors.search(toolCtx, input),
+          execute: async (input, toolCtx) => {
+            const result = await connectors.search(toolCtx, input);
+            connectorWorkingSet.update((current) =>
+              mergeConnectorWorkingSet(current, {
+                authority: result.authority,
+                catalogFingerprint: result.catalogFingerprint,
+                items: result.items,
+                source: "search",
+                max: session.maxMaterializedTools,
+              }),
+            );
+            return result.output;
+          },
         });
 
         if (extension.config.includeStatus) {

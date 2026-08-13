@@ -89,17 +89,19 @@ Do not ask users to paste access tokens into chat messages. Acquire and store th
 
 The connector catalog can contain hundreds of tools. In the default `client` mode, the initial OpenAI request advertises one fixed, client-executed `tool_search` marker instead of the catalog's names, descriptions, and schemas. When the model searches, the extension queries the current user's authorized catalog and returns a count- and byte-bounded set of exact function definitions linked to that search call. Initial request size therefore stays constant as the catalog grows.
 
-Loaded definitions carry a full-catalog version tag and are rebuilt from durable tool-result history on the next step. A definition is accepted only when its name, schema, version, and current per-user authorization all still match. Invocation then goes through the normal connector path, which rechecks authorization and applies the same read/write approval policy.
+Every successful search updates a versioned, count-bounded Eve `defineState` manifest for the session. The manifest contains only the current authority, catalog fingerprint, mapped/upstream names, and discovery source—never schemas, arguments, results, or credentials. On each step, the extension joins those references against the current user's authorized catalog. Authority changes, catalog changes, missing tools, and catalog outages fail closed. Invocation then goes through the normal connector path, which rechecks authorization and applies the same read/write approval policy.
 
 Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. In search/deferred modes, `openai__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
 
 On providers without OpenAI client-executed tool search, the same marker remains a bounded progressive search function. It uses the same flow as ordinary progressive search:
 
 1. The agent calls `openai__search` with a service and keywords.
-2. The result identifies matching connector tools.
+2. The compact result identifies loaded names and short summaries without JSON schemas.
 3. On the next step, those tools are materialized under the `openai__` namespace and become callable.
 
-Set `discovery: "search"` to use ordinary progressive extension search all the time. Search-mode tools discovered earlier in the conversation are rebuilt from history without another catalog request. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
+Set `discovery: "search"` to use ordinary progressive extension search all the time. Discovered tools survive turns, external compaction, worker restarts, and redeploys through extension-owned state, but materialization always requires the current authorized catalog. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
+
+Sessions created by versions before this durable manifest existed are not migrated from transcript tool results. Those legacy results are deliberately ignored because they can contain stale schemas and policy. The agent must search again once; subsequent discoveries use durable state.
 
 Ask the agent, for example:
 
@@ -127,7 +129,7 @@ The extension never logs or persists the token. It holds tokens only in a bounde
 | `discovery` | `"client"` | Use OpenAI client-executed tool search with a bounded progressive fallback. Use `"search"` for ordinary progressive search or `"deferred"` for full-catalog hosted search compatibility. |
 | `baseUrl` | OpenAI connector service | Override the connector endpoint. |
 | `inventoryTtlMs` | `300000` | Per-user connector catalog cache lifetime in milliseconds. |
-| `maxMaterializedTools` | `30` | Maximum previously discovered tools restored on each step. |
+| `maxMaterializedTools` | `30` | Maximum discovered references retained and materialized on each step. |
 | `searchLimitDefault` | `8` | Default number of search matches. |
 | `searchLimitMax` | `25` | Maximum number of search matches. |
 | `clientSearchMaxBytes` | `65536` | Maximum serialized bytes returned by one client tool-search call. |
@@ -180,6 +182,7 @@ Add `--call` to make one read-only live call. The probe reports catalog health a
 
 - Connector output is untrusted input. A GitHub issue, Drive document, or Notion page can contain instruction-shaped text. Treat retrieved content as data and keep writes behind approval.
 - Cross-service chains deserve extra scrutiny: content read from one service must not silently authorize a write to another.
+- Durable connector state contains bounded references only. A principal or catalog mismatch clears it, and an unavailable catalog materializes no connector tools.
 - Every connector call revalidates current per-user catalog membership and the policy-relevant descriptor. A tool removed or changed after discovery fails closed before any upstream `tools/call` request.
 - The connector endpoint is an OpenAI backend used by Codex, not a documented public OpenAI API. OpenAI can change or gate it without notice. Review this dependency with your security team before production use.
 - Connector traffic residency through this endpoint is undocumented. Verify it against any residency obligations.

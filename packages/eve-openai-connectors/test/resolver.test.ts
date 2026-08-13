@@ -5,6 +5,7 @@ import { getConnectorCacheMetrics } from "../extension/lib/cache.js";
 import { createConnectors } from "../extension/lib/connectors.js";
 import { ConnectorToolError } from "../extension/lib/errors.js";
 import type { ConnectorContext, ConnectorToolItem, UpstreamTool } from "../extension/lib/types.js";
+import { mergeConnectorWorkingSet } from "../extension/lib/working-set.js";
 import { startFakeMcpServer, type FakeServer } from "./helpers/fake-server.js";
 
 const CATALOG = (
@@ -16,9 +17,9 @@ const CATALOG = (
 /** A port nothing listens on — catalog loads fail fast with ECONNREFUSED. */
 const DEAD_URL = "http://127.0.0.1:9/mcp";
 
-type Ctx = ConnectorContext & { messages?: readonly unknown[] };
+type Ctx = ConnectorContext;
 
-function makeCtx(messages: readonly unknown[] = [], principalId = "user-1"): Ctx {
+function makeCtx(_messages: readonly unknown[] = [], principalId = "user-1"): Ctx {
   return {
     session: {
       id: "session-1",
@@ -32,16 +33,6 @@ function makeCtx(messages: readonly unknown[] = [], principalId = "user-1"): Ctx
         initiator: null,
       },
     },
-    messages,
-  };
-}
-
-function discoveredMessage(items: ConnectorToolItem[], toolName = "apps_search") {
-  return {
-    role: "tool",
-    content: [
-      { type: "tool-result", toolCallId: "c1", toolName, output: { type: "json", value: items } },
-    ],
   };
 }
 
@@ -104,41 +95,47 @@ describe("begin() — the step.started contract (never throws)", () => {
     expect(String(silentLogger.error.mock.calls[0]?.[0])).not.toContain("Bearer");
   });
 
-  test("a failing catalog degrades apps_search but keeps discovered tools visible", async () => {
+  test("a failing catalog degrades apps_search and fails closed on durable references", async () => {
     const connectors = createConnectors({
       getToken: () => "tok",
       baseUrl: DEAD_URL,
       logger: silentLogger,
     });
-    const session = await connectors.begin(makeCtx([discoveredMessage([searchItem])]));
+    const session = await connectors.begin(makeCtx(), {
+      version: 1,
+      authority: "user:test-idp:user-1",
+      catalogFingerprint: "previous",
+      tools: [{ name: searchItem.name, upstream: searchItem.upstream, source: "search" }],
+    });
     expect(session).not.toBeNull();
     expect(session?.searchToolDescription).toContain("temporarily unavailable");
-    expect(session?.discovered).toHaveLength(1);
-    expect(session?.discovered[0]?.upstream).toBe("github.search_issues");
+    expect(session?.discovered).toEqual([]);
   });
 
-  test("happy path: description lists services, discovered capped most-recent-first", async () => {
+  test("happy path: description lists services and durable discoveries stay bounded", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
-    const many = Array.from({ length: 5 }, (_, i) => ({
-      ...searchItem,
-      name: `apps_tool_${i}`,
-      upstream: `svc.tool_${i}`,
-    }));
     const connectors = createConnectors({
       getToken: () => "tok",
       baseUrl: server.url,
       maxMaterializedTools: 3,
       logger: silentLogger,
     });
-    const session = await connectors.begin(makeCtx([discoveredMessage(many)]));
+    const search = await connectors.search(makeCtx(), { keywords: "" });
+    const workingSet = mergeConnectorWorkingSet(null, {
+      authority: "user:test-idp:user-1",
+      catalogFingerprint: search.catalogFingerprint,
+      items: search.items,
+      source: "search",
+      max: 3,
+    });
+    const session = await connectors.begin(makeCtx(), workingSet);
     expect(session?.searchToolName).toBe("apps_search");
     expect(session?.searchToolDescription).toContain("github (4)");
     expect(session?.searchToolDescription).toContain("google_drive (2)");
-    expect(session?.discovered.map((item) => item.name)).toEqual([
-      "apps_tool_4",
-      "apps_tool_3",
-      "apps_tool_2",
-    ]);
+    expect(session?.discovered).toHaveLength(3);
+    expect(session?.discovered.map((item) => item.name)).toEqual(
+      search.items.slice(0, 3).map((item) => item.name),
+    );
   });
 
   test("a custom prefix flows through search tool name and discovery", async () => {
@@ -149,8 +146,16 @@ describe("begin() — the step.started contract (never throws)", () => {
       toolPrefix: "gpt_",
       logger: silentLogger,
     });
+    const search = await connectors.search(makeCtx(), { keywords: "search issues" });
     const session = await connectors.begin(
-      makeCtx([discoveredMessage([{ ...searchItem, name: "gpt_github_search_issues" }], "gpt_search")]),
+      makeCtx(),
+      mergeConnectorWorkingSet(null, {
+        authority: "user:test-idp:user-1",
+        catalogFingerprint: search.catalogFingerprint,
+        items: search.items,
+        source: "search",
+        max: 30,
+      }),
     );
     expect(session?.searchToolName).toBe("gpt_search");
     expect(session?.discovered[0]?.name).toBe("gpt_github_search_issues");
@@ -174,9 +179,14 @@ describe("begin() — the step.started contract (never throws)", () => {
       discovery: "deferred",
       logger: silentLogger,
     });
-    const fallback = await cold.begin(makeCtx([discoveredMessage([searchItem])]));
+    const fallback = await cold.begin(makeCtx(), {
+      version: 1,
+      authority: "user:test-idp:user-1",
+      catalogFingerprint: session?.catalogFingerprint ?? "previous",
+      tools: [{ name: searchItem.name, upstream: searchItem.upstream, source: "search" }],
+    });
     expect(fallback?.deferred).toHaveLength(0);
-    expect(fallback?.discovered).toHaveLength(1);
+    expect(fallback?.discovered).toHaveLength(0);
     expect(fallback?.searchToolDescription).toContain("temporarily unavailable");
   });
 
@@ -207,7 +217,7 @@ describe("begin() — the step.started contract (never throws)", () => {
 });
 
 describe("search / call / status against a live (fake) catalog", () => {
-  test("client search loads a bounded exact subset and durable replay rebuilds it", async () => {
+  test("client search loads a bounded exact subset and a cold worker rebuilds it from state", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
     const connectors = createConnectors({
       getToken: () => "tok",
@@ -215,7 +225,7 @@ describe("search / call / status against a live (fake) catalog", () => {
       searchLimitMax: 2,
       logger: silentLogger,
     });
-    const output = await connectors.clientSearch(
+    const result = await connectors.clientSearch(
       makeCtx(),
       {
         arguments: { keywords: "search github", service: "github", limit: 25 },
@@ -223,27 +233,30 @@ describe("search / call / status against a live (fake) catalog", () => {
       },
       "openai__",
     );
+    const output = result.output;
     expect(output.tools).toHaveLength(2);
     expect(output.tools.every((tool) => tool.name.startsWith("openai__apps_github_"))).toBe(true);
     expect(output.tools.every((tool) => tool.description.includes("[eve catalog: "))).toBe(true);
 
-    const replay = await connectors.begin(
-      makeCtx([
-        {
-          role: "tool",
-          content: [
-            {
-              type: "tool-result",
-              toolCallId: "call_123",
-              toolName: "tool_search",
-              output: { type: "json", value: output },
-            },
-          ],
-        },
-      ]),
+    const workingSet = mergeConnectorWorkingSet(null, {
+      authority: "user:test-idp:user-1",
+      catalogFingerprint: result.catalogFingerprint,
+      items: result.items,
+      source: "client",
+      max: 30,
+    });
+    const restarted = createConnectors({
+      getToken: () => "tok",
+      baseUrl: server.url,
+      searchLimitMax: 2,
+      logger: silentLogger,
+    });
+    const replay = await restarted.begin(makeCtx(), workingSet);
+    expect(replay?.loaded.map((entry) => entry.item.name)).toEqual(
+      result.items.map((item) => item.name),
     );
-    expect(replay?.loaded.map((entry) => entry.providerName)).toEqual(
-      output.tools.map((tool) => tool.name),
+    expect(replay?.loaded.map((entry) => entry.description)).toEqual(
+      output.tools.map((tool) => tool.description),
     );
   });
 
@@ -257,7 +270,7 @@ describe("search / call / status against a live (fake) catalog", () => {
     });
     await expect(
       connectors.clientSearch(makeCtx(), { keywords: "no-such-capability" }, "openai__"),
-    ).resolves.toEqual({ tools: [] });
+    ).resolves.toMatchObject({ output: { tools: [] }, items: [] });
     await expect(
       connectors.clientSearch(
         makeCtx(),
@@ -270,7 +283,7 @@ describe("search / call / status against a live (fake) catalog", () => {
     ).rejects.toThrow(/Unknown service/);
     await expect(
       connectors.clientSearch(makeCtx(), { keywords: "search" }, "openai__"),
-    ).resolves.toEqual({ tools: [] });
+    ).resolves.toMatchObject({ output: { tools: [] }, items: [] });
 
     const noToken = createConnectors({ getToken: () => null, logger: silentLogger });
     await expect(
@@ -307,14 +320,24 @@ describe("search / call / status against a live (fake) catalog", () => {
       baseUrl: server.url,
       logger: silentLogger,
     });
-    const results = await connectors.search(makeCtx(), { keywords: "search issues", service: "github" });
+    const { items: results, output } = await connectors.search(makeCtx(), {
+      keywords: "search issues",
+      service: "github",
+    });
     expect(results[0]?.name).toBe("apps_github_search_issues");
     expect(results[0]?.upstream).toBe("github.search_issues");
+    expect(output.loaded[0]).toEqual({
+      name: "apps_github_search_issues",
+      summary: "Search issues and pull requests in GitHub repositories.",
+    });
+    expect(JSON.stringify(output)).not.toContain("inputSchema");
 
-    const writes = await connectors.search(makeCtx(), { keywords: "create issue" });
+    const { items: writes } = await connectors.search(makeCtx(), { keywords: "create issue" });
     const create = writes.find((item) => item.upstream === "github.create_issue");
     expect(create?.description).toContain("[write — requires approval]");
-    const destructive = await connectors.search(makeCtx(), { keywords: "delete branch" });
+    const { items: destructive } = await connectors.search(makeCtx(), {
+      keywords: "delete branch",
+    });
     expect(destructive[0]?.description).toContain("[destructive write — requires approval]");
 
     await expect(
@@ -337,20 +360,20 @@ describe("search / call / status against a live (fake) catalog", () => {
     expect(session?.deferred.every((item) => item.service === "github")).toBe(true);
     expect(session?.searchToolDescription).not.toContain("google_drive");
 
-    const results = await connectors.search(makeCtx(), { keywords: "" });
+    const { items: results } = await connectors.search(makeCtx(), { keywords: "" });
     expect(results.every((item) => item.service === "github")).toBe(true);
-    const replayed = await connectors.begin(
-      makeCtx([
-        discoveredMessage([
-          {
-            ...searchItem,
-            name: "apps_google_drive_search_files",
-            upstream: "google_drive.search_files",
-            service: "google_drive",
-          },
-        ]),
-      ]),
-    );
+    const replayed = await connectors.begin(makeCtx(), {
+      version: 1,
+      authority: "user:test-idp:user-1",
+      catalogFingerprint: session?.catalogFingerprint ?? "",
+      tools: [
+        {
+          name: "apps_google_drive_search_files",
+          upstream: "google_drive.search_files",
+          source: "search",
+        },
+      ],
+    });
     expect(replayed?.discovered).toEqual([]);
     expect(await connectors.status(makeCtx())).toMatchObject({
       catalog: { ok: true, services: [{ service: "github", tools: 4 }] },
@@ -370,7 +393,9 @@ describe("search / call / status against a live (fake) catalog", () => {
       baseUrl: server.url,
       logger: silentLogger,
     });
-    const results = await connectors.search(makeCtx(), { keywords: "hotline annotations" });
+    const { items: results } = await connectors.search(makeCtx(), {
+      keywords: "hotline annotations",
+    });
     const hotline = results.find((item) => item.upstream === "hotline.call");
     expect(hotline).toMatchObject({ readOnly: false, destructive: true });
   });

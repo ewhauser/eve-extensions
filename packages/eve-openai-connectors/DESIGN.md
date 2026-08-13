@@ -125,9 +125,9 @@ Two properties define the shape.
 
 **Client-executed tool search is the default.** A catalog of ~189 tools still makes the initial wire request grow even when its schemas are deferred, because hosted search receives every name and description. The extension therefore advertises one fixed OpenAI `tool_search` marker with `execution: "client"`. A `tool_search_call` carries `{ arguments, call_id }`; the extension searches the current user's authorized catalog and returns `{ tools }`, which the AI SDK emits as `tool_search_output` with the same call id. Only a count- and byte-bounded exact subset is loaded, so initial request size is independent of catalog size.
 
-Every returned definition contains the complete normalized catalog fingerprint in its description. On the next step, durable `tool_search_output` history is parsed and each definition is matched against the current authorized catalog by provider-visible name, schema, description, and fingerprint. Catalog or credential drift invalidates the definition and forces a new search. Execution still reauthorizes through the normal connector call path and uses the same approval policy.
+Every successful search also writes a small Eve `defineState` manifest containing the authority, complete normalized catalog fingerprint, mapped/upstream names, and discovery source. On the next step, those references are joined against the current authorized catalog; schemas, descriptions, annotations, and approval policy come only from that catalog. Catalog or credential drift invalidates the working set and forces a new search. Execution still reauthorizes through the normal connector call path and uses the same approval policy.
 
-**Progressive search remains the fallback.** On providers without OpenAI client tool search, the marker remains a normal bounded search function. With `discovery: "search"`, the model instead sees `openai__search`, gets matching tools, and calls them on the next step. Previously discovered search-mode tools are rebuilt from history without a catalog fetch, so an outage does not remove tools already discovered in that conversation. `discovery: "deferred"` preserves the earlier full-catalog hosted-search behavior as an explicit compatibility mode.
+**Progressive search remains the fallback.** On providers without OpenAI client tool search, the marker remains a normal bounded search function. With `discovery: "search"`, the model instead sees `openai__search`, receives only loaded names and short summaries, and calls materialized definitions on the next step. Transcript results never carry schemas or serve as persistence. `discovery: "deferred"` preserves the earlier full-catalog hosted-search behavior as an explicit compatibility mode.
 
 The connector mapper produces names relative to the extension. Eve then adds the mount namespace. The package requires the short `openai` mount so the full `openai__...` name stays within the 64-character provider limit.
 
@@ -189,11 +189,11 @@ mountedName(upstream)  = "openai__" + relativeName(upstream)
 - If a relative name would exceed 56 characters, truncate it and append `_` plus the first 6 hex characters of the SHA-256 of the **full upstream name**. Deterministic across processes; no counters, no state.
 - Sanitize any character outside `[a-zA-Z0-9_-]` to `_` as a final pass, in case a future connector introduces one.
 
-**The reverse mapping must be authoritative — never reconstruct it by string surgery.** `google_drive_foo` is ambiguous: it could be `google_drive.foo` or `google.drive_foo`. The exact `upstream` string travels alongside every mapped name, in the cache and in every search result. **Any code that derives the dotted name by splitting on `_` is a bug.**
+**The reverse mapping must be authoritative — never reconstruct it by string surgery.** `google_drive_foo` is ambiguous: it could be `google_drive.foo` or `google.drive_foo`. The exact `upstream` string travels alongside every mapped name in the inventory and durable reference manifest, but is not exposed in the compact model-facing search result. **Any code that derives the dotted name by splitting on `_` is a bug.**
 
 **`search(inventory, { service?, keywords, limit })`.** Token-overlap scoring: tokenize on `[\s_\-./]+`, drop tokens of length ≤ 1, score 3 per name-token hit and 1 per description-token hit, sort descending, take `limit`. If `service` is given but unknown, throw an error listing the available services — a wrong service name should be self-correcting for the model.
 
-Each result item is exactly:
+Each current-catalog item used internally is exactly:
 
 ```ts
 {
@@ -207,7 +207,7 @@ Each result item is exactly:
 }
 ```
 
-Everything needed to rebuild a callable tool is in this object — which is precisely what makes offline materialization work (§4). `searchResultsFromMessages(messages)` parses these back out of conversation history, deduplicating by `name`, most recent wins.
+Search returns two views inside the executor: these complete current-catalog items for the state update, and a model-facing `{ loaded: [{ name, summary }] }` value. Only `{ name, upstream, source }` references enter the durable manifest. Callable definitions are reconstructed by joining those references with a matching current catalog, never from the model-visible result or manifest alone.
 
 ### 5.4 `policy` — approval tiering
 
@@ -236,13 +236,15 @@ Approval is only honored by Eve for **step-scoped** dynamic tools, whose live `e
 Composed inside the extension from `connectors.begin`, `connectors.search`, `connectors.call`, and `connectors.approvalFor`. The contract, in order, with a hard rule that **the resolver never throws**:
 
 1. Return `null` immediately when disabled, when there is no principal, or when `getToken` yields `null`. These are the common paths and must cost nothing.
-2. Attempt an inventory load under a short overall budget (~5s). **On failure, do not return `null`** — continue to step 4 with an empty catalog so already-discovered tools remain visible. Their execution still revalidates current catalog membership and fails closed if that check cannot complete. Log once per principal.
+2. Attempt an inventory load under a short overall budget (~5s). **On failure, do not return `null`** — continue to step 4 with an empty catalog and no materialized connector tools. Durable references are never treated as authority without a current catalog. Log once per principal.
 3. In default client mode, emit one relative `client_tool_search` marker. The Eve patch replaces it with OpenAI's client-executed provider tool while retaining its execute closure. Search input is validated strictly, catalog lookup is latency-bounded, result count uses `searchLimitMax`, and serialized output uses `clientSearchMaxBytes`.
 4. Outside client mode, emit relative `search` and optional `status` entries. Eve qualifies them as `openai__search` and `openai__status`. Search results explain that returned names receive the same `openai__` namespace on the next step. Client mode omits both so its cold extension contribution is exactly one search tool.
-5. Rebuild previously discovered tools and client-loaded definitions from durable conversation history, capped at `maxMaterializedTools` (default 30, most recent first) to bound context. Progressive results can be rebuilt offline. Client-loaded results additionally require a current catalog and exact authorization/version/schema matching.
+5. Read the extension-owned working set, require its authority and catalog fingerprint to match, and join each mapped/upstream reference against the current catalog. Keep the manifest and materialized set capped at `maxMaterializedTools` (default 30), deterministically ordered with the newest search's relevance order first. The manifest contains no schemas, descriptions, credentials, arguments, or results.
 6. Every connector `execute` re-loads current per-principal authorization, verifies that the stored upstream tool is still present, and compares all policy/schema-relevant descriptor fields before calling `callTool(item.upstream, input)` — the stored upstream string, never a derived one. Catalog removal or credential-driven descriptor changes fail closed before the network call. Successful calls return `structuredContent ?? content`; `isError: true` becomes a thrown error carrying returned text so the model can adapt.
 
 **Why step-scoped**, given session- and turn-scoped resolvers are cheaper: only step scope refreshes between model calls within a turn, which is what makes discover-then-call work in a single turn; and only step scope honors `approval`.
+
+**Legacy sessions:** no transcript migration is attempted. Search results emitted before the working-set format existed may contain stale schemas and policy, so they are ignored and the model must search again. This one-time availability cost preserves the current-catalog authorization boundary.
 
 ---
 
@@ -292,9 +294,9 @@ Ordered so failures surface as early and cheaply as possible.
 
 1. **Name mapping (offline, no network).** Run a recorded catalog snapshot through the mapper: assert every output matches `^[a-zA-Z0-9_-]{1,64}$`, the mapping is injective, round-tripping through the stored `upstream` recovers the original exactly, and a synthetic 70-character name yields a stable hashed form. **Write this test first** — it is the one that catches the §3 failure class, which every static check misses.
 2. **Policy tiering.** Read-only auto-allows; write requires approval; destructive escalates; **absent annotations are treated as destructive**.
-3. **Resolver resilience.** With a catalog stub that throws, the resolver still returns search metadata plus tools rebuilt from synthetic namespaced message history, and never throws. With `getToken` returning `null`, it returns `null` without touching the network.
+3. **Resolver resilience.** With a catalog stub that throws, the resolver returns search metadata but no tools from durable state or synthetic transcript history, and never throws. With `getToken` returning `null`, it returns `null` without touching the network.
 4. **Protocol client.** Against a local fake MCP server: JSON and SSE response bodies both parse; `Mcp-Session-Id` is echoed when present and omitted when absent; 401 maps to `ConnectorAuthError`; `isError: true` results throw with the upstream text.
-5. **Client tool search.** Assert the patched Eve bridge emits `openai.tool_search` with `execution: "client"`, the initial serialized provider tool is identical for synthetic 10- and 200-tool catalogs, malformed/no-match/oversized/unauthorized/stale/failing searches fail closed, latency is bounded, and durable multi-step replay loads only exact current definitions.
+5. **Client tool search and durable working set.** Assert the patched Eve bridge emits `openai.tool_search` with `execution: "client"`, the initial serialized provider tool is identical for synthetic 10- and 200-tool catalogs, malformed/no-match/oversized/unauthorized/stale/failing searches fail closed, and latency is bounded. Assert the reference-only manifest survives Eve serialization, opaque transcript compaction, turns, and cold-worker replay; principal/catalog changes, removed tools, outages, duplicate discoveries, and caps fail closed or remain bounded as appropriate.
 6. **Live integration.** A probe script against a real token: initialize, list, namespace counts, one read-only call. Not a unit test — an operational tool for verifying a token and endpoint health.
 7. **End-to-end in a real Eve agent.** Mount the package as `openai`, drive a session that performs `tool_search` and then calls a loaded read-only tool, and **assert on the complete tools payload the model API actually receives**. The first request must contain no connector catalog names or schemas; the subsequent request must contain only the selected definitions.
 
@@ -309,7 +311,7 @@ Ordered so failures surface as early and cheaply as possible.
 | Catalog grows past the 64-character budget | Low | Relative names reserve eight characters for `openai__` and use deterministic hash truncation; asserted in tests |
 | Tool-name collisions from a future connector | Low | Deterministic sorted first-wins with a warn log; injectivity asserted in tests |
 | Workspace policy blocks parts of the catalog | Low | Server-side enforcement is expected behavior; `openai__status` surfaces catalog health |
-| Client or progressive search changes the tool set between steps | Medium | Results are count- and byte-bounded, rebuilt from durable history, catalog-versioned, and reauthorized before execution |
+| Client or progressive search changes the tool set between steps | Medium | Reference-only durable state is count-bounded, catalog-versioned, authority-bound, and joined against current authorization before materialization |
 | A large or slow client-search response expands latency/context | Medium | `searchLimitMax`, `clientSearchMaxBytes`, and `clientSearchTimeoutMs` impose independent bounds |
 | Eve patch drifts on upgrade | Medium | Eve is pinned exactly; the patch is registered through pnpm and shipped with the package; revalidate against upstream PR #1741 before upgrading |
 | Integrator supplies an OpenAI API key | Low | Documented prominently; an authentication failure is visible through `openai__status` |
