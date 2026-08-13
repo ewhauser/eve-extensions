@@ -145,11 +145,11 @@ describe("durable client tool-search replay", () => {
       30,
     );
     expect(loaded.map((entry) => entry.item.upstream)).toEqual([
-      "google_drive.search_files",
-      "github.search_issues",
       "github.create_issue",
+      "github.search_issues",
+      "google_drive.search_files",
     ]);
-    expect(loaded[0]?.providerName).toBe("openai__google_drive_search_files");
+    expect(loaded[0]?.providerName).toBe("openai__github_create_issue");
   });
 
   test("supports namespaced marker results, JSON strings, multi-step dedupe, and caps", () => {
@@ -170,9 +170,42 @@ describe("durable client tool-search replay", () => {
     ];
     const loaded = clientToolSearchResultsFromMessages(messages, inventory, 2);
     expect(loaded.map((entry) => entry.item.upstream)).toEqual([
-      "github.search_issues",
       "github.create_issue",
+      "github.search_issues",
     ]);
+  });
+
+  test("preserves relevance order within the newest result when capped", () => {
+    const loaded = clientToolSearchResultsFromMessages(
+      [toolResult("tool_search", definitions)],
+      inventory,
+      1,
+    );
+    expect(loaded.map((entry) => entry.providerName)).toEqual([definitions[0]!.name]);
+  });
+
+  test("tries every matching namespace suffix before rejecting a definition", () => {
+    const ambiguous = buildInventory(
+      [
+        { name: "alpha", description: "Same descriptor.", inputSchema: { type: "object" } },
+        { name: "z__alpha", description: "Same descriptor.", inputSchema: { type: "object" } },
+      ],
+      "",
+    );
+    const target = ambiguous.byName.get("z__alpha")!;
+    const [definition] = materializeClientToolSearchOutput(
+      ambiguous,
+      [target],
+      "openai__",
+      64 * 1024,
+    ).tools;
+    expect(
+      clientToolSearchResultsFromMessages(
+        [toolResult("tool_search", [definition])],
+        ambiguous,
+        30,
+      ).map((entry) => entry.item.name),
+    ).toEqual(["z__alpha"]);
   });
 
   test("drops malformed, unauthorized, schema-tampered, and stale definitions", () => {

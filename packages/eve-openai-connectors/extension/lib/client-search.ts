@@ -199,15 +199,18 @@ function matchLoadedDefinition(
   }
 
   const candidateName = candidate.name;
-  let item = inventory.byName.get(candidateName);
-  if (!item) {
-    item = inventory.items.find((entry) => candidateName.endsWith(`__${entry.name}`));
+  const exact = inventory.byName.get(candidateName);
+  const candidates = exact
+    ? [exact]
+    : inventory.items
+        .filter((entry) => candidateName.endsWith(`__${entry.name}`))
+        .sort((a, b) => b.name.length - a.name.length);
+  for (const item of candidates) {
+    if (candidate.description !== clientToolDescription(item, inventory.fingerprint)) continue;
+    if (stableJson(candidate.parameters) !== stableJson(item.inputSchema)) continue;
+    return Object.freeze({ item, providerName: candidateName, description: candidate.description });
   }
-  if (!item) return null;
-  if (candidate.description !== clientToolDescription(item, inventory.fingerprint)) return null;
-  if (stableJson(candidate.parameters) !== stableJson(item.inputSchema)) return null;
-
-  return Object.freeze({ item, providerName: candidateName, description: candidate.description });
+  return null;
 }
 
 /**
@@ -220,7 +223,7 @@ export function clientToolSearchResultsFromMessages(
   inventory: Inventory,
   max: number,
 ): LoadedConnectorTool[] {
-  const byName = new Map<string, LoadedConnectorTool>();
+  const resultGroups: LoadedConnectorTool[][] = [];
   for (const message of messages) {
     if (!isRecord(message) || message.role !== "tool" || !Array.isArray(message.content)) continue;
     for (const part of message.content) {
@@ -229,13 +232,27 @@ export function clientToolSearchResultsFromMessages(
       }
       const value = unwrapToolOutput(part.output);
       if (!isRecord(value) || !Array.isArray(value.tools)) continue;
+      const group: LoadedConnectorTool[] = [];
       for (const candidate of value.tools) {
         const loaded = matchLoadedDefinition(candidate, inventory);
         if (!loaded) continue;
-        byName.delete(loaded.item.name);
-        byName.set(loaded.item.name, loaded);
+        group.push(loaded);
       }
+      if (group.length > 0) resultGroups.push(group);
     }
   }
-  return [...byName.values()].reverse().slice(0, Math.max(0, max));
+
+  const limit = Math.floor(Math.max(0, max));
+  if (!(limit > 0)) return [];
+  const loaded: LoadedConnectorTool[] = [];
+  const seen = new Set<string>();
+  for (const group of resultGroups.reverse()) {
+    for (const candidate of group) {
+      if (seen.has(candidate.item.name)) continue;
+      seen.add(candidate.item.name);
+      loaded.push(candidate);
+      if (loaded.length >= limit) return loaded;
+    }
+  }
+  return loaded;
 }

@@ -243,7 +243,7 @@ describe("search / call / status against a live (fake) catalog", () => {
       ]),
     );
     expect(replay?.loaded.map((entry) => entry.providerName)).toEqual(
-      [...output.tools].reverse().map((tool) => tool.name),
+      output.tools.map((tool) => tool.name),
     );
   });
 

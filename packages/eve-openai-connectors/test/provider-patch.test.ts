@@ -36,7 +36,10 @@ describe("Eve client tool-search provider bridge", () => {
       expect([hostedDeferred, marker].map((tool) => isDeferredTool(tool as never)).some(Boolean)).toBe(
         true,
       );
-      const resolved = await resolveToolSearchProviderTool("openai");
+      const resolved = await resolveToolSearchProviderTool("openai", [
+        hostedDeferred as never,
+        marker as never,
+      ]);
       expect(resolved.name).toBe("tool_search");
       expect(resolved.replacedTool).toBe(marker);
       expect(resolved.tool).toMatchObject({
@@ -57,6 +60,24 @@ describe("Eve client tool-search provider bridge", () => {
     const largeRequestTool = await resolveFor(200);
     expect(largeRequestTool).toBe(smallRequestTool);
     expect(largeRequestTool).not.toContain("private_service_tool_199");
+  });
+
+  test("does not reuse a client marker from a previous tool-set scan", async () => {
+    const staleMarker = markerForCatalogSize(10);
+    expect(isDeferredTool(staleMarker as never)).toBe(true);
+
+    const hostedDeferred = {
+      description: "Hosted deferred tool from a later request.",
+      providerOptions: { openai: { deferLoading: true } },
+    };
+    const resolved = await resolveToolSearchProviderTool("openai", [hostedDeferred as never]);
+    expect(resolved.replacedTool).toBeUndefined();
+    expect(resolved.tool).toMatchObject({
+      type: "provider",
+      isProviderExecuted: false,
+      id: "openai.tool_search",
+      args: {},
+    });
   });
 
   test("round-trips a client call_id and bounded tool_search_output on the Responses wire", async () => {
@@ -138,7 +159,7 @@ describe("Eve client tool-search provider bridge", () => {
       execute,
     };
     expect([marker].map((tool) => isDeferredTool(tool as never)).some(Boolean)).toBe(true);
-    const resolved = await resolveToolSearchProviderTool("openai");
+    const resolved = await resolveToolSearchProviderTool("openai", [marker as never]);
     expect(resolved.replacedTool).toBe(marker);
     const openai = createOpenAI({ apiKey: "test", fetch: mockFetch });
     await generateText({
