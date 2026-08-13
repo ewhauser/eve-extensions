@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-ambient-v0.3.0...eve-ambient-v0.4.0) (2026-08-13)
+
+
+### Features
+
+* **eve-ambient:** optional celld-backed correlation mailbox ([#45](https://github.com/ewhauser/eve-extensions/issues/45)) ([6b937ec](https://github.com/ewhauser/eve-extensions/commit/6b937ec27e9e8bb5b6ba4f262865346a0499f1db))
+
 ## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-ambient-v0.2.0...eve-ambient-v0.3.0) (2026-08-13)
 
 
