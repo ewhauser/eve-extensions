@@ -14,7 +14,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 LOWER_SOURCE = "/opt/eve/lower"
 STATE = "/opt/eve/state"
 BACKING_IMAGE = f"{STATE}/controlled-root.ext4"
@@ -34,6 +34,11 @@ writes = {}
 dirty = False
 frozen = False
 microvm_id = None
+activation_id = None
+controller_ca_sha256 = None
+controller_session_token = None
+credential_placeholder = None
+credential_placeholder_environment_variable = None
 
 
 def run_checked(args, **kwargs):
@@ -155,6 +160,8 @@ def chroot_command(command, cwd="/workspace", env=None):
     workload_environment = dict(process_env)
     if env:
         workload_environment.update({str(key): str(value) for key, value in env.items()})
+    if credential_placeholder is not None:
+        workload_environment[credential_placeholder_environment_variable] = credential_placeholder
     launcher_payload = json.dumps(
         {"command": command, "cwd": cwd, "environment": workload_environment},
         separators=(",", ":"),
@@ -476,15 +483,48 @@ def abort_write(write_id):
 
 
 def reset_for_run(payload):
-    global dirty, frozen, microvm_id
+    global activation_id, controller_ca_sha256, controller_session_token, credential_placeholder, credential_placeholder_environment_variable, dirty, frozen, microvm_id
     microvm_id = payload.get("microvmId")
     if not isinstance(microvm_id, str) or not microvm_id:
         raise ValueError("run hook payload omitted microvmId")
     run_hook_payload = payload.get("runHookPayload")
-    if isinstance(run_hook_payload, str) and run_hook_payload:
-        decoded = json.loads(run_hook_payload)
-        if decoded.get("controllerProtocolVersion") != PROTOCOL_VERSION:
-            raise ValueError("run hook requested an incompatible controller protocol")
+    if not isinstance(run_hook_payload, str) or not run_hook_payload:
+        raise ValueError("run hook omitted activation payload")
+    if len(run_hook_payload.encode("utf-8")) >= 4096:
+        raise ValueError("activation payload must be smaller than 4 KiB")
+    decoded = json.loads(run_hook_payload)
+    if decoded.get("controllerProtocolVersion") == PROTOCOL_VERSION:
+        activation_id = None
+        controller_ca_sha256 = None
+        controller_session_token = None
+        credential_placeholder = None
+        credential_placeholder_environment_variable = None
+        decoded = None
+    allowed = {"activationId", "controllerCaSha256", "controllerSessionToken", "placeholder", "protocolVersion", "version"}
+    if decoded is not None and (set(decoded) != allowed or decoded.get("version") != 2 or decoded.get("protocolVersion") != PROTOCOL_VERSION):
+        raise ValueError("run hook requested an invalid protocol v2 activation")
+    if decoded is None:
+        pass
+    else:
+        activation_id = decoded.get("activationId")
+        controller_ca_sha256 = decoded.get("controllerCaSha256")
+        controller_session_token = decoded.get("controllerSessionToken")
+        placeholder = decoded.get("placeholder")
+        if not isinstance(activation_id, str) or not isinstance(controller_session_token, str):
+            raise ValueError("activation authentication fields are invalid")
+        if not isinstance(controller_ca_sha256, str) or len(controller_ca_sha256) != 64:
+            raise ValueError("activation CA digest is invalid")
+        if not isinstance(placeholder, dict) or set(placeholder) != {"generation", "placement", "token", "trustedBindingGeneration"}:
+            raise ValueError("activation placeholder metadata is invalid")
+        placement = placeholder.get("placement")
+        credential_placeholder = placeholder.get("token")
+        credential_placeholder_environment_variable = placement.get("environmentVariable") if isinstance(placement, dict) else None
+        if not isinstance(credential_placeholder, str) or not isinstance(credential_placeholder_environment_variable, str):
+            raise ValueError("activation placeholder placement is invalid")
+        if credential_placeholder.count(".") == 2 or controller_session_token.count(".") == 2:
+            raise ValueError("activation must not contain JWT-shaped egress authorization material")
+        if credential_placeholder == controller_session_token:
+            raise ValueError("placeholder and controller authentication must be separate")
     for write_id in list(writes):
         abort_write(write_id)
     shutil.rmtree(LOGS, ignore_errors=True)
@@ -563,12 +603,24 @@ class JsonHandler(BaseHTTPRequestHandler):
 
 
 class ControlHandler(JsonHandler):
+    def authenticate(self):
+        return controller_session_token is None or self.headers.get("X-Eve-Controller-Session") == controller_session_token
+
+    def dispatch_authenticated(self, callback):
+        if not self.authenticate():
+            self.send_json(401, {"error": "Unauthorized"})
+            return
+        callback()
+
     def do_GET(self):
+        return self.dispatch_authenticated(self._do_GET)
+
+    def _do_GET(self):
         try:
             parsed = urlparse(self.path)
             if parsed.path in ("/", "/v1/health", "/v1/heartbeat"):
                 ensure_mounted()
-                self.send_json(200, {"protocolVersion": PROTOCOL_VERSION, "status": "ready", "microvmId": microvm_id})
+                self.send_json(200, {"activationId": activation_id, "controllerCaSha256": controller_ca_sha256, "protocolVersion": PROTOCOL_VERSION, "status": "ready", "microvmId": microvm_id})
                 return
             if parsed.path == "/v1/files":
                 query = parse_qs(parsed.query)
@@ -600,6 +652,9 @@ class ControlHandler(JsonHandler):
             self.handle_error(error)
 
     def do_POST(self):
+        return self.dispatch_authenticated(self._do_POST)
+
+    def _do_POST(self):
         try:
             if self.path == "/v1/processes":
                 self.send_json(201, {"processId": start_process(self.read_json())})
@@ -628,6 +683,9 @@ class ControlHandler(JsonHandler):
             self.handle_error(error)
 
     def do_PUT(self):
+        return self.dispatch_authenticated(self._do_PUT)
+
+    def _do_PUT(self):
         try:
             parsed = urlparse(self.path)
             segments = parsed.path.strip("/").split("/")
@@ -641,6 +699,9 @@ class ControlHandler(JsonHandler):
             self.handle_error(error)
 
     def do_DELETE(self):
+        return self.dispatch_authenticated(self._do_DELETE)
+
+    def _do_DELETE(self):
         try:
             parsed = urlparse(self.path)
             if parsed.path == "/v1/files":
