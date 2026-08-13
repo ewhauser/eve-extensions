@@ -1,7 +1,7 @@
 /**
  * An in-process celld fleet for tests.
  *
- * The cells are the real `MonitorInstance` class from `celld-worker/index.ts`
+ * The cells are the real `MonitorInstance` class from `src/celld-worker.ts`
  * — same storage access patterns, same alarm arming, same checkpoint order —
  * running against a Map-backed Durable Object state with a captured alarm and
  * an injected clock and fetch. What the harness fakes is the fleet around
@@ -12,7 +12,7 @@
  * that throws leaves its alarm scheduled, the way celld's retry ladder does.
  */
 
-import { MonitorInstance } from "../celld-worker/index.js";
+import { MonitorInstance } from "../src/celld-worker.js";
 import type { MonitorClock } from "../src/types.js";
 
 export interface FakeStorageEntry {

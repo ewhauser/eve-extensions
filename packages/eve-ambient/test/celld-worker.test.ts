@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
-import { MonitorInstance } from "../celld-worker/index.js";
+import { MonitorInstance } from "../src/celld-worker.js";
 import {
   CELLD_DEFINITION_VERSION_MISMATCH,
   CELLD_MALFORMED_APPEND,

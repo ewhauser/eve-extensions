@@ -26,6 +26,11 @@ CELLD_ESBUILD=/path/to/esbuild node build.mjs
 celld deploy --config wrangler.jsonc
 ```
 
+`index.ts` is a one-line re-export of `eve-ambient/celld-worker`, so the copy
+resolves the implementation through your application's `node_modules` and needs
+nothing else from the package. Keep it beside a `node_modules` that has
+`eve-ambient` installed and both `build.mjs` and `celld deploy` will bundle it.
+
 celld deploys are stop-the-world fleet restarts today (`rollout.percent` is
 not exposed), and cells resume from durable storage afterwards. Treat a worker
 change like a schema change: the pinned configuration in existing cells is not

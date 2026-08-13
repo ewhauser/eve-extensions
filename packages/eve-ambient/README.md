@@ -297,7 +297,8 @@ contains no tool, credential, session-history, or delivery capability.
   reading, the state value is derived from durable instance fields at
   hydration, and the store's `nextEvaluationAt` due-scan timer is computed from
   machine context. Persistence stays in the `MonitorStore`; no live actors or
-  in-process timers are involved.
+  in-process timers are involved. The same machine can run in celld cells
+  instead — see "celld mailbox backend" below.
 - Ingress, subscription results, mailboxes, timer generations, runs, evidence
   snapshots, quotas, dead letters, and deployment identity are durable.
 - Debounce closes on quiet period, mandatory maximum wait, count, or byte
@@ -326,6 +327,143 @@ not represented as deterministic. Runs expose `replayExpiresAt`; recorded and
 live replay require the normalized source payloads and therefore share their
 shorter payload-retention lifetime even though decision records remain available
 for the configured decision retention.
+
+## celld mailbox backend (experimental)
+
+The correlation mailbox — the per-key buffer that accumulates post-filter
+events and decides when a batch is due — can run in
+[celld](https://github.com/denoland/celld) cells instead of in the store. One
+cell per correlation instance, holding the same `StoredMonitorInstance` record
+and running the same statechart, with the cell's durable alarm replacing the
+`nextEvaluationAt` due-scan. Nothing else moves: the store remains the system
+of record for runs, decisions, dead letters, and audit.
+
+```text
+channels
+    │  publish()
+    ▼
+ingress pipeline (unchanged)        schema, dedupe, ingress sequence, filter,
+    │                              correlate, loop prevention, event budgets
+    │  POST /cells/<instanceKey>/append  {ref, bytes, seq, config}
+    ▼
+celld cells                        the statechart, buffer/cooldown, alarms.
+    │                              No model credentials in the fleet.
+    │  alarm() → CLAIM → POST evaluation {runId, batch refs, instanceView}
+    ▼
+runtime.handleEvaluation()         decision, budgets, evidence, route,
+    │                              delivery; writes the run to the store
+    │  {status, decision, binding} → cell dispatches RUN_COMPLETED
+    ▼
+delivery channels                  unchanged: idempotency keys, coalescing
+```
+
+Only post-filter appends leave the runtime. Payloads stay in the event store
+from ingress and the evaluator reads them by ref; the cell keeps its own copy
+for inspection only. Because run records are written identically in both
+tiers, `replay()`, `listRuns()`, and `listDeadLetters()` behave the same.
+
+### When to choose it
+
+Choose it when per-key serialization is the bottleneck: many concurrent
+correlation keys, a due-scan that no longer keeps up, or advisory-lock traffic
+coupling the mailbox to your database's connection pool. Cells scale with
+nodes rather than with one database, timers are native instead of swept, and
+idle keys cost bucket storage rather than resident memory.
+
+Stay on the store tier otherwise. It is the default, it is the small-deployment
+answer, and it stays conformance-tested — the two tiers execute the same
+`dispatchLifecycle`, so moving between them is a configuration change.
+
+### Setup
+
+1. Deploy the worker. It ships in the package at `celld-worker/`; see
+   `celld-worker/README.md`. It carries no monitor configuration — cells learn
+   theirs from the first append — so one deployment serves every monitor.
+
+   ```sh
+   cp -r node_modules/eve-ambient/celld-worker ./mailbox   # edit its vars
+   CELLD_ESBUILD=/path/to/esbuild node ./mailbox/build.mjs # pre-flight bundle
+   celld deploy --config ./mailbox/wrangler.jsonc
+   ```
+
+   The copied `index.ts` re-exports `eve-ambient/celld-worker`, so it resolves
+   through your own `node_modules` and stays in step with the installed
+   version.
+
+2. Mount the evaluator on a route the fleet can reach.
+
+   ```ts
+   import { createEvaluationFetchHandler } from "eve-ambient/celld";
+
+   const evaluate = createEvaluationFetchHandler(runtime, {
+     secret: process.env.MAILBOX_SECRET!,
+     path: "/monitor-evaluations",
+   });
+   ```
+
+   `handleEvaluation(request)` is available directly if your server is not
+   fetch-shaped; it takes and returns plain objects.
+
+3. Point the runtime at the fleet.
+
+   ```ts
+   const runtime = new MonitorRuntime({
+     // ...as before
+     mailbox: {
+       mode: "celld",
+       fleetUrl: "http://fleet.internal:8787",
+       evaluatorUrl: "https://app.internal/monitor-evaluations",
+       secret: process.env.MAILBOX_SECRET!,
+     },
+   });
+   ```
+
+   Keep calling `drain()`: ingress, filtering, correlation, and appends still
+   run there. It stops sweeping due instances and due runs, because claiming
+   them would race the cells.
+
+### Tuning
+
+| Setting | Why |
+|---|---|
+| `CELLD_TTL_MS=5000` | Owner takeover costs a lease TTL. Measured p95 9.7s / 4.7s / 2.9s at TTL 10s / 5s / 3s; 5s is the knee, and the dial is noise against workload cost. |
+| `CELLD_WAKER_TICK_MS=5000` | How fast an orphaned alarm is adopted: 8.8s at 5s, versus 56s at the 60s default. |
+| Stable node identities across restarts | A node restarting with the same ID resumes in ~740ms. A *new* ID makes it a node loss, costing a full TTL. |
+| Ingress key affinity, warm cells | Churn plus round-robin routing measured ≈2.5× the S3 operations of an affinity-routed fleet. |
+| `CELLD_LTX_COMPACTION` configured | ~10⁸ segment objects per month at the RFC's rate cap. A requirement, not an optimization. |
+| Internal listener firewalled | celld's internal listener exposes unauthenticated `/shutdown` and `/evict`. The public `/cells` routes are bearer-authenticated by this worker; the internal one is not celld's to authenticate. |
+
+### Limitations
+
+> - **Per-key correlation cardinality is not enforced.** The store tier caps
+>   active keys per tenant with a `countInstances` under a tenant-wide lock;
+>   celld mode has no instance table to count, and the cap is silently
+>   inactive. Event, model-call, model-token, and wake budgets are unaffected
+>   and remain the rate controls. Size the fleet for unbounded key growth, or
+>   cap keys upstream in `correlate()`.
+> - **celld abandons an alarm after six counted handler failures.** A cell that
+>   exhausts the ladder keeps its buffered events and its instance record but
+>   has no timer left. Mitigation: `POST /cells/<instanceKey>/rearm`, which
+>   recomputes the due time with the statechart's own derivation and re-arms.
+>   Alert on runs stuck in `retry` status, and on cells whose
+>   `nextEvaluationAt` is in the past with no `pendingAlarm` in `/state`.
+> - **Deploys are fleet restarts.** celld's staged rollout is not exposed;
+>   changing the worker stops and restarts every node. Cells resume from
+>   durable storage, and a deploy does not rewrite the configuration already
+>   pinned into existing cells.
+> - **The celld#144 workaround is active.** Alarm handlers can overlap
+>   ([celld#144](https://github.com/denoland/celld/issues/144)), so the worker
+>   wraps evaluation in `blockConcurrencyWhile`. That closes the cell's input
+>   gate for the duration of the evaluator call, so appends queue behind an
+>   in-flight evaluation. The block can narrow once the bug is fixed upstream.
+> - **Sink-side idempotency is mandatory.** Delivery is at-least-once: a node
+>   lost mid-delivery produces exactly one duplicate per interruption, with the
+>   same `monitor:<runId>:0` key. Delivery adapters must dedupe on it.
+> - **celld is alpha, and this tier is experimental.** Production adoption is
+>   gated on the four conditions in the spike's Phase 4 decision record: an AWS
+>   latency segment, celld#144 resolved or its workaround formally accepted, a
+>   governance mitigation (pinned audited commit, vendored source, patch
+>   capability), and a measured throughput ceiling.
 
 ## Definition identity and rollout
 

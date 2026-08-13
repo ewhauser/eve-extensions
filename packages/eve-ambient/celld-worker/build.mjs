@@ -6,6 +6,10 @@
 //
 //   node build.mjs
 //
+// index.ts is a one-line re-export of `eve-ambient/celld-worker`, so run this
+// from a directory whose node_modules resolves that package — either in place
+// inside node_modules/eve-ambient, or from a copy inside your application.
+//
 // esbuild is the caller's, not this package's: celld shells out to a binary
 // rather than depending on one, and so does this script. It is resolved from
 // $CELLD_ESBUILD if set — use the same value your fleet uses, so the two
@@ -51,8 +55,9 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 
 console.log(`bundled -> ${outfile} (${statSync(outfile).size} bytes)`);
 
-// The whole point of src/time.ts and src/mailbox.ts is that none of these
-// reach the bundle. (esbuild's own `__require` helper is not a Node import.)
+// The whole point of src/time.ts and src/mailbox.ts importing no Node
+// built-ins is that none of these reach the bundle. (esbuild’s own `__require`
+// helper is not a Node import.)
 const bundle = readFileSync(outfile, "utf8");
 if (/from "node:|Buffer\.byteLength/.test(bundle)) {
   console.error("bundle references Node built-ins; the worker will fail in workerd");
