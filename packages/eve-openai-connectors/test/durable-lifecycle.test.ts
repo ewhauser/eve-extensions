@@ -46,16 +46,15 @@ let server: FakeServer | null = null;
 afterEach(async () => {
   await server?.close();
   server = null;
-  Reflect.deleteProperty(globalThis, Symbol.for("eve.ext-config-scope"));
 });
 
 describe("extension durable discovery lifecycle", () => {
   test("persists compact search results across steps and ignores opaque transcript replacement", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
 
-    // The extension build supplies this scope at mount time. Set the same
-    // ambient value before importing authored source for this lifecycle test.
-    Reflect.set(globalThis, Symbol.for("eve.ext-config-scope"), "test.openai-connectors");
+    // The package namespace must bind config without build-time ambient scope;
+    // production consumers can also import the public `connectors` subpath.
+    expect(Reflect.get(globalThis, Symbol.for("eve.ext-config-scope"))).toBeUndefined();
     const [{ default: extension }, { default: dynamic }] = await Promise.all([
       import("../extension/extension.js"),
       import("../extension/tools/connectors.js"),
