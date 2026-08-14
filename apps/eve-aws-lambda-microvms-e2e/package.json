@@ -7,7 +7,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda-microvms": "3.1075.0",
+    "@aws-sdk/client-lambda-microvms": "3.1105.0",
     "eve": "0.38.0",
     "eve-aws-lambda-microvms": "workspace:*"
   },
