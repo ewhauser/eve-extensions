@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.5.0...eve-openai-connectors-v0.5.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* **openai-connectors:** bind extension config namespace ([#63](https://github.com/ewhauser/eve-extensions/issues/63)) ([38cc1d8](https://github.com/ewhauser/eve-extensions/commit/38cc1d8994ae73c7c067a9e2a98ac5d8ae6bf881))
+
 ## [0.5.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.4.0...eve-openai-connectors-v0.5.0) (2026-08-14)
 
 
