@@ -94,4 +94,6 @@ const config = z
     },
   );
 
-export default defineExtension({ config });
+// Bind the package namespace explicitly so configuration remains available
+// when a production bundle also imports the public `connectors` subpath.
+export default defineExtension({ config }, "eve-openai-connectors");
