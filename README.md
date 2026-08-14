@@ -65,6 +65,12 @@ pnpm test
 pnpm build
 ```
 
+Shared dependency ranges are defined once in the default `catalog` in
+`pnpm-workspace.yaml`; package manifests reference them with `catalog:`. Update
+the catalog entry when upgrading a shared dependency. Version-keyed settings
+such as Eve's patch path and `minimumReleaseAgeExclude` must still be updated
+alongside the catalog entry.
+
 Tests that require external credentials or cloud resources are opt-in. See the
 relevant package README for prerequisites and teardown behavior before running
 an integration or end-to-end suite.

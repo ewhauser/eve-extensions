@@ -58,16 +58,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "eve": "0.38.0",
-    "typescript": "^5.6.0",
-    "vitest": "^4.1.10"
+    "@types/node": "catalog:",
+    "eve": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "eve": "0.38.0"
+    "eve": "catalog:"
   },
   "engines": {
     "node": ">=24"

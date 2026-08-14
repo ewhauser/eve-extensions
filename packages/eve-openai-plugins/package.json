@@ -29,16 +29,16 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "eve": "0.38.0",
+    "@types/node": "catalog:",
+    "eve": "catalog:",
     "eve-openai-connectors": "workspace:*",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "eve": "0.38.0",
+    "eve": "catalog:",
     "eve-openai-connectors": "^0.2.0"
   },
   "peerDependenciesMeta": {
