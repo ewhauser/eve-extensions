@@ -105,7 +105,7 @@ describe("AWS Lambda MicroVM backend", () => {
     expect(handle.session.id).toBe("session-default");
     expect(fixture.api.createImage).toHaveBeenCalledTimes(1);
     expect(fixture.api.runMicrovm).toHaveBeenCalledTimes(1);
-    await handle.shutdown();
+    await handle.stop();
     expect(fixture.api.terminateMicrovm).toHaveBeenCalledTimes(1);
   });
 

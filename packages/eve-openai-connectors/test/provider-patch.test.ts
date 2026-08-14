@@ -35,7 +35,9 @@ describe("Eve client tool-search provider bridge", () => {
       "utf8",
     );
     expect(lifecycle).toContain("eve:absolute:");
-    expect(lifecycle).toContain("startsWith(ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX)");
+    expect(lifecycle).toMatch(
+      /startsWith\((?:ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX|["'`]eve:absolute:["'`])\)/,
+    );
   });
 
   test("selects a later client marker and emits one constant-size OpenAI provider tool", async () => {

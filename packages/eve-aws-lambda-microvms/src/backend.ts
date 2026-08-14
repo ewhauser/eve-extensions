@@ -470,6 +470,13 @@ async function createLeasedSessionHandle(input: {
     }
   }
 
+  async function stop(): Promise<void> {
+    if (shutDown) return;
+    if (!captured) await capture();
+    controller.pauseHeartbeats();
+    shutDown = true;
+  }
+
   return {
     async captureState() {
       return {
@@ -478,13 +485,9 @@ async function createLeasedSessionHandle(input: {
         sessionKey: input.createInput.sessionKey,
       };
     },
-    async shutdown() {
-      if (shutDown) return;
-      if (!captured) await capture();
-      controller.pauseHeartbeats();
-      shutDown = true;
-    },
+    shutdown: stop,
     session,
+    stop,
     useSessionFn: async () => session,
   };
 }
@@ -640,7 +643,7 @@ function stabilizeSessionKey(
 }
 
 /**
- * Eve 0.31.3 scopes keys to the application path. Replace only that generated
+ * Eve 0.38.0 scopes keys to the application path. Replace only that generated
  * scope segment so resources remain stable across build and deployment roots.
  */
 function stabilizeEveScope(

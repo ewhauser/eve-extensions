@@ -1,6 +1,6 @@
 # Eve AWS Lambda MicroVM sandboxes
 
-> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.31.3. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
+> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.38.0. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
 
 The `awsLambdaMicrovm()` backend runs each durable eve sandbox in an ARM64 [AWS Lambda MicroVM](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html). It is explicit opt-in: `defaultBackend()` never selects AWS.
 
@@ -8,10 +8,10 @@ eve creates and tags MicroVM images, launches MicroVMs, and stores image artifac
 
 ## Install
 
-This initial package targets Eve 0.31.3 exactly:
+This initial package targets Eve 0.38.0 exactly:
 
 ```sh
-pnpm add eve@0.31.3 eve-aws-lambda-microvms
+pnpm add eve@0.38.0 eve-aws-lambda-microvms
 ```
 
 ## Configure the backend
@@ -37,7 +37,7 @@ export default defineSandbox({
 });
 ```
 
-`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.31.3's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
+`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.38.0's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
 
 The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
