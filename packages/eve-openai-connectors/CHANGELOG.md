@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.4.0...eve-openai-connectors-v0.5.0) (2026-08-14)
+
+
+### Features
+
+* **openai-connectors:** release service-qualified namespaces ([#61](https://github.com/ewhauser/eve-extensions/issues/61)) ([6ac7342](https://github.com/ewhauser/eve-extensions/commit/6ac73425fa07bb8835a4f3034136698ae7e5db99))
+
 ## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.3.0...eve-openai-connectors-v0.4.0) (2026-08-13)
 
 
