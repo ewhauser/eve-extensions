@@ -4,6 +4,33 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@ai-sdk/openai':
+      specifier: ^4.0.30
+      version: 4.0.34
+    '@aws-sdk/client-lambda-microvms':
+      specifier: 3.1075.0
+      version: 3.1075.0
+    '@types/node':
+      specifier: ^24.0.0
+      version: 24.13.3
+    ai:
+      specifier: ^7.0.58
+      version: 7.0.64
+    eve:
+      specifier: 0.38.0
+      version: 0.38.0
+    typescript:
+      specifier: ^5.6.0
+      version: 5.9.3
+    vitest:
+      specifier: ^4.1.10
+      version: 4.1.10
+    zod:
+      specifier: ^4.4.3
+      version: 4.4.3
+
 patchedDependencies:
   eve@0.38.0: 1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49
 
@@ -14,26 +41,26 @@ importers:
   apps/eve-aws-lambda-microvms-e2e:
     dependencies:
       '@aws-sdk/client-lambda-microvms':
-        specifier: 3.1075.0
+        specifier: 'catalog:'
         version: 3.1075.0
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/eve-aws-lambda-microvms:
     dependencies:
       '@aws-sdk/client-lambda-microvms':
-        specifier: 3.1075.0
+        specifier: 'catalog:'
         version: 3.1075.0
       '@aws-sdk/client-s3':
         specifier: 3.1073.0
@@ -52,128 +79,128 @@ importers:
         specifier: 3.1073.0
         version: 3.1073.0
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       ai:
-        specifier: ^7.0.58
+        specifier: 'catalog:'
         version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
   packages/eve-openai-compaction:
     devDependencies:
       '@ai-sdk/openai':
-        specifier: ^4.0.30
+        specifier: 'catalog:'
         version: 4.0.34(zod@4.4.3)
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       ai:
-        specifier: ^7.0.58
+        specifier: 'catalog:'
         version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
   packages/eve-openai-connectors:
     dependencies:
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@ai-sdk/anthropic':
         specifier: ^4.0.30
         version: 4.0.34(zod@4.4.3)
       '@ai-sdk/openai':
-        specifier: ^4.0.30
+        specifier: 'catalog:'
         version: 4.0.34(zod@4.4.3)
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       ai:
-        specifier: ^7.0.58
+        specifier: 'catalog:'
         version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
   packages/eve-openai-imagegen:
     dependencies:
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
   packages/eve-openai-plugins:
     dependencies:
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
   packages/eve-project-link:
     dependencies:
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 'catalog:'
         version: 24.13.3
       eve:
-        specifier: 0.38.0
+        specifier: 'catalog:'
         version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
 
 packages:

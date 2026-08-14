@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
@@ -148,10 +149,24 @@ function validateManifest(packagePath, expected) {
 
 function parsePackOutput(output, packagePath) {
   const result = JSON.parse(output);
-  if (!Array.isArray(result) || result.length !== 1) {
-    throw new Error(`npm pack returned an unexpected result for ${packagePath}`);
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    Array.isArray(result) ||
+    typeof result.filename !== "string" ||
+    !Array.isArray(result.files)
+  ) {
+    throw new Error(`pnpm pack returned an unexpected result for ${packagePath}`);
   }
-  return result[0];
+  return result;
+}
+
+function runPack(packagePath, args) {
+  return execFileSync(
+    "pnpm",
+    ["--config.ignore-scripts=true", "pack", "--json", ...args],
+    { cwd: packagePath, encoding: "utf8" },
+  );
 }
 
 function validateContents(packagePath, expected, packResult) {
@@ -175,20 +190,66 @@ function validateContents(packagePath, expected, packResult) {
   }
 }
 
+function validatePackedManifest(packagePath, sourceManifest, tarball) {
+  const packedManifest = JSON.parse(
+    execFileSync("tar", ["-xOf", tarball, "package/package.json"], {
+      encoding: "utf8",
+    }),
+  );
+  const failures = [];
+
+  if (packedManifest.name !== sourceManifest.name) {
+    failures.push(`expected packed name ${sourceManifest.name}, found ${packedManifest.name}`);
+  }
+  if (packedManifest.version !== sourceManifest.version) {
+    failures.push(
+      `expected packed version ${sourceManifest.version}, found ${packedManifest.version}`,
+    );
+  }
+
+  for (const field of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+  ]) {
+    for (const [name, specifier] of Object.entries(packedManifest[field] ?? {})) {
+      if (typeof specifier === "string" && /^(?:catalog|workspace):/.test(specifier)) {
+        failures.push(`${field}.${name} contains unresolved specifier ${specifier}`);
+      }
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`${packagePath} has an invalid packed manifest:\n- ${failures.join("\n- ")}`);
+  }
+}
+
+function normalizePackResult(packResult, tarball) {
+  return {
+    ...packResult,
+    entryCount: packResult.files.length,
+    size: statSync(tarball).size,
+  };
+}
+
 export function checkPackage(packagePath) {
   const expected = packages.get(packagePath);
   if (!expected) throw new Error(`refusing unknown package path: ${packagePath}`);
 
   const manifest = validateManifest(packagePath, expected);
-  const output = execFileSync(
-    "npm",
-    ["pack", "--json", "--dry-run", "--ignore-scripts"],
-    { cwd: packagePath, encoding: "utf8" },
-  );
-  const packResult = parsePackOutput(output, packagePath);
-  validateContents(packagePath, expected, packResult);
-
-  return { manifest, packResult };
+  const destination = mkdtempSync(join(tmpdir(), "eve-package-check-"));
+  try {
+    const output = runPack(packagePath, ["--pack-destination", destination]);
+    const parsed = parsePackOutput(output, packagePath);
+    const tarball = join(destination, basename(parsed.filename));
+    const packResult = normalizePackResult(parsed, tarball);
+    validateContents(packagePath, expected, packResult);
+    validatePackedManifest(packagePath, manifest, tarball);
+    return { manifest, packResult };
+  } finally {
+    rmSync(destination, { recursive: true, force: true });
+  }
 }
 
 export function packPackage(packagePath, destination) {
@@ -196,21 +257,13 @@ export function packPackage(packagePath, destination) {
   if (!expected) throw new Error(`refusing unknown package path: ${packagePath}`);
 
   const manifest = validateManifest(packagePath, expected);
-  const output = execFileSync(
-    "npm",
-    [
-      "pack",
-      "--json",
-      "--ignore-scripts",
-      "--pack-destination",
-      resolve(destination),
-    ],
-    { cwd: packagePath, encoding: "utf8" },
-  );
-  const packResult = parsePackOutput(output, packagePath);
+  const output = runPack(packagePath, ["--pack-destination", resolve(destination)]);
+  const parsed = parsePackOutput(output, packagePath);
+  const tarball = join(destination, basename(parsed.filename));
+  const packResult = normalizePackResult(parsed, tarball);
   validateContents(packagePath, expected, packResult);
+  validatePackedManifest(packagePath, manifest, tarball);
 
-  const tarball = join(destination, basename(packResult.filename));
   const digest = createHash("sha256").update(readFileSync(tarball)).digest("hex");
   writeFileSync(`${tarball}.sha256`, `${digest}  ${basename(tarball)}\n`, {
     encoding: "utf8",

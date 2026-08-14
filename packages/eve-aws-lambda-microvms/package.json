@@ -30,7 +30,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda-microvms": "3.1075.0",
+    "@aws-sdk/client-lambda-microvms": "catalog:",
     "@aws-sdk/client-s3": "3.1073.0",
     "@aws-sdk/s3-request-presigner": "3.1073.0"
   },
@@ -38,15 +38,15 @@
     "@aws-sdk/client-cloudformation": "3.1073.0",
     "@aws-sdk/client-cloudwatch-logs": "3.1073.0",
     "@aws-sdk/client-sts": "3.1073.0",
-    "@types/node": "^24.0.0",
-    "ai": "^7.0.58",
-    "eve": "0.38.0",
+    "@types/node": "catalog:",
+    "ai": "catalog:",
+    "eve": "catalog:",
     "tsx": "^4.23.11",
-    "typescript": "^5.6.0",
-    "vitest": "^4.1.10"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "eve": "0.38.0"
+    "eve": "catalog:"
   },
   "engines": {
     "node": ">=24"
