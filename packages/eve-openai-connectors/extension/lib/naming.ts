@@ -51,6 +51,28 @@ export function mapUpstreamName(upstream: string, prefix: string, maxLength = 64
 }
 
 /**
+ * Map an upstream dotted name to a service-qualified tool name. The first
+ * dotted segment becomes the stable service namespace, while the remaining
+ * operation is sanitized without flattening the namespace boundary.
+ *
+ * Example: `zoom.search_meetings` becomes `zoom__search_meetings`.
+ */
+export function mapUpstreamServiceName(upstream: string, maxLength = 64): string {
+  validateMaxToolNameLength(maxLength);
+  const separator = upstream.indexOf(".");
+  const rawService = separator < 0 ? "connector" : upstream.slice(0, separator);
+  const rawOperation = separator < 0 ? upstream : upstream.slice(separator + 1);
+  const service = rawService.replace(/[^a-zA-Z0-9_-]/g, "_") || "connector";
+  const operation = rawOperation.replace(/\./g, "_").replace(/[^a-zA-Z0-9_-]/g, "_");
+  let mapped = `${service}__${operation || "tool"}`;
+  if (mapped.length > maxLength) {
+    const hash = createHash("sha256").update(upstream, "utf8").digest("hex").slice(0, 6);
+    mapped = `${mapped.slice(0, maxLength - 7)}_${hash}`;
+  }
+  return mapped;
+}
+
+/**
  * Build the injective upstream → mapped map for a catalog. Collisions are
  * resolved deterministically: upstream names are sorted, the first claimant
  * of a mapped name wins, later ones are dropped with a warning.
@@ -60,12 +82,16 @@ export function buildNameMap(
   prefix: string,
   warn?: (message: string) => void,
   maxLength = 64,
+  format: "flat" | "service-qualified" = "flat",
 ): Map<string, string> {
   const sorted = [...upstreamNames].sort();
   const byUpstream = new Map<string, string>();
   const used = new Set<string>();
   for (const upstream of sorted) {
-    const mapped = mapUpstreamName(upstream, prefix, maxLength);
+    const mapped =
+      format === "service-qualified"
+        ? mapUpstreamServiceName(upstream, maxLength)
+        : mapUpstreamName(upstream, prefix, maxLength);
     if (used.has(mapped)) {
       warn?.(
         `eve-openai-connectors: tool name collision — dropping ${JSON.stringify(upstream)} because ${JSON.stringify(mapped)} is already taken.`,

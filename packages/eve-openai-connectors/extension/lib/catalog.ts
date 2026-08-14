@@ -135,6 +135,7 @@ function fingerprintCatalog(
   tools: readonly UpstreamTool[],
   prefix: string,
   maxToolNameLength: number,
+  toolNameFormat: "flat" | "service-qualified",
   allowedServices: ReadonlySet<string> | undefined,
   excludedServices: ReadonlySet<string> | undefined,
 ): { fingerprint: string; estimatedBytes: number } {
@@ -151,6 +152,7 @@ function fingerprintCatalog(
     format: 1,
     prefix,
     maxToolNameLength,
+    toolNameFormat,
     allowedServices: allowedServices === undefined ? null : [...allowedServices].sort(),
     excludedServices: excludedServices === undefined ? null : [...excludedServices].sort(),
     tools: normalizedTools.map(({ tool }) => tool),
@@ -168,11 +170,13 @@ export function buildInventory(
   maxToolNameLength = 64,
   allowedServices?: ReadonlySet<string>,
   excludedServices?: ReadonlySet<string>,
+  toolNameFormat: "flat" | "service-qualified" = "flat",
 ): Inventory {
   const { fingerprint, estimatedBytes } = fingerprintCatalog(
     tools,
     prefix,
     maxToolNameLength,
+    toolNameFormat,
     allowedServices,
     excludedServices,
   );
@@ -182,6 +186,7 @@ export function buildInventory(
       prefix,
       warn,
       maxToolNameLength,
+      toolNameFormat,
       allowedServices,
       excludedServices,
       fingerprint,
@@ -196,6 +201,7 @@ function materializeCatalog(
   prefix: string,
   warn: ((message: string) => void) | undefined,
   maxToolNameLength: number,
+  toolNameFormat: "flat" | "service-qualified",
   allowedServices: ReadonlySet<string> | undefined,
   excludedServices: ReadonlySet<string> | undefined,
   fingerprint: string,
@@ -212,6 +218,7 @@ function materializeCatalog(
     prefix,
     warn,
     maxToolNameLength,
+    toolNameFormat,
   );
   const byName = new Map(named.map((tool) => [tool.name, tool]));
 

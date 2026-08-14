@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildNameMap,
   mapUpstreamName,
+  mapUpstreamServiceName,
   TOOL_NAME_PATTERN,
   validateToolPrefix,
 } from "../extension/lib/naming.js";
@@ -48,6 +49,24 @@ describe("name mapping (the §3 failure class — every static check misses this
     expect(mapUpstreamName("github.search_repositories", "apps_")).toBe(
       "apps_github_search_repositories",
     );
+  });
+
+  test("service-qualified names preserve the service as the tool namespace", () => {
+    expect(mapUpstreamServiceName("zoom.search_meetings")).toBe("zoom__search_meetings");
+    expect(mapUpstreamServiceName("google_drive.search_files")).toBe(
+      "google_drive__search_files",
+    );
+    expect(buildNameMap(["github.search_issues"], "", undefined, 64, "service-qualified"))
+      .toEqual(new Map([["github.search_issues", "github__search_issues"]]));
+  });
+
+  test("service-qualified names retain a stable hash when truncated", () => {
+    const upstream = `long_service.${"x".repeat(80)}`;
+    const mapped = mapUpstreamServiceName(upstream);
+    expect(mapped).toHaveLength(64);
+    expect(mapped).toMatch(TOOL_NAME_PATTERN);
+    expect(mapped.startsWith("long_service__")).toBe(true);
+    expect(mapped).toBe(mapUpstreamServiceName(upstream));
   });
 
   test("reserves room for the Eve extension namespace", () => {
