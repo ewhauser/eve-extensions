@@ -70,6 +70,8 @@ zoom__search_meetings
 
 The service-qualified names remain within model providers' 64-character tool-name limit and avoid grouping unrelated services under an implementation-specific `openai__` or `apps__` prefix. The extension's instruction fragment teaches the agent the discover-then-call flow automatically.
 
+When upgrading from `0.4.x`, update any saved tool allowlists, evaluation fixtures, or prompts that name connector functions: a tool such as `openai__github_search_repositories` is now `github__search_repositories`. Control tools remain qualified by the mount filename, so renaming `openai.ts` to `connectors.ts` separately changes `openai__search` and `openai__status` to `connectors__search` and `connectors__status`.
+
 ### Local development
 
 The Eve development terminal may not have an authenticated principal. For a single-user local agent, supply a stable development principal and read the token from the environment:
