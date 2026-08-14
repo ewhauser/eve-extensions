@@ -45,8 +45,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^4.0.30",
-    "@ai-sdk/openai": "^4.0.30",
+    "@ai-sdk/anthropic": "^4.0.37",
+    "@ai-sdk/openai": "^4.0.38",
     "@types/node": "^24.0.0",
     "ai": "^7.0.58",
     "eve": "0.38.0",
