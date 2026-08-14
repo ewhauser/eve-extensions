@@ -11,7 +11,6 @@ import {
   CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
   CLIENT_TOOL_SEARCH_MARKER_NAME,
   CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
-  namespaceFromClientMarkerToolName,
 } from "../lib/client-search.js";
 import { getOrCreateDeferredToolSet } from "../lib/tool-cache.js";
 import type { ApprovalsConfig, CreateConnectorsOptions } from "../lib/types.js";
@@ -35,7 +34,8 @@ function getConnectors(): Connectors {
     enabled: config.enabled,
     discovery: config.discovery,
     toolPrefix: "",
-    maxToolNameLength: 56,
+    toolNameFormat: "service-qualified",
+    maxToolNameLength: 64,
   };
   if (config.allowedServices !== undefined) options.allowedServices = config.allowedServices;
   if (config.excludedServices !== undefined) options.excludedServices = config.excludedServices;
@@ -75,8 +75,14 @@ function getConnectors(): Connectors {
   return configuredConnectors;
 }
 
+const ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX = "eve:absolute:";
+
+function absoluteDynamicToolName(name: string): string {
+  return `${ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX}${name}`;
+}
+
 const namespaceGuidance =
-  " Returned tool names are relative to this extension. Prefix each one with the namespace before `__search` in this tool's name. For example, when this tool is `openai__search`, `github_search_repositories` is callable as `openai__github_search_repositories`.";
+  " Returned connector names are exact callable names and already include their service namespace, for example `github__search_repositories`.";
 
 export default defineDynamic({
   events: {
@@ -109,7 +115,7 @@ export default defineDynamic({
           () => {
             const deferredTools: Record<string, DynamicToolEntry<any, any>> = {};
             for (const item of session.deferred) {
-              deferredTools[item.name] = defineTool({
+              deferredTools[absoluteDynamicToolName(item.name)] = defineTool({
                 description: item.description,
                 inputSchema: item.inputSchema,
                 approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
@@ -132,7 +138,7 @@ export default defineDynamic({
             const result = await connectors.clientSearch(
               toolCtx,
               input,
-              namespaceFromClientMarkerToolName(toolCtx.toolName),
+              "",
             );
             connectorWorkingSet.update((current) =>
               mergeConnectorWorkingSet(current, {
@@ -180,7 +186,7 @@ export default defineDynamic({
       }
 
       for (const item of session.discovered) {
-        tools[item.name] = defineTool({
+        tools[absoluteDynamicToolName(item.name)] = defineTool({
           description: item.description,
           inputSchema: item.inputSchema,
           approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
@@ -190,7 +196,7 @@ export default defineDynamic({
       }
       for (const loaded of session.loaded) {
         const item = loaded.item;
-        tools[item.name] = defineTool({
+        tools[absoluteDynamicToolName(item.name)] = defineTool({
           description: loaded.description,
           inputSchema: item.inputSchema,
           approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),

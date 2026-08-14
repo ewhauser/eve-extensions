@@ -189,6 +189,12 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const toolPrefix = options.toolPrefix ?? "apps_";
   validateToolPrefix(toolPrefix);
+  const toolNameFormat = options.toolNameFormat ?? "flat";
+  if (toolNameFormat === "service-qualified" && toolPrefix.length > 0) {
+    throw new Error(
+      "eve-openai-connectors: toolPrefix must be empty when toolNameFormat is \"service-qualified\".",
+    );
+  }
   const maxToolNameLength = options.maxToolNameLength ?? 64;
   validateMaxToolNameLength(maxToolNameLength);
   const inventoryTtlMs = options.inventoryTtlMs ?? 300_000;
@@ -412,6 +418,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
           maxToolNameLength,
           allowedServices,
           excludedServices,
+          toolNameFormat,
         );
         loggedFailures.delete(`catalog:${principal}`);
         return inventory;
@@ -438,7 +445,7 @@ export function createConnectors(options: CreateConnectorsOptions): Connectors {
   function searchDescription(inventory: Inventory | null): string {
     const header =
       "Search the ChatGPT connector tools available to the current user. " +
-      `Matching tools become callable on your next step using their generated name (e.g. ${toolPrefix}github_search_repositories). ` +
+      `Matching tools become callable on your next step using their generated name (e.g. ${toolNameFormat === "service-qualified" ? "github__search_repositories" : `${toolPrefix}github_search_repositories`}). ` +
       "Read-only tools run without approval; write tools require human approval before running.";
     if (!inventory) {
       return (

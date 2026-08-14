@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
 import { describe, expect, test, vi } from "vitest";
 
@@ -25,6 +26,18 @@ function markerForCatalogSize(size: number) {
 }
 
 describe("Eve client tool-search provider bridge", () => {
+  test("publishes explicitly service-qualified dynamic connector names without the mount prefix", () => {
+    const lifecycle = readFileSync(
+      new URL(
+        "../node_modules/eve/dist/src/context/dynamic-tool-lifecycle.js",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(lifecycle).toContain("eve:absolute:");
+    expect(lifecycle).toContain("startsWith(ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX)");
+  });
+
   test("selects a later client marker and emits one constant-size OpenAI provider tool", async () => {
     const hostedDeferred = {
       description: "Unrelated hosted deferred tool.",
@@ -147,7 +160,7 @@ describe("Eve client tool-search provider bridge", () => {
 
     const loaded = {
       type: "function",
-      name: "openai__github_search_issues",
+      name: "github__search_issues",
       description: "Search issues.\n[eve catalog: current]",
       defer_loading: true,
       parameters: { type: "object" },

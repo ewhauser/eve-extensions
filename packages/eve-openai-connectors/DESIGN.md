@@ -106,15 +106,15 @@ The consequence: the package cannot use Eve's connection system. It implements d
 
 ```
 Consumer agent
-   │  agent/extensions/openai.ts
+   │  agent/extensions/connectors.ts
    │
    ▼
 eve-openai-connectors (mounted Eve extension)
    │  defineDynamic (step.started), before every model call:
    │    • client-executed tool search       primary OpenAI discovery
-   │    • openai__search                    fallback discovery
-   │    • openai__status                    catalog + auth health
-   │    • openai__<service>_<tool>          bounded loaded tools
+   │    • connectors__search                fallback discovery
+   │    • connectors__status                catalog + auth health
+   │    • <service>__<tool>                 bounded loaded tools
    │
    │  getToken(ctx) ──► consumer-supplied
    ▼
@@ -127,13 +127,13 @@ Two properties define the shape.
 
 Every successful search also writes a small Eve `defineState` manifest containing the authority, complete normalized catalog fingerprint, mapped/upstream names, and discovery source. On the next step, those references are joined against the current authorized catalog; schemas, descriptions, annotations, and approval policy come only from that catalog. Catalog or credential drift invalidates the working set and forces a new search. Execution still reauthorizes through the normal connector call path and uses the same approval policy.
 
-**Progressive search remains the fallback.** On providers without OpenAI client tool search, the marker remains a normal bounded search function. With `discovery: "search"`, the model instead sees `openai__search`, receives only loaded names and short summaries, and calls materialized definitions on the next step. Transcript results never carry schemas or serve as persistence. `discovery: "deferred"` preserves the earlier full-catalog hosted-search behavior as an explicit compatibility mode.
+**Progressive search remains the fallback.** On providers without OpenAI client tool search, the marker remains a normal bounded search function. With `discovery: "search"`, the model instead sees `connectors__search`, receives exact service-qualified names and short summaries, and calls materialized definitions on the next step. Transcript results never carry schemas or serve as persistence. `discovery: "deferred"` preserves the earlier full-catalog hosted-search behavior as an explicit compatibility mode.
 
-The connector mapper produces names relative to the extension. Eve then adds the mount namespace. The package requires the short `openai` mount so the full `openai__...` name stays within the 64-character provider limit.
+The connector mapper turns the upstream service boundary into the public namespace (`zoom.search_meetings` becomes `zoom__search_meetings`). The Eve patch recognizes only the extension's explicit absolute-name marker, strips it, and leaves every ordinary dynamic extension tool under its mount namespace.
 
 ### 4.1 Eve patch for provider-native discovery
 
-Eve 0.31.3 does not preserve per-tool `providerOptions` through every runtime hop or automatically add a provider search tool when deferred tools are advertised. This monorepo carries an additive pnpm patch at `packages/eve-openai-connectors/patches/eve@0.31.3.patch`. It forwards those options, recognizes and removes the extension's internal client-search marker, and mounts `openai.tools.toolSearch({ execution: "client" })` with the marker's execute closure. It still injects hosted Anthropic or OpenAI search for explicit deferred mode. The deferred scan examines every tool so an unrelated deferred tool cannot mask a later client marker.
+Eve 0.31.3 does not preserve per-tool `providerOptions` through every runtime hop, automatically add a provider search tool when deferred tools are advertised, or let a dynamic extension publish an explicitly qualified tool name. This monorepo carries an additive pnpm patch at `packages/eve-openai-connectors/patches/eve@0.31.3.patch`. It forwards those options, recognizes the extension's private absolute-name marker, recognizes and removes the internal client-search marker, and mounts `openai.tools.toolSearch({ execution: "client" })` with the marker's execute closure. It still injects hosted Anthropic or OpenAI search for explicit deferred mode. The deferred scan examines every tool so an unrelated deferred tool cannot mask a later client marker.
 
 The published package includes that patch, but a dependency cannot modify its consumer's Eve installation. Consumers must copy it into their repository, register it under top-level `patchedDependencies`, and keep Eve pinned to 0.31.3. The patch corresponds to [vercel/eve#1741](https://github.com/vercel/eve/pull/1741) and must be revalidated for every Eve upgrade.
 
@@ -181,14 +181,14 @@ Normalized catalogs are SHA-256 content-addressed after applying the tool prefix
 **Name mapping — the load-bearing part.**
 
 ```
-relativeName(upstream) = upstream.replace(/\./g, "_")
-mountedName(upstream)  = "openai__" + relativeName(upstream)
+serviceName(upstream) = upstream.slice(0, upstream.indexOf("."))
+toolName(upstream)    = serviceName(upstream) + "__" + sanitizedOperation(upstream)
 ```
 
-- The extension uses no inner prefix because Eve supplies `openai__` at mount time.
-- Relative names are capped at 56 characters, leaving exactly eight characters for `openai__`.
+- The first upstream dotted segment is the service namespace; remaining dots and illegal characters in the operation are sanitized to `_`.
+- Complete names are capped at 64 characters.
 - *(validated)* Zero collisions today. Handle them anyway, deterministically: sort upstream names, first wins, log the dropped name at warn level. A collision must never produce a mapping that differs between restarts.
-- If a relative name would exceed 56 characters, truncate it and append `_` plus the first 6 hex characters of the SHA-256 of the **full upstream name**. Deterministic across processes; no counters, no state.
+- If a name would exceed 64 characters, truncate it and append `_` plus the first 6 hex characters of the SHA-256 of the **full upstream name**. Deterministic across processes; no counters, no state.
 - Sanitize any character outside `[a-zA-Z0-9_-]` to `_` as a final pass, in case a future connector introduces one.
 
 **The reverse mapping must be authoritative — never reconstruct it by string surgery.** `google_drive_foo` is ambiguous: it could be `google_drive.foo` or `google.drive_foo`. The exact `upstream` string travels alongside every mapped name in the inventory and durable reference manifest, but is not exposed in the compact model-facing search result. **Any code that derives the dotted name by splitting on `_` is a bug.**
@@ -199,7 +199,7 @@ Each current-catalog item used internally is exactly:
 
 ```ts
 {
-  name: string;          // github_search_repositories (relative to the mount)
+  name: string;          // github__search_repositories (exact callable name)
   upstream: string;      // github.search_repositories  ← authoritative reverse mapping
   service: string;       // github
   description: string;
@@ -240,7 +240,7 @@ Composed inside the extension from `connectors.begin`, `connectors.search`, `con
 1. Return `null` immediately when disabled, when there is no principal, or when `getToken` yields `null`. These are the common paths and must cost nothing.
 2. Attempt an inventory load under a short overall budget (~5s). **On failure, do not return `null`** — continue to step 4 with an empty catalog and no materialized connector tools. Durable references are never treated as authority without a current catalog. Log once per principal.
 3. In default client mode, emit one relative `client_tool_search` marker. The Eve patch replaces it with OpenAI's client-executed provider tool while retaining its execute closure. Search input is validated strictly, catalog lookup is latency-bounded, result count uses `searchLimitMax`, and serialized output uses `clientSearchMaxBytes`.
-4. Outside client mode, emit relative `search` and optional `status` entries. Eve qualifies them as `openai__search` and `openai__status`. Search results explain that returned names receive the same `openai__` namespace on the next step. Client mode omits both so its cold extension contribution is exactly one search tool.
+4. Outside client mode, emit relative `search` and optional `status` control entries. Eve qualifies them with the extension mount (`connectors__search` and `connectors__status` in the recommended setup). Search results return exact service-qualified connector names. Client mode omits both so its cold extension contribution is exactly one search tool.
 5. Read the extension-owned working set, require its authority and catalog fingerprint to match, and join each mapped/upstream reference against the current catalog. Keep the manifest and materialized set capped at `maxMaterializedTools` (default 30), deterministically ordered with the newest search's relevance order first. The manifest contains no schemas, descriptions, credentials, arguments, or results.
 6. Every connector `execute` re-loads current per-principal authorization, verifies that the stored upstream tool is still present, and compares all policy/schema-relevant descriptor fields before calling `callTool(item.upstream, input)` — the stored upstream string, never a derived one. Catalog removal or credential-driven descriptor changes fail closed before the network call. Successful calls return `structuredContent ?? content`; `isError: true` becomes a thrown error carrying returned text so the model can adapt.
 7. Emit one bounded `onResolution` summary for the completed path. It contains no principals, names, schemas, credentials, arguments, results, or upstream error text.
@@ -257,7 +257,7 @@ Eve makes dynamic tools replay-safe by transforming `execute` arrows at build ti
 
 Eve's extension build now provides the correct distribution boundary for this requirement. The package owns the authored `defineDynamic` contribution and keeps every `execute` arrow inline in `extension/tools/connectors.ts`; `eve extension build` transforms and packages that source for consumers.
 
-The consumer only mounts the built extension from `agent/extensions/openai.ts` and supplies configuration. No hand-copied tools file is required. The package also contributes an instruction fragment that explains discovery and treats connector output as untrusted data. Consumers that need the lower-level composition boundary use the public `eve-openai-connectors/connectors` export rather than vendoring `extension/lib` source.
+The consumer only mounts the built extension from `agent/extensions/connectors.ts` and supplies configuration. No hand-copied tools file is required. The package also contributes an instruction fragment that explains discovery and treats connector output as untrusted data. Consumers that need the lower-level composition boundary use the public `eve-openai-connectors/connectors` export rather than vendoring `extension/lib` source.
 
 ---
 
@@ -312,13 +312,13 @@ Ordered so failures surface as early and cheaply as possible.
 |---|---|---|
 | Private endpoint changes or is gated | High | Opt-in; graceful degradation; protocol isolated to one module; probe script for fast diagnosis |
 | Prompt injection via connector content | High | Untrusted-data framing in docs; approval required on every write; approval prompts reference the originating request |
-| Catalog grows past the 64-character budget | Low | Relative names reserve eight characters for `openai__` and use deterministic hash truncation; asserted in tests |
+| Catalog grows past the 64-character budget | Low | Service-qualified names use deterministic hash truncation; asserted in tests |
 | Tool-name collisions from a future connector | Low | Deterministic sorted first-wins with a warn log; injectivity asserted in tests |
-| Workspace policy blocks parts of the catalog | Low | Server-side enforcement is expected behavior; `openai__status` surfaces catalog health |
+| Workspace policy blocks parts of the catalog | Low | Server-side enforcement is expected behavior; the mount-qualified status tool surfaces catalog health |
 | Client or progressive search changes the tool set between steps | Medium | Reference-only durable state is count-bounded, catalog-versioned, authority-bound, and joined against current authorization before materialization |
 | A large or slow client-search response expands latency/context | Medium | `searchLimitMax`, `clientSearchMaxBytes`, and `clientSearchTimeoutMs` impose independent bounds |
 | Eve patch drifts on upgrade | Medium | Eve is pinned exactly; the patch is registered through pnpm and shipped with the package; revalidate against upstream PR #1741 before upgrading |
-| Integrator supplies an OpenAI API key | Low | Documented prominently; an authentication failure is visible through `openai__status` |
+| Integrator supplies an OpenAI API key | Low | Documented prominently; an authentication failure is visible through the mount-qualified status tool |
 
 ---
 

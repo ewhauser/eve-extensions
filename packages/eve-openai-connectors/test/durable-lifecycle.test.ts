@@ -102,7 +102,7 @@ describe("extension durable discovery lifecycle", () => {
         { ...firstCtx, toolName: "openai__search" } as never,
       );
       expect(output).toEqual({
-        loaded: [{ name: "github_search_issues", summary: "Search GitHub issues." }],
+        loaded: [{ name: "github__search_issues", summary: "Search GitHub issues." }],
       });
       expect(JSON.stringify(output)).not.toContain("inputSchema");
 
@@ -113,8 +113,8 @@ describe("extension durable discovery lifecycle", () => {
         string,
         DynamicToolEntry
       >;
-      expect(Object.keys(nextStep)).toEqual(["search", "github_search_issues"]);
-      expect(nextStep.github_search_issues?.inputSchema).toEqual(
+      expect(Object.keys(nextStep)).toEqual(["search", "eve:absolute:github__search_issues"]);
+      expect(nextStep["eve:absolute:github__search_issues"]?.inputSchema).toEqual(
         CATALOG[0]!.inputSchema,
       );
 

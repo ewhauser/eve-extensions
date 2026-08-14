@@ -50,7 +50,7 @@ export interface UpstreamCallResult {
 
 /** One discoverable connector tool from the current authorized inventory. */
 export interface ConnectorToolItem {
-  /** Mapped, API-legal tool name, e.g. `github_search_repositories`. */
+  /** Mapped, API-legal tool name, e.g. `github__search_repositories`. */
   readonly name: string;
   /** Exact upstream dotted name, e.g. `github.search_repositories`. */
   readonly upstream: string;
@@ -211,6 +211,8 @@ export interface CreateConnectorsOptions {
   baseUrl?: string;
   /** Prefix on generated tool names. May be empty; otherwise must contain only API-legal name characters. */
   toolPrefix?: string;
+  /** Generated connector name format. The extension uses `service-qualified` names such as `zoom__search_meetings`. */
+  toolNameFormat?: "flat" | "service-qualified";
   /** Maximum generated name length before any outer Eve extension namespace is added. */
   maxToolNameLength?: number;
   /** Connector-catalog cache lifetime per user, ms. */

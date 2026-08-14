@@ -36,11 +36,11 @@ Then apply it:
 pnpm install
 ```
 
-The patch forwards per-tool `providerOptions` through Eve. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.31.3` and revalidate or replace the patch before upgrading. The corresponding upstream work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
+The patch forwards per-tool `providerOptions` through Eve and recognizes the connector extension's explicit service-qualified-name marker. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.31.3` and revalidate or replace the patch before upgrading. The corresponding provider-search work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
 
 ## Mount the extension
 
-Create `agent/extensions/openai.ts`:
+Create `agent/extensions/connectors.ts`:
 
 ```ts
 import openaiConnectors from "eve-openai-connectors";
@@ -59,15 +59,16 @@ export default openaiConnectors({
 });
 ```
 
-The mount file must be named `openai.ts`. Eve uses that filename as the extension namespace, producing names such as:
+Eve uses the mount filename as the namespace for the extension's control tools. The connector tools themselves use their service as the namespace:
 
 ```text
-openai__search
-openai__status
-openai__github_search_repositories
+connectors__search
+connectors__status
+github__search_repositories
+zoom__search_meetings
 ```
 
-The short, fixed namespace also leaves enough room under model providers' 64-character tool-name limit. The extension's instruction fragment teaches the agent the discover-then-call flow automatically.
+The service-qualified names remain within model providers' 64-character tool-name limit and avoid grouping unrelated services under an implementation-specific `openai__` or `apps__` prefix. The extension's instruction fragment teaches the agent the discover-then-call flow automatically.
 
 ### Local development
 
@@ -97,13 +98,13 @@ The connector catalog can contain hundreds of tools. In the default `client` mod
 
 Every successful search updates a versioned, count-bounded Eve `defineState` manifest for the session. The manifest contains only the current authority, catalog fingerprint, mapped/upstream names, and discovery source—never schemas, arguments, results, or credentials. On each step, the extension joins those references against the current user's authorized catalog. Authority changes, catalog changes, missing tools, and catalog outages fail closed. Invocation then goes through the normal connector path, which rechecks authorization and applies the same read/write approval policy.
 
-Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. In search/deferred modes, `openai__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
+Equivalent normalized catalogs are content-addressed and interned across users. Their frozen descriptors, raw schema objects, and connector-scoped dynamic tool definitions retain stable identities, while tokens, protocol clients, catalog membership, and credential invalidation remain per-user. Both shared caches are TTL-, entry-, and estimated-byte-bounded. In search/deferred modes, `connectors__status` reports only aggregate hit, miss, entry, eviction, and estimated-byte counts; it never uses principals, tokens, or schemas as metric labels.
 
 On providers without OpenAI client-executed tool search, the same marker remains a bounded progressive search function. It uses the same flow as ordinary progressive search:
 
-1. The agent calls `openai__search` with a service and keywords.
+1. The agent calls `connectors__search` with a service and keywords.
 2. The compact result identifies loaded names and short summaries without JSON schemas.
-3. On the next step, those tools are materialized under the `openai__` namespace and become callable.
+3. On the next step, those tools are materialized under service namespaces such as `github__` or `zoom__` and become callable.
 
 Set `discovery: "search"` to use ordinary progressive extension search all the time. Discovered tools survive turns, external compaction, worker restarts, and redeploys through extension-owned state, but materialization always requires the current authorized catalog. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
 
@@ -142,7 +143,7 @@ The extension never logs or persists the token. By default it holds tokens only 
 | `searchLimitMax` | `25` | Maximum number of search matches. |
 | `clientSearchMaxBytes` | `65536` | Maximum serialized bytes returned by one client tool-search call. |
 | `clientSearchTimeoutMs` | `5000` | Wall-clock budget for client tool search, including catalog lookup. |
-| `includeStatus` | `true` | Include `openai__status` in search/deferred modes. Client mode keeps the cold tool set to one search tool. |
+| `includeStatus` | `true` | Include the mount-qualified status tool (for example `connectors__status`) in search/deferred modes. Client mode keeps the cold tool set to one search tool. |
 | `approvals` | simple policy | Configure declarative write-tool approval rules. |
 | `approvalFor(item)` | none | Supply a fully custom Eve approval function for each tool. |
 | `transformCallInput(ctx, item, input)` | identity | Transform arguments after current-catalog reauthorization and immediately before `tools/call`. It cannot change routing. |
