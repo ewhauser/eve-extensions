@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  eve@0.31.3: bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d
+  eve@0.38.0: 1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49
 
 importers:
 
@@ -17,8 +17,8 @@ importers:
         specifier: 3.1075.0
         version: 3.1075.0
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -55,11 +55,11 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       ai:
-        specifier: ^7.0.38
-        version: 7.0.56(zod@4.4.3)
+        specifier: ^7.0.58
+        version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
@@ -79,11 +79,11 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       ai:
-        specifier: ^7.0.38
-        version: 7.0.56(zod@4.4.3)
+        specifier: ^7.0.58
+        version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -107,11 +107,11 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       ai:
-        specifier: ^7.0.38
-        version: 7.0.56(zod@4.4.3)
+        specifier: ^7.0.58
+        version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -129,8 +129,8 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -148,8 +148,8 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -167,8 +167,8 @@ importers:
         specifier: ^24.0.0
         version: 24.13.3
       eve:
-        specifier: 0.31.3
-        version: 0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        specifier: 0.38.0
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -184,8 +184,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/gateway@4.0.44':
-    resolution: {integrity: sha512-dQ/AHH1do1iEpWEXdAge37FtpXV17fsj7NkL9w+xuzVgvmI7+dQFeDerul+F2I5czmxe61Lq+TnUREjU92UXYg==}
+  '@ai-sdk/gateway@4.0.51':
+    resolution: {integrity: sha512-tQxWGUbg/O3A5EgekJo/C2byLVQ1r+vL6QdEVWmxUSnPhdCupcOeDbQO1tv9Um40VrdwYuSWlYzcbWvtlG5bOA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -202,8 +202,18 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.27':
+    resolution: {integrity: sha512-EzAn4pdgG5g0xXtH6lE2zyNmfjDQIDjATkfqzuidEI35g++hh4+07vnjzkT/RmGmIClPZiRj/Q2GMPV2V7mkHw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.6':
     resolution: {integrity: sha512-YYXjvs8F3q/BdEn9tBDoDuQACotfR7c5foGw/ADsM6iAVC1JabqEjQSkwHv/Kg2vNIr1c2AVHcQb+JYsYk76Qw==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.7':
+    resolution: {integrity: sha512-6or44XprPzKbr8zkmzosowSE0pxkvJcoojBL+mCZvPUt3kvXp3XSNqeVun9golb1acEfSo6yaEBRT18h2VU+1Q==}
     engines: {node: '>=22'}
 
   '@aws-crypto/sha1-browser@5.2.0':
@@ -809,8 +819,8 @@ packages:
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
-  ai@7.0.56:
-    resolution: {integrity: sha512-Lp7q9tZFl/TGOpBBNgt2wZ85SoCvJJVlHQksMkqrgiFUnIGOw+L2FWJ0gXuNEngLQTp9+t32k8QuIB7Jc5uKRA==}
+  ai@7.0.64:
+    resolution: {integrity: sha512-29Ufm56e53pRzIPueWzZiwJsgxmZStaBFpwEkVM89sqyIIax/pzDm+ez/ksJ/CcY9UCuYzvCQpE2zkFHICvS3w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -893,13 +903,13 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
-  eve@0.31.3:
-    resolution: {integrity: sha512-/ae8kfsVLGoy68BU+7uNEkXeEQzOHWaXi0Q+Fj5oA2On5POcU0DGR9AnZlOaDQoFLoEtMxRnR1urTw4H0U2O7Q==}
+  eve@0.38.0:
+    resolution: {integrity: sha512-2Ttr239Ds/OzkNhmDDfohmbudEaB5ILRfSb5wCMHoy1IPIkOwa7gS6dcs+cZliFwsT6knyw0PD8xHvGCU5x3AA==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
-      ai: ^7.0.38
+      ai: ^7.0.58
       braintrust: ^3.0.0
       just-bash: ^3.0.0
       microsandbox: ^0.5.0
@@ -1270,10 +1280,10 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.23(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/gateway@4.0.44(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.51(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.6
-      '@ai-sdk/provider-utils': 5.0.23(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.7
+      '@ai-sdk/provider-utils': 5.0.27(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
@@ -1292,7 +1302,20 @@ snapshots:
       undici: 7.29.0
       zod: 4.4.3
 
+  '@ai-sdk/provider-utils@5.0.27(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.7
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      undici: 7.29.0
+      zod: 4.4.3
+
   '@ai-sdk/provider@4.0.6':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.7':
     dependencies:
       json-schema: 0.4.0
 
@@ -1881,11 +1904,11 @@ snapshots:
 
   '@workflow/serde@4.1.0': {}
 
-  ai@7.0.56(zod@4.4.3):
+  ai@7.0.64(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 4.0.44(zod@4.4.3)
-      '@ai-sdk/provider': 4.0.6
-      '@ai-sdk/provider-utils': 5.0.23(zod@4.4.3)
+      '@ai-sdk/gateway': 4.0.51(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.7
+      '@ai-sdk/provider-utils': 5.0.27(zod@4.4.3)
       zod: 4.4.3
 
   assertion-error@2.0.1: {}
@@ -1946,9 +1969,9 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.31.3(patch_hash=bb2bd4f55c39f63071de2e85e17be2bb37fa921055d17b0ad34cec2d0a3d7c4d)(ai@7.0.56(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
+  eve@0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
-      ai: 7.0.56(zod@4.4.3)
+      ai: 7.0.64(zod@4.4.3)
       nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       undici: 8.9.0
     transitivePeerDependencies:

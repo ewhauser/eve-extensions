@@ -11,7 +11,7 @@ allowBuilds:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - eve@0.31.3
+  - eve@0.38.0
 
 patchedDependencies:
-  eve@0.31.3: patches/eve@0.31.3.patch
+  eve@0.38.0: patches/eve@0.38.0.patch

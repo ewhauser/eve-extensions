@@ -11,23 +11,23 @@ The user authorizes each service once in ChatGPT. The extension talks to OpenAI'
 Add the extension to the Eve agent project:
 
 ```sh
-pnpm add eve@0.31.3 eve-openai-connectors
+pnpm add eve@0.38.0 eve-openai-connectors
 ```
 
 ### Install the required Eve patch
 
-Client-executed and provider-native deferred discovery require a small patch to Eve 0.31.3. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
+Client-executed and provider-native deferred discovery require a small patch to Eve 0.38.0. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-openai-connectors/patches/eve@0.31.3.patch patches/eve@0.31.3.patch
+cp node_modules/eve-openai-connectors/patches/eve@0.38.0.patch patches/eve@0.38.0.patch
 ```
 
 Register it in the top-level `pnpm-workspace.yaml`, preserving any existing settings:
 
 ```yaml
 patchedDependencies:
-  eve@0.31.3: patches/eve@0.31.3.patch
+  eve@0.38.0: patches/eve@0.38.0.patch
 ```
 
 Then apply it:
@@ -36,7 +36,7 @@ Then apply it:
 pnpm install
 ```
 
-The patch forwards per-tool `providerOptions` through Eve and recognizes the connector extension's explicit service-qualified-name marker. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.31.3` and revalidate or replace the patch before upgrading. The corresponding provider-search work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
+The patch forwards per-tool `providerOptions` through Eve and recognizes the connector extension's explicit service-qualified-name marker. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.38.0` and revalidate or replace the patch before upgrading. The corresponding provider-search work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
 
 ## Mount the extension
 

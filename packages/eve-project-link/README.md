@@ -27,7 +27,7 @@ Project presets add only the provider- or installation-specific parts:
 ## Install
 
 ```sh
-pnpm add eve@0.31.3 eve-project-link
+pnpm add eve@0.38.0 eve-project-link
 ```
 
 Create `agent/extensions/project_link.ts`:

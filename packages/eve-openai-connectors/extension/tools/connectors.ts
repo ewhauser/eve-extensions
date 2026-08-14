@@ -118,7 +118,7 @@ export default defineDynamic({
               deferredTools[absoluteDynamicToolName(item.name)] = defineTool({
                 description: item.description,
                 inputSchema: item.inputSchema,
-                approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
+                approval: connectors.approvalFor(item),
                 providerOptions: DEFER_PROVIDER_OPTIONS,
                 execute: async (input, toolCtx) =>
                   connectors.call(toolCtx, item.upstream, input, item),
@@ -189,7 +189,7 @@ export default defineDynamic({
         tools[absoluteDynamicToolName(item.name)] = defineTool({
           description: item.description,
           inputSchema: item.inputSchema,
-          approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
+          approval: connectors.approvalFor(item),
           execute: async (input, toolCtx) =>
             connectors.call(toolCtx, item.upstream, input, item),
         });
@@ -199,7 +199,7 @@ export default defineDynamic({
         tools[absoluteDynamicToolName(item.name)] = defineTool({
           description: loaded.description,
           inputSchema: item.inputSchema,
-          approval: (approvalCtx) => connectors.approvalFor(item)(approvalCtx),
+          approval: connectors.approvalFor(item),
           execute: async (input, toolCtx) =>
             connectors.call(toolCtx, item.upstream, input, item),
         });

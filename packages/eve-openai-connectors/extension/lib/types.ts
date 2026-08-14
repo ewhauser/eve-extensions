@@ -269,7 +269,7 @@ export interface CreateConnectorsOptions {
    *   tool; works with unpatched Eve.
    * - `"deferred"` — expose the full catalog as deferred tools and let
    *   Anthropic or OpenAI perform provider-native tool search. Requires the
-   *   Eve 0.31.3 patch shipped with this package. Falls back to search when
+   *   Eve 0.38.0 patch shipped with this package. Falls back to search when
    *   the catalog is unavailable.
    */
   discovery?: ConnectorDiscovery;

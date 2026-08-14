@@ -43,8 +43,8 @@ export const packages = new Map([
       requiredFiles: [
         "dist/index.d.ts",
         "dist/index.js",
-        "patches/eve@0.31.3-source.patch",
-        "patches/eve@0.31.3.patch",
+        "patches/eve@0.38.0-source.patch",
+        "patches/eve@0.38.0.patch",
         "LICENSE",
         "README.md",
       ],

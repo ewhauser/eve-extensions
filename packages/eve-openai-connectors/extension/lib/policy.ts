@@ -1,4 +1,4 @@
-import type { Approval } from "eve/tools";
+import type { ApprovalPolicy } from "eve/tools";
 import type {
   ApprovalAction,
   ApprovalsConfig,
@@ -36,12 +36,12 @@ export function flagsFromAnnotations(annotations: unknown): {
  * destructive tier is surfaced through the tool description instead (see
  * `catalog.ts`), not through a different approval status.
  */
-export function defaultApprovalFor(item: Pick<ConnectorToolItem, "readOnly">): Approval {
+export function defaultApprovalFor(item: Pick<ConnectorToolItem, "readOnly">): ApprovalPolicy {
   if (item.readOnly) return () => "not-applicable";
   return () => "user-approval";
 }
 
-function approvalForAction(action: ApprovalAction, upstream: string): Approval {
+function approvalForAction(action: ApprovalAction, upstream: string): ApprovalPolicy {
   switch (action) {
     case "allow":
       return () => "not-applicable";
@@ -83,7 +83,7 @@ interface CompiledRule {
  */
 export function buildApprovalPolicy(
   config: ApprovalsConfig | undefined,
-): (item: ConnectorToolItem) => Approval {
+): (item: ConnectorToolItem) => ApprovalPolicy {
   if (!config || (config.mode ?? "simple") === "simple") {
     return defaultApprovalFor;
   }

@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda-microvms": "3.1075.0",
-    "eve": "0.31.3",
+    "eve": "0.38.0",
     "eve-aws-lambda-microvms": "workspace:*"
   },
   "devDependencies": {
