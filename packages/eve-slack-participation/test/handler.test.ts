@@ -138,16 +138,77 @@ describe("Slack participation handler", () => {
     expect(records[0]).toMatchObject({ source, decision: "RESPOND" });
   });
 
-  it("drops an unmentioned message outside an active Eve thread", async () => {
+  it("preserves not-subscribed routing before the non-Eve addressee rule", async () => {
     const records: SlackParticipationDecisionRecord[] = [];
     const { handler, auth, classifier } = harness({ onDecision: (record) => { records.push(record); } });
     const { ctx, listParticipants } = context({ subscribed: false });
 
-    await expect(handler(ctx, slackMessage())).resolves.toBeNull();
+    await expect(
+      handler(ctx, slackMessage({ text: "hey <@U1> - can you rerun it?" })),
+    ).resolves.toBeNull();
     expect(auth).not.toHaveBeenCalled();
     expect(classifier).not.toHaveBeenCalled();
     expect(listParticipants).not.toHaveBeenCalled();
     expect(records[0]).toMatchObject({ source: "not_subscribed", decision: "SILENT" });
+  });
+
+  it("deterministically drops a sentence-initial non-Eve addressee even in shadow mode", async () => {
+    const records: SlackParticipationDecisionRecord[] = [];
+    const { handler, auth, classifier } = harness({
+      mode: "shadow",
+      onDecision: (record) => { records.push(record); },
+    });
+    const message = slackMessage({
+      text: "hey <@U2> - can you rerun it with the fake clock enabled?",
+      author: { ...slackMessage().author!, userId: "U1" },
+    });
+    const { ctx, cancel, listParticipants } = context({ participants: ["U1"] });
+
+    await expect(handler(ctx, message)).resolves.toBeNull();
+    expect(auth).not.toHaveBeenCalled();
+    expect(classifier).not.toHaveBeenCalled();
+    expect(listParticipants).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(records[0]).toMatchObject({
+      source: "explicit_non_eve_addressee",
+      mode: "unknown",
+      decision: "SILENT",
+      reason: "HUMAN_TO_HUMAN",
+      addressee: "HUMAN",
+      shadow: true,
+    });
+  });
+
+  it("keeps mid-sentence Slack user references classifier-eligible", async () => {
+    const records: SlackParticipationDecisionRecord[] = [];
+    const { handler, classifier } = harness({
+      onDecision: (record) => { records.push(record); },
+    });
+    const { ctx, listParticipants } = context();
+
+    await expect(
+      handler(ctx, slackMessage({ text: "I asked <@U1> to review it. What do you think?" })),
+    ).resolves.toBeNull();
+    expect(listParticipants).toHaveBeenCalledOnce();
+    expect(classifier).toHaveBeenCalledOnce();
+    expect(records[0]).toMatchObject({ source: "classifier", decision: "SILENT" });
+  });
+
+  it("gives an explicit Eve mention precedence over a leading human addressee", async () => {
+    const records: SlackParticipationDecisionRecord[] = [];
+    const { handler, auth, classifier } = harness({
+      onDecision: (record) => { records.push(record); },
+    });
+    const { ctx, cancel, listParticipants } = context({ mentioned: true });
+
+    await expect(
+      handler(ctx, slackMessage({ text: "hey <@U1> - can you ask <@UEVE123> to check this?" })),
+    ).resolves.toMatchObject({ auth: expect.anything() });
+    expect(auth).toHaveBeenCalledOnce();
+    expect(classifier).not.toHaveBeenCalled();
+    expect(listParticipants).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(records[0]).toMatchObject({ source: "explicit_mention", decision: "RESPOND" });
   });
 
   it("dispatches a trustworthy dyadic thread model-free and cancels first", async () => {

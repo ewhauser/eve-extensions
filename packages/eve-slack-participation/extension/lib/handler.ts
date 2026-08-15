@@ -6,6 +6,7 @@ import {
 } from "eve/channels/slack";
 
 import { getSlackParticipationConfig } from "../extension.js";
+import { hasSentenceInitialSlackUserMention } from "./addressing.js";
 import {
   classifierErrorCode,
   classifyParticipation,
@@ -169,6 +170,22 @@ export function createSlackParticipationHandlerWithDependencies(
       await emitParticipationDecision(config.onDecision, {
         ...baseRecord(message, config, route),
         ...(subscription.errorCode ? { errorCode: subscription.errorCode } : {}),
+      });
+      return null;
+    }
+
+    if (hasSentenceInitialSlackUserMention(message.text)) {
+      const route = evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: false,
+        explicitlyAddressedNonEve: true,
+        subscribed: true,
+        recentMessageCount: ctx.thread.recentMessages.length,
+      });
+      await emitParticipationDecision(config.onDecision, {
+        ...baseRecord(message, config, route),
+        reason: "HUMAN_TO_HUMAN",
+        addressee: "HUMAN",
       });
       return null;
     }

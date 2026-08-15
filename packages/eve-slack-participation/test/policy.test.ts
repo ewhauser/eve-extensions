@@ -38,6 +38,41 @@ describe("routing policy", () => {
     });
   });
 
+  it("drops a non-Eve addressee after subscription and Eve-mention precedence", () => {
+    expect(
+      evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: false,
+        explicitlyAddressedNonEve: true,
+        subscribed: true,
+        recentMessageCount: 2,
+      }),
+    ).toEqual({
+      action: "drop",
+      decision: "SILENT",
+      source: "explicit_non_eve_addressee",
+      mode: "unknown",
+    });
+    expect(
+      evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: true,
+        explicitlyAddressedNonEve: true,
+        subscribed: true,
+        recentMessageCount: 2,
+      }).source,
+    ).toBe("explicit_mention");
+    expect(
+      evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: false,
+        explicitlyAddressedNonEve: true,
+        subscribed: false,
+        recentMessageCount: 2,
+      }).source,
+    ).toBe("not_subscribed");
+  });
+
   it("fails quiet for unavailable and visibly truncated snapshots", () => {
     expect(
       evaluateRoutingPolicy({

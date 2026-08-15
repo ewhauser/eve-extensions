@@ -50,6 +50,8 @@ information:
 
 - Direct messages and explicit mentions dispatch without classification.
 - Unmentioned messages outside an active Eve session are dropped.
+- In an active channel thread, a canonical Slack user mention used as a
+  sentence-initial non-Eve addressee is dropped without classification.
 - An active thread with one visible human dispatches model-free.
 - An active thread with multiple visible humans uses the configured model.
 - Empty or unavailable participant snapshots fail quiet.
@@ -62,10 +64,16 @@ before returning `{ auth }`. An enforced silent decision never cancels the
 current turn. Cancellation is best-effort: failure is recorded but does not
 reverse a valid dispatch decision.
 
+The non-Eve addressee rule recognizes canonical `<@USER_ID>` Slack syntax at
+the start of a message or sentence, optionally after a short greeting such as
+`hey`. Mid-sentence mentions remain classifier input. Direct messages and any
+message that explicitly mentions Eve take precedence over this rule.
+
 `mode: "shadow"` records the decision while preserving the existing behavior
 of subscribed threads. In shadow mode, a classifier or snapshot decision of
 `SILENT` still dispatches and cancels the active turn. Messages confirmed not
-to be subscribed remain dropped. Use telemetry to evaluate the policy before
+to be subscribed remain dropped. The deterministic non-Eve addressee rule is
+enforced in both modes. Use telemetry to evaluate the classifier policy before
 switching to `mode: "enforce"`.
 
 ## Configuration
@@ -131,6 +139,11 @@ decision source, structured classifier fields when present, bounded-context
 sizes, model id, latency, safe error code, and whether the decision was shadowed.
 It never contains message text. Callback errors are logged and cannot change
 the routing decision.
+
+Deterministic non-Eve addressee drops use source
+`explicit_non_eve_addressee`, reason `HUMAN_TO_HUMAN`, and addressee `HUMAN`.
+Their thread mode is `unknown` because the guard intentionally skips the
+participant snapshot.
 
 Recommended rollout:
 

@@ -7,6 +7,7 @@ import type {
 export interface RoutingPolicyInput {
   readonly directMessage: boolean;
   readonly explicitlyMentioned: boolean;
+  readonly explicitlyAddressedNonEve?: boolean;
   readonly subscribed?: boolean;
   readonly participantIds?: readonly string[];
   readonly recentMessageCount: number;
@@ -44,6 +45,15 @@ export function evaluateRoutingPolicy(input: RoutingPolicyInput): RoutingPolicyR
       action: "drop",
       decision: "SILENT",
       source: "not_subscribed",
+      mode: "unknown",
+    };
+  }
+
+  if (input.explicitlyAddressedNonEve) {
+    return {
+      action: "drop",
+      decision: "SILENT",
+      source: "explicit_non_eve_addressee",
       mode: "unknown",
     };
   }

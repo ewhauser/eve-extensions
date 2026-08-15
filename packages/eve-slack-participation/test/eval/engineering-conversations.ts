@@ -216,13 +216,13 @@ export const engineeringConversationEvalCases = [
     },
   },
   {
-    id: "human-to-human-explicit-mention",
-    description: "A request explicitly addressed to another human should not wake Eve.",
+    id: "human-to-human-named-rerun",
+    description: "A request addressed by name to another human should not wake Eve.",
     participants: ["author", "reviewer"],
     turns: [
       { speaker: "author", text: "The flaky test is still blocking the merge." },
       { speaker: "eve", text: "The failure is isolated to the clock assertion." },
-      { speaker: "reviewer", text: "<@U_AUTHOR>, can you rerun it with the fake clock enabled?" },
+      { speaker: "reviewer", text: "Marco, can you rerun it with the fake clock enabled?" },
     ],
     groupRequests: "silent",
     expected: {
@@ -270,7 +270,7 @@ export const engineeringConversationEvalCases = [
     turns: [
       { speaker: "author", text: "Eve's patch changes the retry boundary." },
       { speaker: "release", text: "I want a second reviewer on the failure path." },
-      { speaker: "author", text: "I reviewed Eve's diff. <@U_REVIEWER>, can you check the cancellation branch?" },
+      { speaker: "author", text: "I reviewed Eve's diff. Maya, can you check the cancellation branch?" },
     ],
     groupRequests: "silent",
     expected: {

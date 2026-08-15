@@ -25,6 +25,7 @@ export type SlackParticipationReason =
 export type SlackParticipationSource =
   | "direct_message"
   | "explicit_mention"
+  | "explicit_non_eve_addressee"
   | "not_subscribed"
   | "dyadic_rule"
   | "classifier"
