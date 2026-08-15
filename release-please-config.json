@@ -10,6 +10,11 @@
       "package-name": "eve-project-link",
       "release-type": "node"
     },
+    "packages/eve-slack-participation": {
+      "component": "eve-slack-participation",
+      "package-name": "eve-slack-participation",
+      "release-type": "node"
+    },
     "packages/eve-aws-lambda-microvms": {
       "component": "eve-aws-lambda-microvms",
       "package-name": "eve-aws-lambda-microvms",
