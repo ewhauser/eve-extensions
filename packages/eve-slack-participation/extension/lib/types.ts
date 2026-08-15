@@ -6,6 +6,7 @@ import type {
 } from "eve/channels/slack";
 
 export type SlackParticipationMode = "shadow" | "enforce";
+export type SlackParticipationStrategy = "classifier" | "deterministic";
 export type GroupRequestPolicy = "respond" | "silent";
 export type ThreadParticipationMode = "dyadic" | "multi_party" | "unknown";
 
@@ -28,6 +29,7 @@ export type SlackParticipationSource =
   | "explicit_non_eve_addressee"
   | "not_subscribed"
   | "dyadic_rule"
+  | "deterministic_multi_party"
   | "classifier"
   | "failure_fallback"
   | "snapshot_limit";
@@ -43,6 +45,7 @@ export interface SlackParticipationDecisionRecord {
   readonly channelId: string;
   readonly threadTs: string;
   readonly messageTs: string;
+  readonly strategy: SlackParticipationStrategy;
   readonly mode: ThreadParticipationMode;
   readonly distinctHumans?: number;
   readonly decision: SlackParticipationDecisionValue;
@@ -61,8 +64,7 @@ export type SlackParticipationDecisionCallback = (
   record: SlackParticipationDecisionRecord,
 ) => void | Promise<void>;
 
-export interface SlackParticipationConfig {
-  readonly model: string | LanguageModel;
+interface SlackParticipationConfigBase {
   readonly mode: SlackParticipationMode;
   readonly recentMessages: number;
   readonly maxContextCharacters: number;
@@ -70,6 +72,20 @@ export interface SlackParticipationConfig {
   readonly groupRequests: GroupRequestPolicy;
   readonly onDecision?: SlackParticipationDecisionCallback | undefined;
 }
+
+export interface ClassifierSlackParticipationConfig extends SlackParticipationConfigBase {
+  readonly strategy: "classifier";
+  readonly model: string | LanguageModel;
+}
+
+export interface DeterministicSlackParticipationConfig extends SlackParticipationConfigBase {
+  readonly strategy: "deterministic";
+  readonly model?: string | LanguageModel | undefined;
+}
+
+export type SlackParticipationConfig =
+  | ClassifierSlackParticipationConfig
+  | DeterministicSlackParticipationConfig;
 
 export type SlackParticipationAuth = NonNullable<SlackInboundResult>["auth"];
 
@@ -94,6 +110,6 @@ export interface ClassifierResult extends SlackParticipationDecision {
 }
 
 export type ParticipationClassifier = (input: {
-  readonly config: SlackParticipationConfig;
+  readonly config: ClassifierSlackParticipationConfig;
   readonly context: ClassifierContext;
 }) => Promise<ClassifierResult>;

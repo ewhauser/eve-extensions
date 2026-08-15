@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { classifyParticipation } from "../../extension/lib/classifier.js";
 import { buildClassifierContext } from "../../extension/lib/context.js";
-import type { SlackParticipationConfig } from "../../extension/lib/types.js";
+import type { ClassifierSlackParticipationConfig } from "../../extension/lib/types.js";
 import {
   engineeringConversationEvalCases,
   gradeEngineeringConversation,
@@ -47,7 +47,8 @@ describe.sequential(`engineering Slack participation eval (${model})`, () => {
           maxCharacters: 12_000,
           groupRequests: testCase.groupRequests,
         });
-        const config: SlackParticipationConfig = {
+        const config: ClassifierSlackParticipationConfig = {
+          strategy: "classifier",
           model,
           mode: "enforce",
           recentMessages: 12,

@@ -56,6 +56,7 @@ function baseRecord(
     channelId: message.channelId,
     threadTs: message.threadTs,
     messageTs: message.ts,
+    strategy: config.strategy,
     mode: route.mode,
     ...(route.distinctHumans !== undefined
       ? { distinctHumans: route.distinctHumans }
@@ -204,7 +205,7 @@ export function createSlackParticipationHandlerWithDependencies(
         ...baseRecord(message, config, route),
         errorCode: "participant_snapshot_failed",
       };
-      if (config.mode === "shadow") {
+      if (config.strategy === "classifier" && config.mode === "shadow") {
         return resolveDispatch({
           ctx,
           message,
@@ -223,12 +224,13 @@ export function createSlackParticipationHandlerWithDependencies(
       directMessage: false,
       explicitlyMentioned: false,
       subscribed: true,
+      strategy: config.strategy,
       participantIds: participants,
       recentMessageCount: ctx.thread.recentMessages.length,
     });
 
     let record = baseRecord(message, config, route);
-    if (route.action === "classify") {
+    if (route.action === "classify" && config.strategy === "classifier") {
       const context = buildClassifierContext({
         message,
         recentMessages: ctx.thread.recentMessages,
@@ -264,7 +266,9 @@ export function createSlackParticipationHandlerWithDependencies(
       }
     }
 
-    const shouldDispatch = record.decision === "RESPOND" || config.mode === "shadow";
+    const shouldDispatch =
+      record.decision === "RESPOND" ||
+      (config.strategy === "classifier" && config.mode === "shadow");
     if (shouldDispatch) {
       return resolveDispatch({
         ctx,

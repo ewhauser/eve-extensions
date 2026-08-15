@@ -30,15 +30,27 @@ const onDecision = z.custom<SlackParticipationDecisionCallback>(
   { message: "onDecision must be a function." },
 );
 
-export const slackParticipationConfigSchema = z.object({
-  model,
+const sharedConfigShape = {
   mode: z.enum(["shadow", "enforce"]).default("shadow"),
   recentMessages: z.number().int().min(2).max(50).default(12),
   maxContextCharacters: z.number().int().min(1_000).max(100_000).default(12_000),
   timeoutMs: z.number().int().min(100).max(30_000).default(2_000),
   groupRequests: z.enum(["respond", "silent"]).default("silent"),
   onDecision: onDecision.optional(),
-});
+} as const;
+
+export const slackParticipationConfigSchema = z.union([
+  z.object({
+    strategy: z.literal("classifier").default("classifier"),
+    model,
+    ...sharedConfigShape,
+  }),
+  z.object({
+    strategy: z.literal("deterministic"),
+    model: model.optional(),
+    ...sharedConfigShape,
+  }),
+]);
 
 export type ConfiguredSlackParticipation = z.output<typeof slackParticipationConfigSchema>;
 

@@ -6,7 +6,7 @@ import {
   classifyParticipation,
   ParticipationClassifierError,
 } from "../extension/lib/classifier.js";
-import type { SlackParticipationConfig } from "../extension/lib/types.js";
+import type { ClassifierSlackParticipationConfig } from "../extension/lib/types.js";
 
 const usage = {
   inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
@@ -28,8 +28,9 @@ function model(output: unknown): MockLanguageModelV4 {
 function config(
   languageModel: MockLanguageModelV4,
   groupRequests: "respond" | "silent" = "silent",
-): SlackParticipationConfig {
+): ClassifierSlackParticipationConfig {
   return {
+    strategy: "classifier",
     model: languageModel,
     mode: "enforce",
     recentMessages: 12,

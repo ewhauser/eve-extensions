@@ -94,7 +94,7 @@ describe("routing policy", () => {
     ).toMatchObject({ action: "drop", source: "snapshot_limit", decision: "SILENT" });
   });
 
-  it("uses the model only for multi-party active threads", () => {
+  it("dispatches dyadic threads in either strategy", () => {
     expect(
       evaluateRoutingPolicy({
         directMessage: false,
@@ -108,10 +108,39 @@ describe("routing policy", () => {
       evaluateRoutingPolicy({
         directMessage: false,
         explicitlyMentioned: false,
+        strategy: "deterministic",
+        subscribed: true,
+        participantIds: ["U1"],
+        recentMessageCount: 10,
+      }),
+    ).toMatchObject({ action: "dispatch", source: "dyadic_rule", mode: "dyadic" });
+  });
+
+  it("classifies or drops multi-party threads according to strategy", () => {
+    expect(
+      evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: false,
         subscribed: true,
         participantIds: ["U1", "U2"],
         recentMessageCount: 10,
       }),
     ).toMatchObject({ action: "classify", source: "classifier", mode: "multi_party" });
+    expect(
+      evaluateRoutingPolicy({
+        directMessage: false,
+        explicitlyMentioned: false,
+        strategy: "deterministic",
+        subscribed: true,
+        participantIds: ["U1", "U2"],
+        recentMessageCount: 10,
+      }),
+    ).toEqual({
+      action: "drop",
+      decision: "SILENT",
+      source: "deterministic_multi_party",
+      mode: "multi_party",
+      distinctHumans: 2,
+    });
   });
 });

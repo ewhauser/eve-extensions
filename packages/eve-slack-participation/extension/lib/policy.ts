@@ -1,6 +1,7 @@
 import type {
   SlackParticipationDecisionValue,
   SlackParticipationSource,
+  SlackParticipationStrategy,
   ThreadParticipationMode,
 } from "./types.js";
 
@@ -8,6 +9,7 @@ export interface RoutingPolicyInput {
   readonly directMessage: boolean;
   readonly explicitlyMentioned: boolean;
   readonly explicitlyAddressedNonEve?: boolean;
+  readonly strategy?: SlackParticipationStrategy;
   readonly subscribed?: boolean;
   readonly participantIds?: readonly string[];
   readonly recentMessageCount: number;
@@ -85,6 +87,16 @@ export function evaluateRoutingPolicy(input: RoutingPolicyInput): RoutingPolicyR
       source: "dyadic_rule",
       mode: "dyadic",
       distinctHumans: 1,
+    };
+  }
+
+  if (input.strategy === "deterministic") {
+    return {
+      action: "drop",
+      decision: "SILENT",
+      source: "deterministic_multi_party",
+      mode: "multi_party",
+      distinctHumans: participants.length,
     };
   }
 

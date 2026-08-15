@@ -8,6 +8,7 @@ describe("slack participation config", () => {
     const config = slackParticipationConfigSchema.parse({ model: "openai/gpt-5-mini" });
 
     expect(config).toMatchObject({
+      strategy: "classifier",
       model: "openai/gpt-5-mini",
       mode: "shadow",
       recentMessages: 12,
@@ -15,6 +16,16 @@ describe("slack participation config", () => {
       timeoutMs: 2_000,
       groupRequests: "silent",
     });
+  });
+
+  it("accepts deterministic-only routing without a model", () => {
+    const config = slackParticipationConfigSchema.parse({ strategy: "deterministic" });
+
+    expect(config).toMatchObject({
+      strategy: "deterministic",
+      mode: "shadow",
+    });
+    expect(config.model).toBeUndefined();
   });
 
   it("accepts a language model and callback", () => {
@@ -29,6 +40,9 @@ describe("slack participation config", () => {
   it.each([
     { model: "" },
     { model: {} },
+    { strategy: "deterministic", model: {} },
+    { strategy: "classifier" },
+    { strategy: "unknown", model: "valid" },
     { model: "valid", recentMessages: 1 },
     { model: "valid", recentMessages: 51 },
     { model: "valid", maxContextCharacters: 999 },

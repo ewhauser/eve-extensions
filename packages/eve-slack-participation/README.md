@@ -21,9 +21,20 @@ Create an authored extension, for example
 import slackParticipation from "eve-slack-participation";
 
 export default slackParticipation({
+  strategy: "classifier",
   model: "openai/gpt-5-mini",
   mode: "shadow",
   groupRequests: "silent",
+});
+```
+
+For model-free routing, omit the model and select the deterministic strategy:
+
+```ts
+import slackParticipation from "eve-slack-participation";
+
+export default slackParticipation({
+  strategy: "deterministic",
 });
 ```
 
@@ -40,8 +51,9 @@ export default slackChannel({
 ```
 
 The `threadContext` option is not required by this extension. Eve's participant
-snapshot refreshes the thread before a multi-party decision, and the extension
-selects its own bounded root/recent/latest classifier view from that snapshot.
+snapshot refreshes the thread before a multi-party decision. When classification
+is enabled, the extension selects its own bounded root/recent/latest classifier
+view from that snapshot.
 
 ## Policy
 
@@ -53,7 +65,8 @@ information:
 - In an active channel thread, a canonical Slack user mention used as a
   sentence-initial non-Eve addressee is dropped without classification.
 - An active thread with one visible human dispatches model-free.
-- An active thread with multiple visible humans uses the configured model.
+- An active thread with multiple visible humans uses the configured model under
+  `strategy: "classifier"` and stays silent under `strategy: "deterministic"`.
 - Empty or unavailable participant snapshots fail quiet.
 - A 50-message snapshot with fewer than two visible humans is treated as
   truncated and fails quiet instead of being misclassified as dyadic.
@@ -70,11 +83,18 @@ the start of a message or sentence, optionally after a short greeting such as
 message that explicitly mentions Eve take precedence over this rule.
 
 `mode: "shadow"` records the decision while preserving the existing behavior
-of subscribed threads. In shadow mode, a classifier or snapshot decision of
-`SILENT` still dispatches and cancels the active turn. Messages confirmed not
-to be subscribed remain dropped. The deterministic non-Eve addressee rule is
-enforced in both modes. Use telemetry to evaluate the classifier policy before
-switching to `mode: "enforce"`.
+of subscribed threads under the classifier strategy. In shadow mode, a
+classifier or snapshot decision of `SILENT` still dispatches and cancels the
+active turn. Messages confirmed not to be subscribed remain dropped. The
+deterministic non-Eve addressee rule is enforced in both modes. Use telemetry
+to evaluate the classifier policy before switching to `mode: "enforce"`.
+
+`strategy: "deterministic"` never calls the classifier. Direct messages and
+explicit Eve mentions dispatch, subscribed dyadic threads dispatch, and
+subscribed multi-party threads stay silent. A missing, failed, empty, or visibly
+truncated participant snapshot also stays silent because the handler cannot
+prove the thread is dyadic. These outcomes are enforced even when `mode` is
+`"shadow"`.
 
 ## Configuration
 
@@ -82,8 +102,7 @@ switching to `mode: "enforce"`.
 import type { LanguageModel } from "ai";
 import type { SlackParticipationDecisionRecord } from "eve-slack-participation/types";
 
-interface Config {
-  model: string | LanguageModel;
+interface SharedConfig {
   mode?: "shadow" | "enforce";           // default: "shadow"
   recentMessages?: number;                // 2..50, default: 12
   maxContextCharacters?: number;          // 1,000..100,000, default: 12,000
@@ -91,15 +110,28 @@ interface Config {
   groupRequests?: "respond" | "silent";  // default: "silent"
   onDecision?: (record: SlackParticipationDecisionRecord) => void | Promise<void>;
 }
+
+type Config = SharedConfig & (
+  | {
+      strategy?: "classifier";            // default
+      model: string | LanguageModel;
+    }
+  | {
+      strategy: "deterministic";
+      model?: string | LanguageModel;      // optional and unused
+    }
+);
 ```
 
-A string model id is resolved through the AI SDK gateway. A `LanguageModel`
-instance is used directly. Classification uses structured output, temperature
-zero, a small output cap, no tools, no retries, and a hard abort timeout.
-Provider errors, timeouts, invalid output, inconsistent output, and ambiguous
-content all fail quiet.
+The default strategy is `"classifier"`, preserving the original configuration
+shape where only `model` is specified. A string model id is resolved through
+the AI SDK gateway, and a `LanguageModel` instance is used directly.
+Classification uses structured output, temperature zero, a small output cap,
+no tools, no retries, and a hard abort timeout. Provider errors, timeouts,
+invalid output, inconsistent output, and ambiguous content all fail quiet.
 
-Group-wide asks are the only configurable semantic category. With
+Under the classifier strategy, group-wide asks are the only configurable
+semantic category. With
 `groupRequests: "respond"`, requests addressed to the whole channel may wake
 Eve; with `"silent"`, they do not.
 
@@ -120,7 +152,8 @@ bound auth context.
 
 ## Classifier data and privacy
 
-Only a bounded, text-only transcript is sent to the model: the root when
+Only the classifier strategy sends data to a model. Its input is a bounded,
+text-only transcript: the root when
 available, recent messages, and the triggering message. Slack user ids are
 replaced with stable per-thread labels (`THREAD_AUTHOR`, `HUMAN_2`, and so on),
 Eve is labeled `EVE`, and mentions are normalized to those labels. Attachments,
@@ -135,8 +168,9 @@ No confidence score or free-form rationale is generated or retained.
 
 `onDecision` receives one content-free record per eligible human message. It
 contains Slack routing ids, observed thread mode and participant count, the
-decision source, structured classifier fields when present, bounded-context
-sizes, model id, latency, safe error code, and whether the decision was shadowed.
+configured strategy, decision source, structured classifier fields when present,
+bounded-context sizes, model id, latency, safe error code, and whether the
+configuration uses shadow mode.
 It never contains message text. Callback errors are logged and cannot change
 the routing decision.
 
@@ -145,7 +179,11 @@ Deterministic non-Eve addressee drops use source
 Their thread mode is `unknown` because the guard intentionally skips the
 participant snapshot.
 
-Recommended rollout:
+Deterministic multi-party drops use source `deterministic_multi_party`, mode
+`multi_party`, and include the observed human count. They contain no model or
+classifier fields.
+
+Recommended classifier rollout:
 
 1. Start in `shadow` and inspect false-positive and false-negative rates by
    decision source and reason.

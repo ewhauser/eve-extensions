@@ -78,18 +78,25 @@ function context(input: {
 
 function harness(input: {
   mode?: "shadow" | "enforce";
+  strategy?: "classifier" | "deterministic";
   classifier?: ParticipationClassifier;
   onDecision?: (record: SlackParticipationDecisionRecord) => void | Promise<void>;
 } = {}) {
-  const config: SlackParticipationConfig = {
-    model: "openai/gpt-5-mini",
+  const sharedConfig = {
     mode: input.mode ?? "enforce",
     recentMessages: 12,
     maxContextCharacters: 12_000,
     timeoutMs: 2_000,
-    groupRequests: "silent",
+    groupRequests: "silent" as const,
     ...(input.onDecision ? { onDecision: input.onDecision } : {}),
   };
+  const config: SlackParticipationConfig = input.strategy === "deterministic"
+    ? { ...sharedConfig, strategy: "deterministic" }
+    : {
+        ...sharedConfig,
+        strategy: "classifier",
+        model: "openai/gpt-5-mini",
+      };
   const classifier = input.classifier ?? vi.fn().mockResolvedValue({
     decision: "SILENT",
     addressee: "HUMAN",
@@ -211,9 +218,12 @@ describe("Slack participation handler", () => {
     expect(records[0]).toMatchObject({ source: "explicit_mention", decision: "RESPOND" });
   });
 
-  it("dispatches a trustworthy dyadic thread model-free and cancels first", async () => {
+  it("dispatches a trustworthy dyadic thread in deterministic-only strategy", async () => {
     const records: SlackParticipationDecisionRecord[] = [];
-    const { handler, classifier } = harness({ onDecision: (record) => { records.push(record); } });
+    const { handler, classifier } = harness({
+      strategy: "deterministic",
+      onDecision: (record) => { records.push(record); },
+    });
     const message = slackMessage({
       author: { ...slackMessage().author!, userId: "U1" },
     });
@@ -223,11 +233,37 @@ describe("Slack participation handler", () => {
     expect(classifier).not.toHaveBeenCalled();
     expect(cancel).toHaveBeenCalledOnce();
     expect(records[0]).toMatchObject({
+      strategy: "deterministic",
       source: "dyadic_rule",
       mode: "dyadic",
       distinctHumans: 1,
       decision: "RESPOND",
     });
+  });
+
+  it("drops multi-party threads model-free in deterministic-only strategy", async () => {
+    const records: SlackParticipationDecisionRecord[] = [];
+    const { handler, auth, classifier } = harness({
+      strategy: "deterministic",
+      mode: "shadow",
+      onDecision: (record) => { records.push(record); },
+    });
+    const { ctx, cancel, listParticipants } = context({ participants: ["U1", "U2"] });
+
+    await expect(handler(ctx, slackMessage())).resolves.toBeNull();
+    expect(listParticipants).toHaveBeenCalledOnce();
+    expect(classifier).not.toHaveBeenCalled();
+    expect(auth).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(records[0]).toMatchObject({
+      strategy: "deterministic",
+      source: "deterministic_multi_party",
+      mode: "multi_party",
+      distinctHumans: 2,
+      decision: "SILENT",
+      shadow: true,
+    });
+    expect(records[0]).not.toHaveProperty("modelId");
   });
 
   it("adds a missing latest human to a non-empty snapshot before classifying", async () => {
@@ -360,6 +396,7 @@ describe("Slack participation handler", () => {
   it("fails quiet when an application auth resolver throws", async () => {
     const records: SlackParticipationDecisionRecord[] = [];
     const config: SlackParticipationConfig = {
+      strategy: "classifier",
       model: "openai/gpt-5-mini",
       mode: "enforce",
       recentMessages: 12,
@@ -417,6 +454,28 @@ describe("Slack participation handler", () => {
     await expect(handler(ctx, slackMessage())).resolves.toMatchObject({ auth: expect.anything() });
     expect(cancel).toHaveBeenCalledOnce();
     expect(records[0]).toMatchObject({
+      source: "failure_fallback",
+      decision: "SILENT",
+      errorCode: "participant_snapshot_failed",
+      shadow: true,
+    });
+  });
+
+  it("fails quiet after a snapshot exception in deterministic-only strategy", async () => {
+    const records: SlackParticipationDecisionRecord[] = [];
+    const { handler, auth, classifier } = harness({
+      strategy: "deterministic",
+      mode: "shadow",
+      onDecision: (record) => { records.push(record); },
+    });
+    const { ctx, cancel } = context({ snapshotError: true });
+
+    await expect(handler(ctx, slackMessage())).resolves.toBeNull();
+    expect(classifier).not.toHaveBeenCalled();
+    expect(auth).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(records[0]).toMatchObject({
+      strategy: "deterministic",
       source: "failure_fallback",
       decision: "SILENT",
       errorCode: "participant_snapshot_failed",
