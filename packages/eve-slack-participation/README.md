@@ -218,9 +218,28 @@ EVE_SLACK_PARTICIPATION_EVAL_MODEL=openai/gpt-5-mini \
 pnpm --filter eve-slack-participation eval
 ```
 
-The runner makes one model request per selected case and fails on a wrong
-decision, addressee, or reason. Run a subset by passing exact comma-separated
-case ids:
+For a correctness, latency, and cost comparison, pass comma-separated model
+ids. This example spans several useful price/quality tiers from the current AI
+Gateway catalog:
+
+```sh
+AI_GATEWAY_API_KEY=... \
+EVE_SLACK_PARTICIPATION_EVAL_MODELS=openai/gpt-5-nano,google/gemini-2.5-flash-lite,alibaba/qwen3.5-flash,openai/gpt-5.6-luna,google/gemini-3.1-flash-lite,openai/gpt-5-mini,anthropic/claude-haiku-4.5 \
+pnpm --filter eve-slack-participation eval
+```
+
+The runner makes one request per model and selected case. It fails individual
+tests on a wrong decision, addressee, or reason, but continues through the
+matrix. Its final human-readable table and JSON summary include exact structured
+accuracy, decision accuracy, false and missed wakes, safe error counts, p50/p95
+latency, input/output tokens, estimated total cost, and projected cost per 1,000
+classified messages. Decision metrics treat classifier errors as `SILENT`,
+matching the production fail-quiet route, while exact accuracy and error counts
+still expose those failures. Cost covers responses that report token usage and
+uses live list prices from the public AI Gateway model catalog; accuracy and
+latency still report if that catalog is unavailable.
+
+Run a subset by passing exact comma-separated case ids:
 
 ```sh
 AI_GATEWAY_API_KEY=... \
