@@ -8,6 +8,24 @@ const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
 
 export const packages = new Map([
   [
+    "packages/eve-slack-participation",
+    {
+      name: "eve-slack-participation",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.mjs",
+        "dist/extension/slack.d.ts",
+        "dist/extension/slack.mjs",
+        "dist/extension/lib/types.d.ts",
+        "dist/extension/lib/types.mjs",
+        "dist/tools/index.d.ts",
+        "dist/tools/index.mjs",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-project-link",
     {
       name: "eve-project-link",

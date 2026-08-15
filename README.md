@@ -18,6 +18,10 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
   card on every turn, and guides the agent to use already-mounted Notion,
   Linear, or custom tools without owning provider credentials.
   It is licensed under MIT.
+- [`eve-slack-participation`](packages/eve-slack-participation) — gives Eve a
+  bounded, fail-quiet participation policy for active multi-human Slack
+  threads while preserving direct messages, explicit mentions, and dyadic
+  follow-ups. It is licensed under MIT.
 - [`eve-openai-compaction`](packages/eve-openai-compaction) — replaces Eve's
   built-in prose-summary compaction with OpenAI's remote encrypted checkpoint
   strategy, using Codex's retained-user-message window. It is remote-only,
@@ -85,6 +89,6 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-project-link`, `eve-openai-compaction`, `eve-openai-connectors`,
-`eve-openai-plugins`, and `eve-openai-imagegen` are MIT-licensed, while
-`eve-aws-lambda-microvms` is Apache-2.0-licensed.
+`eve-project-link`, `eve-slack-participation`, `eve-openai-compaction`,
+`eve-openai-connectors`, `eve-openai-plugins`, and `eve-openai-imagegen` are
+MIT-licensed, while `eve-aws-lambda-microvms` is Apache-2.0-licensed.
