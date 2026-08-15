@@ -57,6 +57,11 @@ describe("participation classifier", () => {
       addressee: "EVE",
       reason: "FOLLOW_UP_TO_EVE",
       modelId: "participation-test",
+      inputTokens: 10,
+      uncachedInputTokens: 10,
+      cacheReadInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 8,
     });
     expect(languageModel.doGenerateCalls).toHaveLength(1);
     expect(languageModel.doGenerateCalls[0]?.temperature).toBe(0);

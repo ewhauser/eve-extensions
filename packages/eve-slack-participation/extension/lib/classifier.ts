@@ -107,6 +107,21 @@ export const classifyParticipation: ParticipationClassifier = async ({ config, c
     ...output,
     modelId: participationModelId(config.model),
     latencyMs: Math.round(performance.now() - startedAt),
+    ...(result.usage.inputTokens !== undefined
+      ? { inputTokens: result.usage.inputTokens }
+      : {}),
+    ...(result.usage.inputTokenDetails.noCacheTokens !== undefined
+      ? { uncachedInputTokens: result.usage.inputTokenDetails.noCacheTokens }
+      : {}),
+    ...(result.usage.inputTokenDetails.cacheReadTokens !== undefined
+      ? { cacheReadInputTokens: result.usage.inputTokenDetails.cacheReadTokens }
+      : {}),
+    ...(result.usage.inputTokenDetails.cacheWriteTokens !== undefined
+      ? { cacheWriteInputTokens: result.usage.inputTokenDetails.cacheWriteTokens }
+      : {}),
+    ...(result.usage.outputTokens !== undefined
+      ? { outputTokens: result.usage.outputTokens }
+      : {}),
   } satisfies ClassifierResult;
 };
 
