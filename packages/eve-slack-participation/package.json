@@ -35,6 +35,7 @@
   },
   "scripts": {
     "build": "eve extension build",
+    "eval": "vitest run --config vitest.eval.config.ts",
     "prepare": "eve extension build",
     "typecheck": "tsc",
     "test": "vitest run",

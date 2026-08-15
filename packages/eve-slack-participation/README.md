@@ -140,6 +140,46 @@ Recommended rollout:
 3. Switch to `enforce` explicitly.
 4. Keep alerts on classifier failures, latency, and snapshot-limit fallbacks.
 
+## Engineering conversation evals
+
+The repository includes a reproducible corpus of 20 synthetic multi-human
+engineering threads in
+[`test/eval/engineering-conversations.ts`](test/eval/engineering-conversations.ts).
+It is balanced between `RESPOND` and `SILENT`, covers every structured reason,
+and includes both group-request policies. Cases exercise terse answers,
+interrupted answers, follow-up work, named requests for Eve, group asks,
+human-to-human assignments, acknowledgements, social chatter, completed
+incidents, and ambiguous technical questions.
+
+The corpus materializes real Eve `SlackMessage` and `SlackThreadMessage` shapes.
+It intentionally contains only classifier-eligible active multi-party threads;
+DM, explicit-mention, dyadic, subscription, and snapshot routing remain in the
+deterministic unit suite.
+
+Offline `pnpm test` validates corpus coverage, participant topology,
+pseudonymization, context bounds, and the decision/addressee/reason grading
+contract. To evaluate the production classifier against a live AI SDK gateway
+model:
+
+```sh
+AI_GATEWAY_API_KEY=... \
+EVE_SLACK_PARTICIPATION_EVAL_MODEL=openai/gpt-5-mini \
+pnpm --filter eve-slack-participation eval
+```
+
+The runner makes one model request per selected case and fails on a wrong
+decision, addressee, or reason. Run a subset by passing exact comma-separated
+case ids:
+
+```sh
+AI_GATEWAY_API_KEY=... \
+EVE_SLACK_PARTICIPATION_EVAL_MODEL=openai/gpt-5-mini \
+EVE_SLACK_PARTICIPATION_EVAL_CASES=terse-answer-to-eve,human-answers-human \
+pnpm --filter eve-slack-participation eval
+```
+
+Live model evals are opt-in and are not part of the offline CI gate.
+
 ## License
 
 MIT
