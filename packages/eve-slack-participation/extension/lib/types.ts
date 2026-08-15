@@ -107,6 +107,11 @@ export interface ClassifierContext {
 export interface ClassifierResult extends SlackParticipationDecision {
   readonly modelId: string;
   readonly latencyMs: number;
+  readonly inputTokens?: number;
+  readonly uncachedInputTokens?: number;
+  readonly cacheReadInputTokens?: number;
+  readonly cacheWriteInputTokens?: number;
+  readonly outputTokens?: number;
 }
 
 export type ParticipationClassifier = (input: {
