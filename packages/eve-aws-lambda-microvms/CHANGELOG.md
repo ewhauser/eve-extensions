@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.5.0...eve-aws-lambda-microvms-v0.5.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **aws-lambda-microvms:** support optional SSE-KMS writes ([#80](https://github.com/ewhauser/eve-extensions/issues/80)) ([9b24ca6](https://github.com/ewhauser/eve-extensions/commit/9b24ca6c66ee9cdfdc6235d720f42bd59b423b5b))
+
 ## [0.5.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.4.0...eve-aws-lambda-microvms-v0.5.0) (2026-08-16)
 
 
