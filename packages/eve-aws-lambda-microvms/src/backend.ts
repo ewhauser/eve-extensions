@@ -107,6 +107,7 @@ function createDefaultServices(
     createController: (microvm) => new HttpAwsLambdaMicrovmController({ api, microvm }),
     storage: new SdkAwsLambdaMicrovmStorage({
       bucket: options.artifactBucket,
+      kmsKeyId: options.artifactKmsKeyId,
       region: options.region,
     }),
   };

@@ -16,6 +16,7 @@ export interface ResolvedAwsLambdaMicrovmOptions {
   readonly applicationId: string;
   readonly applicationHash: string;
   readonly artifactBucket: string;
+  readonly artifactKmsKeyId?: string;
   readonly artifactPrefix: string;
   readonly baseImage?: AwsLambdaMicrovmBaseImage;
   readonly buildEgressNetworkConnectorArns: readonly string[];
@@ -44,6 +45,7 @@ export function resolveAwsLambdaMicrovmOptions(
   const region = expectNonEmpty("region", options.region);
   const artifactBucket = expectNonEmpty("artifactBucket", options.artifactBucket);
   const buildRoleArn = expectNonEmpty("buildRoleArn", options.buildRoleArn);
+  const artifactKmsKeyId = optionalNonEmpty("artifactKmsKeyId", options.artifactKmsKeyId);
   const baseImage =
     options.baseImage === undefined
       ? undefined
@@ -141,6 +143,7 @@ export function resolveAwsLambdaMicrovmOptions(
     applicationHash,
     applicationId,
     artifactBucket,
+    artifactKmsKeyId,
     artifactPrefix,
     baseImage,
     buildEgressNetworkConnectorArns,

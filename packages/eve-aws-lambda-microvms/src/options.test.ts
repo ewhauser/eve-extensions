@@ -35,6 +35,7 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
     const resolved = resolveAwsLambdaMicrovmOptions(REQUIRED);
 
     expect(resolved).toMatchObject({
+      artifactKmsKeyId: undefined,
       artifactPrefix: expect.stringMatching(/^eve\/lambda-microvms\/[a-f0-9]{20}$/),
       executionRoleArn: undefined,
       idlePolicy: {
@@ -52,6 +53,21 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
     expect(resolved.runtimeEgressNetworkConnectorArns).toEqual([
       expect.stringContaining(":INTERNET_EGRESS"),
     ]);
+  });
+
+  it("accepts an optional artifact KMS key identifier", () => {
+    const artifactKmsKeyId =
+      "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012";
+
+    expect(resolveAwsLambdaMicrovmOptions({ ...REQUIRED, artifactKmsKeyId })).toMatchObject({
+      artifactKmsKeyId,
+    });
+  });
+
+  it("rejects a blank artifact KMS key identifier", () => {
+    expect(() =>
+      resolveAwsLambdaMicrovmOptions({ ...REQUIRED, artifactKmsKeyId: " " }),
+    ).toThrow(/artifactKmsKeyId/);
   });
 
   it("requires explicit singleton customer-managed connectors and lane ids", () => {

@@ -40,6 +40,8 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly region: string;
   /** Existing same-region S3 bucket used for image artifacts and checkpoints. */
   readonly artifactBucket: string;
+  /** Optional KMS key identifier for explicit SSE-KMS S3 writes. */
+  readonly artifactKmsKeyId?: string;
   /** IAM role AWS assumes while building the MicroVM image. */
   readonly buildRoleArn: string;
   /** Prefix inside `artifactBucket`; defaults to an application-scoped eve prefix. */

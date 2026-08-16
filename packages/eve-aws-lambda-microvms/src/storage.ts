@@ -64,12 +64,25 @@ export interface AwsLambdaMicrovmStorage {
 export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
   readonly #bucket: string;
   readonly #client: S3Client;
+  readonly #writeEncryption:
+    | {
+        readonly ServerSideEncryption: "aws:kms";
+        readonly SSEKMSKeyId: string;
+      }
+    | undefined;
   readonly #region: string;
 
-  constructor(input: { readonly bucket: string; readonly region: string }) {
+  constructor(
+    input: { readonly bucket: string; readonly kmsKeyId?: string; readonly region: string },
+    client?: S3Client,
+  ) {
     this.#bucket = input.bucket;
     this.#region = input.region;
-    this.#client = new S3Client({ region: input.region });
+    this.#client = client ?? new S3Client({ region: input.region });
+    this.#writeEncryption =
+      input.kmsKeyId === undefined
+        ? undefined
+        : { ServerSideEncryption: "aws:kms", SSEKMSKeyId: input.kmsKeyId };
   }
 
   async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
@@ -127,6 +140,7 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
         ChecksumType: "COMPOSITE",
         ContentType: "application/zstd",
         Key: key,
+        ...this.#writeEncryption,
       }),
     );
     return expectString(output.UploadId, "UploadId");
@@ -230,6 +244,7 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
         ContentType: "application/zip",
         Key: key,
         Metadata: metadata === undefined ? undefined : { ...metadata },
+        ...this.#writeEncryption,
       }),
     );
   }
@@ -247,6 +262,7 @@ export class SdkAwsLambdaMicrovmStorage implements AwsLambdaMicrovmStorage {
         IfMatch: condition.etag,
         IfNoneMatch: condition.absent === true ? "*" : undefined,
         Key: key,
+        ...this.#writeEncryption,
       }),
     );
     return { etag: expectString(output.ETag, "ETag") };
