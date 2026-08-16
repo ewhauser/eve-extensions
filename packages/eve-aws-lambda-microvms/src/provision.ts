@@ -23,7 +23,9 @@ export async function ensureAwsLambdaMicrovmImage(input: {
   readonly options: ResolvedAwsLambdaMicrovmOptions;
   readonly storage: AwsLambdaMicrovmStorage;
 }): Promise<ProvisionedAwsLambdaMicrovmImage> {
-  const artifact = await buildAwsLambdaMicrovmImageArtifact();
+  const artifact = await buildAwsLambdaMicrovmImageArtifact({
+    egressProxyCaBundlePem: input.options.egressProxyCaBundlePem,
+  });
   const baseImage = await resolveBaseImage(input.api, input.options);
   const imageHash = hashStable({
     artifact: artifact.sha256,
@@ -36,6 +38,7 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     buildNetworkLaneId: input.options.buildNetworkLaneId,
     imageHash,
     executionRoleArn: input.options.executionRoleArn,
+    egressProxyCaSha256: input.options.egressProxyCaSha256,
     idlePolicy: input.options.idlePolicy,
     maximumDurationSeconds: input.options.maximumDurationSeconds,
     networkingMode: input.options.networkingMode,

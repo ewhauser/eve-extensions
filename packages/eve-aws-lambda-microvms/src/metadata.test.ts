@@ -7,6 +7,7 @@ const VALID = {
   configHash: "config-1",
   controllerCaSha256: "c".repeat(64),
   controllerProtocolVersion: 2,
+  egressProxyCaSha256: "e".repeat(64),
   egressNetworkConnectorArn:
     "arn:aws:lambda:us-east-1:123456789012:network-connector:runtime",
   imageArn: "arn:aws:lambda:us-east-1:123456789012:microvm-image:test",
@@ -26,6 +27,7 @@ describe("AWS Lambda MicroVM metadata v2", () => {
   it("parses placeholder and trusted-binding generations without authorization material", () => {
     expect(parseAwsLambdaMicrovmSessionMetadata(VALID)).toMatchObject({
       activationId: "activation_opaque_1",
+      egressProxyCaSha256: "e".repeat(64),
       placeholderGeneration: 4,
       placeholderPlacement: { environmentVariable: "OPENAI_API_KEY" },
       trustedBindingGeneration: 9,

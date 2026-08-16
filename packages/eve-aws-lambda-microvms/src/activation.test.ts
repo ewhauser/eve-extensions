@@ -93,4 +93,21 @@ describe("AWS Lambda MicroVM activation v2", () => {
       } as never),
     ).toThrow(/unexpected field capability/);
   });
+
+  it("does not admit proxy certificates or private keys into the run-hook envelope", () => {
+    const value = createAwsLambdaMicrovmActivationEnvelope({
+      controllerCaSha256: "a".repeat(64),
+      placeholder: PLACEHOLDER,
+    });
+
+    expect(() =>
+      serializeAwsLambdaMicrovmActivationEnvelope({
+        ...value,
+        egressProxyCaBundlePem: "-----BEGIN CERTIFICATE-----",
+      } as never),
+    ).toThrow(/unexpected field egressProxyCaBundlePem/);
+    expect(serializeAwsLambdaMicrovmActivationEnvelope(value)).not.toMatch(
+      /BEGIN (?:CERTIFICATE|(?:RSA |EC )?PRIVATE KEY)/,
+    );
+  });
 });

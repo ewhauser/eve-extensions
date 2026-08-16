@@ -222,6 +222,7 @@ For production, select customer-managed networking explicitly and provide the no
 awsLambdaMicrovm({
   // required fields omitted
   networkingMode: "customer-managed",
+  egressProxyCaBundlePem: process.env.EVE_EGRESS_PROXY_PUBLIC_CA_PEM,
   buildNetworkLaneId: "package-build-v1",
   buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
   runtimeNetworkLaneId: "agent-runtime-v1",
@@ -229,7 +230,14 @@ awsLambdaMicrovm({
 });
 ```
 
-This mode requires exactly one connector for image build/template prewarm and exactly one for live sessions. Both must be customer-managed connector ARNs in the configured Region and the build role's AWS account. Missing, blank, empty, multiple, cross-Region, cross-account, and AWS-managed `INTERNET_EGRESS` values fail before AWS clients are constructed. The connector AWS reports for each launched MicroVM is checked before controller traffic; a mismatch is terminated. Session metadata records the runtime lane ID and connector ARN, and stale reattachment is terminated and replaced before exposing the guest.
+`egressProxyCaBundlePem` accepts only one or more public X.509 `CERTIFICATE` PEM blocks. eve
+normalizes the bundle, rejects private-key or other PEM blocks, and bakes the public certificates
+into the AL2023 system trust store before the controlled guest root is captured. The private CA key
+must remain in the trusted proxy workload and must never be passed to this package, the MicroVM,
+the image artifact, checkpoints, or logs. Omitting the bundle preserves the existing trust store;
+deployments that intercept TLS must provision the public bundle before enabling that path.
+
+This mode requires exactly one connector for image build/template prewarm and exactly one for live sessions. Both must be customer-managed connector ARNs in the configured Region and the build role's AWS account. Missing, blank, empty, multiple, cross-Region, cross-account, and AWS-managed `INTERNET_EGRESS` values fail before AWS clients are constructed. The connector AWS reports for each launched MicroVM is checked before controller traffic; a mismatch is terminated. Session metadata records the runtime lane ID, connector ARN, and public trust-bundle digest, and stale reattachment is terminated and replaced before exposing the guest. Changing the public bundle creates a new deterministic image/config identity. After the updated template is provisioned, the next replacement launches that image and restores the checksum-verified writable checkpoint onto it instead of silently reusing the old trust root.
 
 Legacy mode continues to default both phases to `INTERNET_EGRESS` and preserves explicit connector arrays (including `[]`) for existing consumers. Do not use legacy mode as a production no-Internet control: explicit empty-array behavior is an AWS API semantic rather than this package's strict invariant. Connectors are fixed at launch, so `sandbox.setNetworkPolicy()` throws for this backend. Configure VPC security groups, network ACLs, routing, and DNS on the connector instead.
 
@@ -241,17 +249,19 @@ Customer-managed sessions require an injected activation provider. Each launch r
 secret-free activation envelope smaller than 4 KiB containing an opaque provider credential
 placeholder with its exact environment-variable placement and generations, a separate opaque
 localhost controller-session token, an activation identifier, and the immutable controller CA
-digest. Neither opaque value is a JWT or authorization assertion. JWT-shaped input is rejected,
-the guest never requests or renews egress authorization, and placeholder possession establishes no
-authority.
+digest. Neither opaque value is a JWT or authorization assertion. JWT-shaped input is rejected;
+the guest never receives, requests, renews, validates, or presents an egress JWT, and placeholder
+possession establishes no authority.
 
 Session metadata v2 persists the non-secret activation identifier, placeholder placement and
-generation, trusted-binding generation, and controller CA digest. Capture commits the verified
+generation, trusted-binding generation, controller CA digest, and public egress-proxy CA digest.
+Capture commits the verified
 checkpoint manifest, revokes the old trusted proxy binding, and then terminates the MicroVM.
 Opening the session again always launches a fresh MicroVM, installs fresh placeholder/binding
 generations and fresh local controller authentication, and verifies the exact singleton connector,
-image, protocol, CA digest, placement, and generations before restoring the checksum-verified
-checkpoint. There is no native suspend/resume or stale-placeholder fallback.
+image, protocol, controller CA digest, public proxy CA digest, placement, and generations before
+restoring the checksum-verified checkpoint. There is no native suspend/resume or stale-placeholder
+fallback.
 
 ## Operations and retention
 

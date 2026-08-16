@@ -12,6 +12,7 @@ export interface AwsLambdaMicrovmTemplateDescriptor {
   readonly checkpoint?: AwsLambdaMicrovmCheckpoint;
   readonly configHash: string;
   readonly controllerProtocolVersion: number;
+  readonly egressProxyCaSha256?: string;
   readonly imageArn: string;
   readonly imageVersion: string;
   readonly region: string;
@@ -44,6 +45,7 @@ export function parseAwsLambdaMicrovmTemplateDescriptor(
       record.controllerProtocolVersion,
       "controllerProtocolVersion",
     ),
+    egressProxyCaSha256: optionalSha256(record.egressProxyCaSha256, "egressProxyCaSha256"),
     imageArn: expectString(record.imageArn, "imageArn"),
     imageVersion: expectString(record.imageVersion, "imageVersion"),
     region: expectString(record.region, "region"),
@@ -89,6 +91,7 @@ function rejectUnexpectedSessionKeys(record: Record<string, unknown>): void {
     "controllerCaSha256",
     "controllerProtocolVersion",
     "egressNetworkConnectorArn",
+    "egressProxyCaSha256",
     "imageArn",
     "imageVersion",
     "manifestEtag",

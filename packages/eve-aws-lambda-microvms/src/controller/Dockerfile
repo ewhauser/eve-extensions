@@ -1,8 +1,15 @@
 FROM public.ecr.aws/lambda/microvms:al2023-minimal@sha256:1cc40991f5cab3fc8d2dd16350354d5780ea9e878fcf9f46904dddd63a7b983b
 
-RUN dnf install -y acl attr e2fsprogs findutils gzip iproute procps-ng python3 shadow-utils tar \
+COPY egress-proxy-ca.pem /tmp/eve-egress-proxy-ca.pem
+RUN dnf install -y acl attr ca-certificates e2fsprogs findutils gzip iproute procps-ng python3 shadow-utils tar \
       util-linux which zstd && \
     dnf clean all && \
+    if [ -s /tmp/eve-egress-proxy-ca.pem ]; then \
+      install -m 0644 /tmp/eve-egress-proxy-ca.pem \
+        /etc/pki/ca-trust/source/anchors/eve-egress-proxy-ca.pem && \
+      update-ca-trust extract; \
+    fi && \
+    rm -f /tmp/eve-egress-proxy-ca.pem && \
     mkdir -p /opt/eve/lower /opt/eve/state /opt/eve/controller && \
     tar --acls --xattrs --xattrs-include='*' --numeric-owner --one-file-system \
       --exclude=./opt/eve --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run \

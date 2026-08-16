@@ -68,6 +68,12 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly runtimeNetworkLaneId?: string;
   /** Egress connectors used for live agent sessions. */
   readonly runtimeEgressNetworkConnectorArns?: readonly string[];
+  /**
+   * Public X.509 certificate bundle used to trust the customer-managed egress
+   * proxy. The bundle is baked into the guest image trust store; private keys
+   * and non-certificate PEM blocks are rejected.
+   */
+  readonly egressProxyCaBundlePem?: string;
   /** Adds AWS's shell ingress connector. Disabled by default. */
   readonly shellAccess?: boolean;
   /** CloudWatch configuration, or `false` to disable logging. */

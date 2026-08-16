@@ -6,7 +6,9 @@ import { createDeterministicZip } from "./deterministic-zip.js";
 export const AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION = 2;
 
 /** Builds the deterministic Docker context uploaded for a Lambda MicroVM image. */
-export async function buildAwsLambdaMicrovmImageArtifact(): Promise<{
+export async function buildAwsLambdaMicrovmImageArtifact(input: {
+  readonly egressProxyCaBundlePem?: string;
+} = {}): Promise<{
   readonly bytes: Buffer;
   readonly sha256: string;
 }> {
@@ -19,6 +21,10 @@ export async function buildAwsLambdaMicrovmImageArtifact(): Promise<{
   const bytes = createDeterministicZip([
     { content: controller, mode: 0o100755, path: "controller.py" },
     { content: dockerfile, path: "Dockerfile" },
+    {
+      content: Buffer.from(input.egressProxyCaBundlePem ?? "", "utf8"),
+      path: "egress-proxy-ca.pem",
+    },
     { content: launcher, mode: 0o100755, path: "launcher.py" },
     { content: start, mode: 0o100755, path: "start.sh" },
   ]);
