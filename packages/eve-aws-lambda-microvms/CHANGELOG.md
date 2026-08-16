@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.4.0...eve-aws-lambda-microvms-v0.5.0) (2026-08-16)
+
+
+### Features
+
+* **lambda-microvms:** trust public egress proxy CA ([#75](https://github.com/ewhauser/eve-extensions/issues/75)) ([b391ab9](https://github.com/ewhauser/eve-extensions/commit/b391ab9729a070c9cbc76207b4312b663d3707c1))
+
 ## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.3.0...eve-aws-lambda-microvms-v0.4.0) (2026-08-14)
 
 
