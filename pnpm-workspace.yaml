@@ -3,8 +3,8 @@ packages:
   - packages/*
 
 catalog:
-  "@ai-sdk/openai": ^4.0.30
-  "@aws-sdk/client-lambda-microvms": 3.1075.0
+  "@ai-sdk/openai": ^4.0.41
+  "@aws-sdk/client-lambda-microvms": 3.1106.0
   "@types/node": ^24.0.0
   ai: ^7.0.58
   eve: 0.38.0
