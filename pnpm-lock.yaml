@@ -38,6 +38,28 @@ importers:
 
   .: {}
 
+  apps/eve-agent-builder-e2e:
+    dependencies:
+      eve:
+        specifier: 'catalog:'
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      eve-agent-builder:
+        specifier: workspace:*
+        version: link:../../packages/eve-agent-builder
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      microsandbox:
+        specifier: ^0.6.9
+        version: 0.6.9
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   apps/eve-aws-lambda-microvms-e2e:
     dependencies:
       '@aws-sdk/client-lambda-microvms':
@@ -45,7 +67,7 @@ importers:
         version: 3.1075.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -68,7 +90,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -105,7 +127,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
@@ -129,7 +151,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -157,7 +179,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -176,7 +198,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -195,7 +217,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -214,7 +236,7 @@ importers:
         version: 24.13.3
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -236,7 +258,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -839,6 +861,38 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.9':
+    resolution: {integrity: sha512-0b7XqqmAr+MPpz2kd8Bau5tEDSHjcQFVyZd9T2kPLM+KAFOlRKUVotQuGHMPr4B+X64Q6eRXYsIwBZ4f5g95Cw==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.9':
+    resolution: {integrity: sha512-D2xvbNsQG5P9y9JuaJwNfVkjYxOa10uoim8ZNSCkMZbcmzu+OxVqZVGOLyDYcA7CnYepninKqtst8CyXn2CACQ==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.9':
+    resolution: {integrity: sha512-nfL/CZbHqKDASH9V4OjevkMvw6PNPz6pFqdzrApzel3xcVCZMpdP34fhxV4hDhdHgghniSW6EQvTl0Zxj+cmzw==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.9':
+    resolution: {integrity: sha512-SYsZckrCo27yl+Rkp6H9Fe6AkeMZ0uN/psPfvbyK6PYvOiWInZoxKnllhUvFLi+LgFin/RhPQUBpNTGAuccCmw==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.9':
+    resolution: {integrity: sha512-VnrXTRPDSfAexe40rUyvvSX4zzQ3g9ws3o1bQjX5sjPqffcINve6hMOuTQgxIAzlp+UoIauMFq4cAlWuwxgqFQ==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [win32]
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -1037,6 +1091,11 @@ packages:
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+
+  microsandbox@0.6.9:
+    resolution: {integrity: sha512-la9REVB0OAoSqBkmivTDAtPR/Bje5kxRJZIStK1dhwq84Y6+XOo+tGwQU8U5LgzB+8MMW+55SFLmafFmBws4FA==}
+    engines: {node: '>= 22'}
+    hasBin: true
 
   nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
@@ -1914,6 +1973,21 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.9':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.9':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.9':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.9':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.9':
+    optional: true
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2037,11 +2111,13 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
+  eve@0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
       ai: 7.0.64(zod@4.4.3)
       nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       undici: 8.9.0
+    optionalDependencies:
+      microsandbox: 0.6.9
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -2111,6 +2187,14 @@ snapshots:
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  microsandbox@0.6.9:
+    optionalDependencies:
+      '@superradcompany/microsandbox-darwin-arm64': 0.6.9
+      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.9
+      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.9
+      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.9
+      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.9
 
   nanoid@3.3.18: {}
 

@@ -1,14 +1,24 @@
 # RFC 0001: `eve-agent-builder`
 
-- **Status:** Proposed — reviewed design; implementation and end-to-end proof pending
-- **Revision:** 5
+- **Status:** Proposed — PR 03 direct runtime proved; later workflow, skills,
+  triggers, and convergence gates pending
+- **Revision:** 6
 - **Author:** ewhauser (rev 3 drafted with Claude; rev 4 revised from
   maintainer review and PR 00 evidence; rev 5 records PR 02 persistence
-  contracts)
+  contracts; rev 6 records PR 03 runtime evidence and Eve 0.38 transport
+  limits)
 - **Date:** 2026-08-16
-- **Target package:** `packages/eve-agent-builder` (PR 02 foundation; runtime pending)
+- **Target package:** `packages/eve-agent-builder` (PR 03 direct runtime;
+  workflow, skills, and triggers pending)
 - **Framework target:** `eve@0.38.0`, tag commit
   [`692c5c62b86e9a968c65c593fcf5b4f32d780788`](https://github.com/vercel/eve/tree/692c5c62b86e9a968c65c593fcf5b4f32d780788)
+
+PR 03 audits its load-bearing lifecycle and public-type claims against that
+unmodified tag source. The repository workspace installs the same version with
+its tracked Eve patch, so the committed built-host eval is evidence for the
+patched workspace runtime. PR 03 validation also packs the extension into a
+clean consumer and runs the same six evals against the unpatched registry
+`eve@0.38.0` artifact; both runtime variants must pass.
 
 ## Summary
 
@@ -39,10 +49,9 @@ one-mount setup, and hard persona isolation. V1 chooses an explicit,
 reproducible persona and capability boundary. Hosts that cannot supply a
 user-authority-preserving trigger adapter operate in **direct-only mode**.
 
-The RFC remains “Proposed” because later runtime, authority, and end-to-end
-contracts still require proof. PR 02 introduces only the domain, service,
-store, memory-adapter, and conformance APIs described below; it does not make
-the execution surfaces production-ready.
+The RFC remains “Proposed” because later workflow, authority, skill, trigger,
+and convergence contracts still require proof. PR 03 adds the isolated direct
+runtime described below, but does not make the package production-ready.
 
 ## User-facing behavior
 
@@ -151,6 +160,12 @@ not inferred from a newer Eve version.
    calls and lets the parent continue a parked child. An unknown ID starts a
    new child, so a missing bootstrap lease MUST fail closed rather than assume
    continuation succeeded.
+   Persistent continuation does not refresh the parked child's
+   `auth.current`; PR 03 therefore issues and consumes both child calls inside
+   one authenticated parent turn, rechecks the current user at every root and
+   capability tool execution, and atomically closes abandoned ready/running
+   leases when that parent turn terminates. A host that cannot preserve that
+   same-turn authenticated boundary cannot enable direct execution.
 8. Nested `ask_question` works when the root channel has
    `capabilities.requestInput: true`; Eve proxies descendant input requests.
    It is absent from scheduled/task roots and descendant chains without that
@@ -319,7 +334,8 @@ additional parent/call lineage from its richer tool callback context when Eve
 provides it. Successful redemption is atomic and single-use, creates a
 short-lived lease bound to the child session, and records the child session
 ID. Replays, wrong roles, expired grants, wrong owners, wrong specs, and wrong
-lineage fail closed. Raw tokens never enter audits or logs.
+lineage fail closed. Agent Builder audit records and package logs never include
+raw tokens; Eve transcript transport has the explicit limitation below.
 
 Static role personas do not depend on the grant for their identity; the grant
 only selects owner-scoped data and dynamic tools. A generic saved runner does
@@ -349,8 +365,11 @@ uses a fresh persistent child session and exactly two parent calls:
    `step.started` resolver validates the token and exposes
    `agent_builder__bootstrap_redeem`. The tool atomically redeems it, binds the
    lease to the child session, and returns a non-sensitive receipt. The child
-   stops with a structured `ready` result. It MUST NOT receive or execute the
-   user's task on this turn.
+   stops with a structured `ready` result. When the parent requests that
+   structured result through Eve's public `outputSchema`, Eve also contributes
+   its non-executing `final_output` protocol tool; it is not a selected runner
+   capability. The child MUST NOT receive or execute the user's task on this
+   turn.
 2. **Execution turn.** The parent calls the same subagent tool with the parked
    child's `agentId` and the real task. At `turn.started`, the runner extension
    looks up the completed session lease from prior history/session identity and
@@ -364,6 +383,23 @@ child has no lease and MUST return `BOOTSTRAP_REQUIRED` without tools or task
 execution. A lease is single-run: completion, cancellation, expiry, or
 terminal failure closes it. A parked child ID MUST NOT be reused for another
 run.
+
+Eve 0.38's public subagent API is model-mediated: the opaque credential is a
+root tool result and then the child call's message. Eve therefore necessarily
+places the clear credential in its conversation/event transport before the
+child redeems it. The Agent Builder store, typed errors, package logs, and
+package-owned snapshots MUST retain only the digest; the built fixture redacts
+the credential from retained eval artifacts. Hosts MUST treat Eve transcript
+storage as secret-bearing and apply equivalent redaction/retention controls.
+The stronger claim that the clear credential never enters Eve's own transient
+message/event path is not implementable through the public 0.38 API and is not
+a v1 guarantee.
+
+Public dynamic resolver exceptions are not a custom error-code transport.
+The pre-model guard throws the typed Agent Builder code in its message, while
+Eve surfaces `MODEL_SELECTION_FAILED` and the parent subagent boundary surfaces
+`SUBAGENT_EXECUTION_FAILED`. Tests assert the inner package code and do not
+claim that Eve preserves it as the outer framework code.
 
 PM, implementor, and QA MAY complete in one turn because their authoritative
 persona is static. If a host substitutes one generic builder runner for those
@@ -911,9 +947,11 @@ interface ProvisioningAuditRecord {
 }
 ```
 
-The default records exclude prompts, payloads, tool inputs/outputs, access
-tokens, bootstrap tokens, and provider secrets. Hosts own retention and access
-control. Logs use opaque IDs and structured error codes.
+The default Agent Builder records exclude prompts, payloads, tool
+inputs/outputs, access tokens, clear bootstrap tokens, and provider secrets.
+This does not describe Eve's model-mediated transcript transport discussed in
+the bootstrap section. Hosts own transcript redaction, retention, and access
+control. Package logs use opaque IDs and structured error codes.
 
 ## Failure-domain boundaries
 
@@ -934,8 +972,9 @@ control. Logs use opaque IDs and structured error codes.
 
 ## Host setup
 
-The host must declare all six execution surfaces. The exact filenames follow
-public Eve 0.38 discovery conventions:
+The host must declare all six execution surfaces. Directory names are
+host-chosen; the following names are illustrative while their locations and
+slot filenames follow public Eve 0.38 discovery conventions:
 
 ```text
 agent/
@@ -1028,11 +1067,11 @@ RFC amendment.
 
 | ID | Contract | Proving PR(s) | Required executable acceptance |
 |---|---|---|---|
-| A01 | Exact Eve 0.38 declared isolation and lifecycle assumptions | PR 03, PR 09 | Built host proves role/runner prompts and tools exclude root slots; exact tag fixture remains green |
+| A01 | Exact Eve 0.38 declared isolation and lifecycle assumptions | PR 03, PR 09 | Exact-tag source audit plus built host proves role/runner prompts and tools exclude root slots; PR 03 records whether the workspace runtime carries repository patches |
 | A02 | Current-user opaque owner scope; no initiator/app fallback | PR 02, PR 09 | PR 02 service tests reject null/app/runtime, preserve case-sensitive opaque keys, and make cross-owner reads/mutations not-found; PR 09 alternates two users in one Slack session |
 | A03 | Mutable draft, immutable versions, atomic active pointer, CAS | PR 02, PR 09 | Reusable PR 02 store conformance covers typed conflicts, atomic races, historical names, operation replay, rollback with a retained draft, max-history publication, quota, archive, restore, tombstone delete, and retained history |
-| A04 | Single-use owner/role/spec/expiry/lineage bootstrap | PR 03, PR 09 | E2E rejects replay, expiry, wrong owner/role/spec, stale token, wrong child and spoofed message |
-| A05 | Two-turn persistent bootstrap with no first-turn task/tools | PR 03, PR 09 | Real nested subagent E2E observes `ready`, continues same child, injects system persona, and fails unknown `agentId` closed |
+| A04 | Single-use owner/role/spec/expiry/lineage bootstrap | PR 03, PR 09 | Reusable atomic store/bootstrap conformance rejects replay, races, expiry, wrong owner/role/draft/spec/version/lineage/child and parent-terminal races; parser and built-host tests reject spoofed/unknown-child starts |
+| A05 | Two-turn persistent bootstrap with no first-turn task/tools | PR 03, PR 09 | Real nested subagent E2E observes structured `ready`, continues the same child, injects the saved system persona, executes once, and proves unknown or terminal child continuation fails before another model call |
 | A06 | Enforced role matrix and field ownership | PR 03, PR 04, PR 09 | Each role attempts every forbidden extension mutation; service and model-visible surfaces both deny it |
 | A07 | Stable capability registry and explicit runner surface | PR 03, PR 09 | Runner sees selected registry entries only; added root/raw connection tools never leak |
 | A08 | Required/optional drift and conservative consequence | PR 03, PR 04, PR 09 | Missing/incompatible required tool blocks; optional omission reports; unknown class is consequential |
@@ -1049,7 +1088,8 @@ RFC amendment.
 | A19 | Minimal audit without secret/payload capture | PR 06, PR 09 | Snapshot tests cover required fields and assert tokens, prompts, payloads, inputs, outputs, and credentials absent |
 | A20 | Packed consumer and public documentation honesty | PR 10 | Pack/install into clean Eve 0.38 consumer, typecheck/build/eval, package-content and high-severity audit pass |
 
-Planned validation commands, once the packages exist:
+PR 03 and later validation use these commands as their surfaces become
+available:
 
 ```sh
 pnpm --filter eve-agent-builder lint
