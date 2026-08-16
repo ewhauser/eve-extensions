@@ -170,6 +170,7 @@ async function prewarmTemplateWithLease(input: {
     if (input.prewarmInput.bootstrap !== undefined || input.prewarmInput.seedFiles.length > 0) {
       temporaryMicrovm = await runMicrovm({
         egressNetworkConnectorArns: input.options.buildEgressNetworkConnectorArns,
+        egressProxyCaSha256: input.options.egressProxyCaSha256,
         imageArn: image.imageArn,
         imageVersion: image.imageVersion,
         options: input.options,
@@ -215,6 +216,9 @@ async function prewarmTemplateWithLease(input: {
       checkpoint,
       configHash: image.configHash,
       controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+      ...(input.options.egressProxyCaSha256 === undefined
+        ? {}
+        : { egressProxyCaSha256: input.options.egressProxyCaSha256 }),
       imageArn: image.imageArn,
       imageVersion: image.imageVersion,
       region: input.options.region,
@@ -296,6 +300,11 @@ async function createLeasedSessionHandle(input: {
     );
   }
   assertControllerCompatibility(template.controllerProtocolVersion);
+  if (template.egressProxyCaSha256 !== input.options.egressProxyCaSha256) {
+    throw new Error(
+      "AWS Lambda MicroVM template does not contain the configured egress proxy CA; provision the updated template before launching sessions.",
+    );
+  }
 
   const manifestKey = sessionManifestKey(input.options, input.createInput.sessionKey);
   const storedSession = await input.services.storage.getJson<unknown>(manifestKey);
@@ -310,9 +319,15 @@ async function createLeasedSessionHandle(input: {
     assertControllerCompatibility(persistedSession.controllerProtocolVersion);
   }
 
-  const source = persistedSession ?? template;
+  const source =
+    persistedSession === undefined
+      ? template
+      : persistedSession.configHash === template.configHash
+        ? persistedSession
+        : { ...template, checkpoint: persistedSession.checkpoint };
   const microvm = await runMicrovm({
     egressNetworkConnectorArns: input.options.runtimeEgressNetworkConnectorArns,
+    egressProxyCaSha256: source.egressProxyCaSha256,
     imageArn: source.imageArn,
     imageVersion: source.imageVersion,
     options: input.options,
@@ -411,6 +426,9 @@ async function createLeasedSessionHandle(input: {
       checkpoint,
       configHash: source.configHash,
       controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+      ...(source.egressProxyCaSha256 === undefined
+        ? {}
+        : { egressProxyCaSha256: source.egressProxyCaSha256 }),
       imageArn: source.imageArn,
       imageVersion: source.imageVersion,
       ...(input.options.networkingMode === "customer-managed"
@@ -514,7 +532,8 @@ function assertFreshReplacement(
     microvm.placeholderPlacement?.environmentVariable ===
       metadata.placeholderPlacement?.environmentVariable &&
     microvm.controllerCaSha256 !== undefined &&
-    microvm.controllerCaSha256 === metadata.controllerCaSha256;
+    microvm.controllerCaSha256 === metadata.controllerCaSha256 &&
+    microvm.egressProxyCaSha256 === options.egressProxyCaSha256;
   if (!valid) {
     throw new Error(
       "AWS Lambda MicroVM replacement rejected stale placeholder/binding generations, activation, controller authentication, CA, placement, or connector state.",
@@ -524,6 +543,7 @@ function assertFreshReplacement(
 
 async function runMicrovm(input: {
   readonly egressNetworkConnectorArns: readonly string[];
+  readonly egressProxyCaSha256?: string;
   readonly imageArn: string;
   readonly imageVersion: string;
   readonly options: ResolvedAwsLambdaMicrovmOptions;
@@ -590,6 +610,7 @@ async function runMicrovm(input: {
     Object.defineProperties(microvm, {
       activationId: { value: activation!.activationId },
       controllerCaSha256: { value: activation!.controllerCaSha256 },
+      egressProxyCaSha256: { value: input.egressProxyCaSha256 },
       controllerSessionToken: { value: activation!.controllerSessionToken },
       placeholderGeneration: { value: activation!.placeholder.generation },
       placeholderPlacement: { value: activation!.placeholder.placement },

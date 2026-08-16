@@ -12,6 +12,23 @@ const BUILD_CONNECTOR =
   "arn:aws:lambda:us-east-1:123456789012:network-connector:build-egress";
 const RUNTIME_CONNECTOR =
   "arn:aws:lambda:us-east-1:123456789012:network-connector:runtime-egress";
+const PUBLIC_TEST_CA = `-----BEGIN CERTIFICATE-----
+MIICwjCCAaoCCQCw/VQlcDz3ETANBgkqhkiG9w0BAQsFADAjMSEwHwYDVQQDDBhl
+dmUtZWdyZXNzLXByb3h5LXRlc3QtY2EwHhcNMjYwODE2MDIyNjU1WhcNMjYwODE3
+MDIyNjU1WjAjMSEwHwYDVQQDDBhldmUtZWdyZXNzLXByb3h5LXRlc3QtY2EwggEi
+MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDH54ZSUg+WtgJgZjc2J31thXm6
++TDaJbwbCifCWrlIVaCmX9tccLuZnYVw0w/R/x8EE4l64hGQjQWDbDS3xcg4kfC1
+66rVz7hDa80DmlHSLlARtNLQmQ689/UPLjbjp0pXeKWYe1r7KieWjawIzPliKGZ0
+FfHNJ3YrvuCo4z1NIM+EfxOS31OfJ/+GOGzKSKDr+V/TQdLM1h8pIinZ7FifM92c
+E3xAg0qKPyDKqUI1dlWqLFDPb0EnBnK+yLw7/McFlrEAbYXXoy9NA/PnEmhUW+We
+TjVU/Vp2ZCjswZhIUC4VCOST9p1bNO2p10uLsK1XTpxkqynSuz0fI25/L/qtAgMB
+AAEwDQYJKoZIhvcNAQELBQADggEBALQGo9CVTIPk07qLs2X0CAsw10rdyrGIxO+v
+pc4n/JkxMbVCyV8wmFve7FYN97HLhJ9swKKHdh6m31+TXRq//ENxIHZD0X2SjeKv
+ZS1JPcafAkeSBtGFZL7VZhBacvERuHrXK7iJd17vgznby0PH8DqUiGbbooIceBxd
+GMiISlsOMCvnG7TqtrGWbGl84Wr57IQsEpvLphCTGISNT9ebHodjq2XwTiah1Ke1
+vXE4cllUUkfTZrB8cfG0qIYWBG32sz3IkoOdZJa8jtKNsjhCwsX+/mi5PuUIENDk
+cvKZSIRd5mmzmvNtQgWJanxamFuq2VD4N3Syvyplb/BiY46nN04=
+-----END CERTIFICATE-----`;
 
 describe("resolveAwsLambdaMicrovmOptions", () => {
   it("preserves 0.1.0 lifecycle and connector defaults in legacy mode", () => {
@@ -135,6 +152,26 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
         executionRoleArn: "arn:aws:iam::123456789012:role/eve-runtime",
       }).runtimeLogging,
     ).toEqual({ logGroup: expect.stringMatching(/^\/aws\/lambda-microvms\/eve-/) });
+  });
+
+  it("normalizes a public egress proxy CA bundle and derives its image identity", () => {
+    const resolved = resolveAwsLambdaMicrovmOptions({
+      ...REQUIRED,
+      egressProxyCaBundlePem: `\n${PUBLIC_TEST_CA}\n`,
+    });
+
+    expect(resolved.egressProxyCaBundlePem).toBe(`${PUBLIC_TEST_CA}\n`);
+    expect(resolved.egressProxyCaSha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it.each([
+    ["private key", "-----BEGIN PRIVATE KEY-----\nforbidden\n-----END PRIVATE KEY-----"],
+    ["mixed bundle", `${PUBLIC_TEST_CA}\n-----BEGIN PRIVATE KEY-----\nforbidden\n-----END PRIVATE KEY-----`],
+    ["invalid certificate", "-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----"],
+  ])("rejects %s in the public egress trust bundle", (_name, bundle) => {
+    expect(() =>
+      resolveAwsLambdaMicrovmOptions({ ...REQUIRED, egressProxyCaBundlePem: bundle }),
+    ).toThrow(/CERTIFICATE PEM blocks|invalid certificate/);
   });
 
   it("preserves explicit empty egress and enables shell ingress", () => {

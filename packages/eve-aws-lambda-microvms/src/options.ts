@@ -1,5 +1,5 @@
 // Derived from vercel/eve PR #208 (Apache-2.0); adapted for standalone packaging.
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 
 import type {
   AwsLambdaMicrovmBaseImage,
@@ -22,6 +22,8 @@ export interface ResolvedAwsLambdaMicrovmOptions {
   readonly buildNetworkLaneId?: string;
   readonly buildRoleArn: string;
   readonly executionRoleArn?: string;
+  readonly egressProxyCaBundlePem?: string;
+  readonly egressProxyCaSha256?: string;
   readonly httpIngressNetworkConnectorArn: string;
   readonly idlePolicy: AwsLambdaMicrovmIdlePolicy;
   readonly maximumDurationSeconds: number;
@@ -81,6 +83,7 @@ export function resolveAwsLambdaMicrovmOptions(
   const managedConnectorPrefix = `arn:aws:lambda:${region}:aws:network-connector:aws-network-connector`;
   const internetEgress = `${managedConnectorPrefix}:INTERNET_EGRESS`;
   const executionRoleArn = optionalNonEmpty("executionRoleArn", options.executionRoleArn);
+  const egressProxyCa = normalizePublicCertificateBundle(options.egressProxyCaBundlePem);
   const networkingMode = options.networkingMode ?? "legacy";
   if (networkingMode !== "legacy" && networkingMode !== "customer-managed") {
     throw new Error(`AWS Lambda MicroVM networkingMode ${String(networkingMode)} is unsupported.`);
@@ -144,6 +147,8 @@ export function resolveAwsLambdaMicrovmOptions(
     buildNetworkLaneId,
     buildRoleArn,
     executionRoleArn,
+    egressProxyCaBundlePem: egressProxyCa?.pem,
+    egressProxyCaSha256: egressProxyCa?.sha256,
     httpIngressNetworkConnectorArn: `${managedConnectorPrefix}:ALL_INGRESS`,
     idlePolicy,
     maximumDurationSeconds,
@@ -161,6 +166,34 @@ export function resolveAwsLambdaMicrovmOptions(
       options.shellAccess === true ? `${managedConnectorPrefix}:SHELL_INGRESS` : undefined,
     tags: normalizeTags(options.tags),
   };
+}
+
+function normalizePublicCertificateBundle(
+  value: string | undefined,
+): { readonly pem: string; readonly sha256: string } | undefined {
+  if (value === undefined) return undefined;
+  if (Buffer.byteLength(value, "utf8") > 256 * 1024) {
+    throw new Error("AWS Lambda MicroVM egressProxyCaBundlePem must not exceed 256 KiB.");
+  }
+  const blocks = value.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [];
+  const remainder = value.replace(
+    /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g,
+    "",
+  );
+  if (blocks.length === 0 || remainder.trim().length !== 0) {
+    throw new Error(
+      "AWS Lambda MicroVM egressProxyCaBundlePem must contain only public CERTIFICATE PEM blocks.",
+    );
+  }
+  let pem: string;
+  try {
+    pem = `${blocks.map((block) => new X509Certificate(block).toString().trim()).join("\n")}\n`;
+  } catch (error) {
+    throw new Error("AWS Lambda MicroVM egressProxyCaBundlePem contains an invalid certificate.", {
+      cause: error,
+    });
+  }
+  return { pem, sha256: sha256(pem) };
 }
 
 function accountFromBuildRoleArn(value: string): string {

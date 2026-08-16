@@ -33,6 +33,23 @@ const STRICT_OPTIONS = {
   ],
   runtimeNetworkLaneId: "runtime-lane",
 } as const;
+const PUBLIC_TEST_CA = `-----BEGIN CERTIFICATE-----
+MIICwjCCAaoCCQCw/VQlcDz3ETANBgkqhkiG9w0BAQsFADAjMSEwHwYDVQQDDBhl
+dmUtZWdyZXNzLXByb3h5LXRlc3QtY2EwHhcNMjYwODE2MDIyNjU1WhcNMjYwODE3
+MDIyNjU1WjAjMSEwHwYDVQQDDBhldmUtZWdyZXNzLXByb3h5LXRlc3QtY2EwggEi
+MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDH54ZSUg+WtgJgZjc2J31thXm6
++TDaJbwbCifCWrlIVaCmX9tccLuZnYVw0w/R/x8EE4l64hGQjQWDbDS3xcg4kfC1
+66rVz7hDa80DmlHSLlARtNLQmQ689/UPLjbjp0pXeKWYe1r7KieWjawIzPliKGZ0
+FfHNJ3YrvuCo4z1NIM+EfxOS31OfJ/+GOGzKSKDr+V/TQdLM1h8pIinZ7FifM92c
+E3xAg0qKPyDKqUI1dlWqLFDPb0EnBnK+yLw7/McFlrEAbYXXoy9NA/PnEmhUW+We
+TjVU/Vp2ZCjswZhIUC4VCOST9p1bNO2p10uLsK1XTpxkqynSuz0fI25/L/qtAgMB
+AAEwDQYJKoZIhvcNAQELBQADggEBALQGo9CVTIPk07qLs2X0CAsw10rdyrGIxO+v
+pc4n/JkxMbVCyV8wmFve7FYN97HLhJ9swKKHdh6m31+TXRq//ENxIHZD0X2SjeKv
+ZS1JPcafAkeSBtGFZL7VZhBacvERuHrXK7iJd17vgznby0PH8DqUiGbbooIceBxd
+GMiISlsOMCvnG7TqtrGWbGl84Wr57IQsEpvLphCTGISNT9ebHodjq2XwTiah1Ke1
+vXE4cllUUkfTZrB8cfG0qIYWBG32sz3IkoOdZJa8jtKNsjhCwsX+/mi5PuUIENDk
+cvKZSIRd5mmzmvNtQgWJanxamFuq2VD4N3Syvyplb/BiY46nN04=
+-----END CERTIFICATE-----`;
 
 describe("AWS Lambda MicroVM backend", () => {
   it("requires and reuses an empty build-time template", async () => {
@@ -292,6 +309,56 @@ describe("AWS Lambda MicroVM backend", () => {
       fixture.api.terminateMicrovm.mock.invocationCallOrder[0]!,
     );
     await replacement.shutdown();
+  });
+
+  it("moves replacement restore onto the image identity for a newly provisioned public CA", async () => {
+    const fixture = createServicesFixture();
+    const initial = createAwsLambdaMicrovmSandbox({
+      options: STRICT_OPTIONS,
+      services: fixture.services,
+    });
+    await initial.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-ca-rotation",
+    });
+    const first = await initial.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-ca-rotation",
+      templateKey: "template-ca-rotation",
+    });
+    await first.session.writeTextFile({ content: "durable", path: "/workspace/state" });
+    const before = await first.captureState();
+    expect(before.metadata).not.toHaveProperty("egressProxyCaSha256");
+
+    const updated = createAwsLambdaMicrovmSandbox({
+      options: { ...STRICT_OPTIONS, egressProxyCaBundlePem: PUBLIC_TEST_CA },
+      services: fixture.services,
+    });
+    await expect(
+      updated.create({
+        existingMetadata: before.metadata,
+        runtimeContext: { appRoot: "/app" },
+        sessionKey: "session-ca-rotation",
+        templateKey: "template-ca-rotation",
+      }),
+    ).rejects.toThrow(/provision the updated template/);
+    await updated.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-ca-rotation",
+    });
+    const replacement = await updated.create({
+      existingMetadata: before.metadata,
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-ca-rotation",
+      templateKey: "template-ca-rotation",
+    });
+    const after = await replacement.captureState();
+
+    expect(after.metadata.configHash).not.toBe(before.metadata.configHash);
+    expect(after.metadata.egressProxyCaSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(fixture.controllers.at(-1)?.restored.at(-1)?.sha256).toBe("a".repeat(64));
   });
 
   it("rejects a replacement that reuses stale placeholder and trusted-binding generations", async () => {
