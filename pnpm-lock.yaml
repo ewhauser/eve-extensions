@@ -57,6 +57,25 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/eve-agent-builder:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eve:
+        specifier: 'catalog:'
+        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+
   packages/eve-aws-lambda-microvms:
     dependencies:
       '@aws-sdk/client-lambda-microvms':
