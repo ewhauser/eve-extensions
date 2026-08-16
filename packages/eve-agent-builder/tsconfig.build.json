@@ -8,6 +8,14 @@
     "rootDir": ".",
     "sourceMap": true
   },
-  "include": ["index.ts", "src/**/*.ts", "stores/**/*.ts", "testing/**/*.ts"],
+  "include": [
+    "index.ts",
+    "extension/**/*.ts",
+    "mounts/**/*.ts",
+    "runtime/**/*.ts",
+    "src/**/*.ts",
+    "stores/**/*.ts",
+    "testing/**/*.ts"
+  ],
   "exclude": ["test/**/*.ts"]
 }

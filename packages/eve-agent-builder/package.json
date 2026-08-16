@@ -1,7 +1,7 @@
 {
   "name": "eve-agent-builder",
   "version": "0.0.0",
-  "description": "Experimental identity, versioned domain, and durable store contracts for Eve saved agents.",
+  "description": "Experimental owner-scoped saved-agent control plane and isolated direct runner for Eve.",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -11,42 +11,71 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/extension/lib/public.d.ts",
+      "import": "./dist/extension/lib/public.mjs",
+      "default": "./dist/extension/lib/public.mjs"
+    },
+    "./extension": {
+      "types": "./dist/extension/extension.d.ts",
+      "import": "./dist/extension/extension.mjs",
+      "default": "./dist/extension/extension.mjs"
+    },
+    "./bootstrap": {
+      "types": "./dist/extension/lib/bootstrap.d.ts",
+      "default": "./dist/extension/lib/bootstrap.mjs"
+    },
+    "./capabilities": {
+      "types": "./dist/extension/lib/capabilities.d.ts",
+      "default": "./dist/extension/lib/capabilities.mjs"
+    },
+    "./discovery": {
+      "types": "./dist/extension/lib/discovery.d.ts",
+      "default": "./dist/extension/lib/discovery.mjs"
     },
     "./domain": {
-      "types": "./dist/src/domain.d.ts",
-      "import": "./dist/src/domain.js",
-      "default": "./dist/src/domain.js"
+      "types": "./dist/extension/lib/domain.d.ts",
+      "default": "./dist/extension/lib/domain.mjs"
     },
     "./service": {
-      "types": "./dist/src/service.d.ts",
-      "import": "./dist/src/service.js",
-      "default": "./dist/src/service.js"
+      "types": "./dist/extension/lib/service.d.ts",
+      "default": "./dist/extension/lib/service.mjs"
+    },
+    "./roles": {
+      "types": "./dist/extension/lib/roles.d.ts",
+      "default": "./dist/extension/lib/roles.mjs"
     },
     "./store": {
-      "types": "./dist/src/store.d.ts",
-      "import": "./dist/src/store.js",
-      "default": "./dist/src/store.js"
+      "types": "./dist/extension/lib/store.d.ts",
+      "default": "./dist/extension/lib/store.mjs"
     },
     "./stores/memory": {
-      "types": "./dist/stores/memory.d.ts",
-      "import": "./dist/stores/memory.js",
-      "default": "./dist/stores/memory.js"
+      "types": "./dist/extension/lib/stores/memory.d.ts",
+      "default": "./dist/extension/lib/stores/memory.mjs"
     },
     "./testing/store-conformance": {
-      "types": "./dist/testing/store-conformance.d.ts",
-      "import": "./dist/testing/store-conformance.js",
-      "default": "./dist/testing/store-conformance.js"
+      "types": "./dist/extension/lib/testing/store-conformance.d.ts",
+      "default": "./dist/extension/lib/testing/store-conformance.mjs"
+    },
+    "./testing/bootstrap-conformance": {
+      "types": "./dist/extension/lib/testing/bootstrap-conformance.d.ts",
+      "default": "./dist/extension/lib/testing/bootstrap-conformance.mjs"
+    },
+    "./runtime/*": {
+      "types": "./dist/extension/lib/runtime/*.d.ts",
+      "default": "./dist/extension/lib/runtime/*.mjs"
+    },
+    "./mounts/*": {
+      "types": "./dist/extension/lib/mounts/*.d.ts",
+      "default": "./dist/extension/lib/mounts/*.mjs"
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "build": "node scripts/build.mjs",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "prepare": "pnpm run build",
     "test": "vitest run",
+    "restore:exports": "node scripts/restore-hybrid-exports.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -72,6 +101,12 @@
     "type": "git",
     "url": "git+https://github.com/ewhauser/eve-extensions.git",
     "directory": "packages/eve-agent-builder"
+  },
+  "eve": {
+    "extension": {
+      "source": "./extension",
+      "dist": "./dist/extension"
+    }
   },
   "bugs": {
     "url": "https://github.com/ewhauser/eve-extensions/issues"
