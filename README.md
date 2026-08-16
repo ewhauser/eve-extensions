@@ -54,6 +54,8 @@ considerations, and production use.
 - `packages/` contains the independently licensed, publishable packages.
 - `apps/` contains fixtures and end-to-end test applications used to validate
   packages in realistic Eve projects.
+- `docs/rfcs/` contains tracked design proposals and their executable
+  acceptance contracts before or alongside implementation.
 - `patches/` contains workspace-level patches needed for development and
   validation against the currently supported Eve version.
 
