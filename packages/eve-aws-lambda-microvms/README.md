@@ -27,6 +27,7 @@ export default defineSandbox({
     applicationId: "analytics-agent",
     region: "us-east-1",
     artifactBucket: "company-eve-sandboxes",
+    artifactKmsKeyId: process.env.EVE_AWS_ARTIFACT_KMS_KEY_ARN,
     buildRoleArn: process.env.EVE_AWS_BUILD_ROLE_ARN!,
     executionRoleArn: process.env.EVE_AWS_EXECUTION_ROLE_ARN,
   }),
@@ -38,6 +39,8 @@ export default defineSandbox({
 ```
 
 `applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.38.0's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
+
+`artifactKmsKeyId` is optional. When supplied, eve sends explicit `aws:kms` and key-ID headers on JSON, image-artifact, and multipart checkpoint writes. AWS accepts a key ID, key ARN, alias name, or alias ARN; cross-account keys require an ARN. Grant callers `kms:Encrypt`, `kms:Decrypt`, and `kms:GenerateDataKey` as needed for that key. When omitted, eve sends no SSE headers and preserves the bucket's default encryption behavior.
 
 The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
