@@ -13,6 +13,11 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
 
 ## Packages
 
+- [`eve-agent-builder`](packages/eve-agent-builder) — an unreleased,
+  experimental PR-02 foundation for private saved-agent identity, versioned
+  domain state, lifecycle services, and durable store conformance. It does not
+  yet ship Eve runtime roles, runners, skills, capabilities, or triggers. It is
+  licensed under MIT.
 - [`eve-project-link`](packages/eve-project-link) — links an entire Eve context
   channel to a durable external project hub, injects a compact project context
   card on every turn, and guides the agent to use already-mounted Notion,
@@ -91,6 +96,7 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-project-link`, `eve-slack-participation`, `eve-openai-compaction`,
-`eve-openai-connectors`, `eve-openai-plugins`, and `eve-openai-imagegen` are
-MIT-licensed, while `eve-aws-lambda-microvms` is Apache-2.0-licensed.
+`eve-agent-builder`, `eve-project-link`, `eve-slack-participation`,
+`eve-openai-compaction`, `eve-openai-connectors`, `eve-openai-plugins`, and
+`eve-openai-imagegen` are MIT-licensed, while `eve-aws-lambda-microvms` is
+Apache-2.0-licensed.

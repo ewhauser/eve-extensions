@@ -8,6 +8,28 @@ const repositoryUrl = "git+https://github.com/ewhauser/eve-extensions.git";
 
 export const packages = new Map([
   [
+    "packages/eve-agent-builder",
+    {
+      name: "eve-agent-builder",
+      requiredFiles: [
+        "dist/index.d.ts",
+        "dist/index.js",
+        "dist/src/domain.d.ts",
+        "dist/src/domain.js",
+        "dist/src/service.d.ts",
+        "dist/src/service.js",
+        "dist/src/store.d.ts",
+        "dist/src/store.js",
+        "dist/stores/memory.d.ts",
+        "dist/stores/memory.js",
+        "dist/testing/store-conformance.d.ts",
+        "dist/testing/store-conformance.js",
+        "LICENSE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-slack-participation",
     {
       name: "eve-slack-participation",

@@ -1,10 +1,12 @@
 # RFC 0001: `eve-agent-builder`
 
 - **Status:** Proposed — reviewed design; implementation and end-to-end proof pending
-- **Revision:** 4
-- **Author:** ewhauser (rev 3 drafted with Claude; rev 4 revised from maintainer review and PR 00 evidence)
+- **Revision:** 5
+- **Author:** ewhauser (rev 3 drafted with Claude; rev 4 revised from
+  maintainer review and PR 00 evidence; rev 5 records PR 02 persistence
+  contracts)
 - **Date:** 2026-08-16
-- **Target package:** planned `packages/eve-agent-builder`
+- **Target package:** `packages/eve-agent-builder` (PR 02 foundation; runtime pending)
 - **Framework target:** `eve@0.38.0`, tag commit
   [`692c5c62b86e9a968c65c593fcf5b4f32d780788`](https://github.com/vercel/eve/tree/692c5c62b86e9a968c65c593fcf5b4f32d780788)
 
@@ -37,9 +39,10 @@ one-mount setup, and hard persona isolation. V1 chooses an explicit,
 reproducible persona and capability boundary. Hosts that cannot supply a
 user-authority-preserving trigger adapter operate in **direct-only mode**.
 
-The RFC is “Proposed,” not “Ready for implementation,” because the interfaces
-below are reviewed contracts that later PRs must prove. No package API exists
-until those PRs merge.
+The RFC remains “Proposed” because later runtime, authority, and end-to-end
+contracts still require proof. PR 02 introduces only the domain, service,
+store, memory-adapter, and conformance APIs described below; it does not make
+the execution surfaces production-ready.
 
 ## User-facing behavior
 
@@ -523,6 +526,59 @@ and owner-scoped name uniqueness are enforced atomically by the store. The
 default `maxAgentFamiliesPerOwner` is 25 and counts every non-deleted family,
 including archived families; hosts MAY lower or raise it explicitly.
 
+### PR 02 persistence clarifications
+
+PR 02 makes the previously reviewed domain boundary executable and adds these
+normative details:
+
+1. `canonicalizeAgentName` is the one alias rule shared by services, adapters,
+   and conformance suites. It applies Unicode NFKC, replaces every Unicode
+   `White_Space` run with one ASCII space, trims both ends, then uses
+   JavaScript's locale-independent Unicode lowercase mapping. It does not use
+   the process locale or full Unicode case folding. The authored display name
+   remains stored separately.
+2. Every canonical alias present in a family's current draft or any published
+   version is reserved to that family. The family MAY reuse its own alias.
+   Archived families retain all reservations. Renaming a non-deleted draft
+   releases an old unpublished-only alias, but publication makes an alias
+   historical. PR 02 conservatively retains deleted-family aliases because PR
+   06 cleanup confirmation does not exist yet; PR 06 MAY enable reuse only
+   after durable trigger absence is confirmed. This refines the lifecycle
+   paragraph below rather than assuming deletion alone is cleanup proof.
+3. Every trusted mutation carries an opaque host/runtime `operationId` outside
+   the model-authored input. The service derives a versioned SHA-256 fingerprint
+   from the action, current authenticated principal, and validated request. The
+   store atomically records `(OwnerScope, operationId, fingerprint)` with the
+   successful typed result. An exact retry returns that original result before
+   applying validation against post-commit state; a different request using
+   the same identity returns `OPERATION_ID_REUSED`. Adapters MUST retain this
+   ledger for at least as long as an ambiguous client retry can arrive. Later
+   retention policy MUST NOT permit duplicate lifecycle commits.
+4. The durable store surface is typed reads plus one discriminated
+   transactional `mutate` command. The service owns untrusted schema
+   validation, current-user authorization input, lifecycle policy, immutable
+   field ownership, and injected IDs/time. The store owns atomic CAS, quota,
+   name reservations, append-only version allocation, active-pointer changes,
+   tombstones, and successful-operation replay. Store conflicts contain the
+   current family revision and, when present, current draft revision.
+5. Family revision increments exactly once for every successful mutation;
+   draft revision increments exactly once for every successful draft patch.
+   IDs, revisions, lifecycle, owner, timestamps, bases, active pointers, and
+   `publishedBy` never come from a model-authored patch.
+6. Activating a prior version preserves any existing draft and its explicit
+   `basedOnSpecId`/`basedOnVersion` pair. Later publication still allocates
+   `max(historical version) + 1`, not `activeVersion + 1`.
+7. PR 02 timestamps are canonical UTC RFC 3339 strings with exactly millisecond
+   precision (`YYYY-MM-DDTHH:mm:ss.sssZ`). Services inject validated clock and
+   ID factories so conformance never relies on wall-clock or random races.
+   Trusted store reads retain tombstones/history for later reconciliation;
+   user-facing services make deleted and cross-owner records look not-found.
+8. Model-authored JSON values such as normalized schedules and event filters
+   are acyclic JSON trees with at most 64 levels and 10,000 total nodes per
+   value. Boundary validation enforces those budgets iteratively before schema
+   traversal so excessive nesting returns `INVALID_INPUT` rather than escaping
+   the typed service result.
+
 ### Agent lifecycle transition table
 
 | From | Operation | To | Required effects |
@@ -921,13 +977,15 @@ envelope verifier, and authority broker. A host enabling schedules/events must
 configure all three and pass their conformance suites before those trigger
 kinds can publish as runnable.
 
-## Planned package layout
+## Package layout and planned additions
 
-PR 01 adds only this RFC. Later PRs may implement the following reviewed
-layout; changing the public boundaries requires an RFC amendment.
+PR 01 added only this RFC. PR 02 adds the domain/store files annotated below;
+later PRs may implement the remaining reviewed layout. Changing public
+boundaries requires an RFC amendment.
 
 ```text
 packages/eve-agent-builder/
+├── index.ts                              # PR 02 domain/service/store exports
 ├── package.json
 ├── extension/
 │   ├── extension.ts                     # pinned config namespace
@@ -945,8 +1003,9 @@ packages/eve-agent-builder/
 │   ├── provisioning.ts
 │   └── audit.ts
 ├── stores/memory.ts                     # tests/dev only
+├── testing/store-conformance.ts         # framework-independent adapter suite
 ├── test/
-│   ├── store-conformance.ts
+│   ├── memory-store-conformance.test.ts
 │   ├── provisioner-conformance.ts
 │   └── authority-conformance.ts
 └── README.md
@@ -970,8 +1029,8 @@ RFC amendment.
 | ID | Contract | Proving PR(s) | Required executable acceptance |
 |---|---|---|---|
 | A01 | Exact Eve 0.38 declared isolation and lifecycle assumptions | PR 03, PR 09 | Built host proves role/runner prompts and tools exclude root slots; exact tag fixture remains green |
-| A02 | Current-user opaque owner scope; no initiator/app fallback | PR 02, PR 09 | Store/service tests reject null/app/runtime; one Slack session alternates two users without cross-read |
-| A03 | Mutable draft, immutable versions, atomic active pointer, CAS | PR 02, PR 09 | Reusable store conformance covers conflicts, races, rollback, quota, archive, restore, delete |
+| A02 | Current-user opaque owner scope; no initiator/app fallback | PR 02, PR 09 | PR 02 service tests reject null/app/runtime, preserve case-sensitive opaque keys, and make cross-owner reads/mutations not-found; PR 09 alternates two users in one Slack session |
+| A03 | Mutable draft, immutable versions, atomic active pointer, CAS | PR 02, PR 09 | Reusable PR 02 store conformance covers typed conflicts, atomic races, historical names, operation replay, rollback with a retained draft, max-history publication, quota, archive, restore, tombstone delete, and retained history |
 | A04 | Single-use owner/role/spec/expiry/lineage bootstrap | PR 03, PR 09 | E2E rejects replay, expiry, wrong owner/role/spec, stale token, wrong child and spoofed message |
 | A05 | Two-turn persistent bootstrap with no first-turn task/tools | PR 03, PR 09 | Real nested subagent E2E observes `ready`, continues same child, injects system persona, and fails unknown `agentId` closed |
 | A06 | Enforced role matrix and field ownership | PR 03, PR 04, PR 09 | Each role attempts every forbidden extension mutation; service and model-visible surfaces both deny it |
@@ -1100,12 +1159,16 @@ saved agent.
 - Generic test/active runners use a two-turn, single-use persistent bootstrap.
 - Owner scope is opaque and host-supplied; `auth.current` authorizes each
   interactive operation and `auth.initiator` never substitutes.
+- Names use the single locale-independent PR 02 canonicalization rule;
+  published, archived, and not-yet-cleaned deleted aliases remain reserved.
 - Extension-owned mutations are role- and field-scoped in both tool selection
   and the service layer.
 - Runner capabilities use stable host registry IDs; arbitrary root inheritance
   is not promised.
 - Drafts are mutable; published versions are immutable; one CAS pointer selects
   the active version.
+- Trusted mutation identities replay successful ambiguous requests exactly
+  once; reusing an identity for a different request fails closed.
 - Archive is reversible and pauses triggers; delete is an irreversible
   tombstone and reconciles resources to absent before purge.
 - External delivery uses authenticated stable-ID envelopes and idempotent
