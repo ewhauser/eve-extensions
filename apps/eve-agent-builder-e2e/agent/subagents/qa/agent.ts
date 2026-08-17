@@ -10,7 +10,7 @@ export default defineAgentBuilderRoleAgent({
     personaMarker: "Agent Builder QA reviewer",
     executionTools: [
       "agent_builder__draft_get",
-      "agent_builder__qa_patch",
+      "agent_builder__qa_submit",
       "agent_builder__run_context",
     ],
   }),

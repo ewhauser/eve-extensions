@@ -5,4 +5,7 @@ export * from "./domain.js";
 export * from "./roles.js";
 export * from "./service.js";
 export * from "./store.js";
+export * from "./test-policy.js";
+export * from "./workflow.js";
+export * from "./workflow-service.js";
 export { default } from "../extension.js";

@@ -1,23 +1,23 @@
 # RFC 0001: `eve-agent-builder`
 
-- **Status:** Proposed — PR 03 direct runtime proved; later workflow, skills,
-  triggers, and convergence gates pending
-- **Revision:** 6
+- **Status:** Proposed — PR 04 build workflow proved; skills, triggers, and
+  convergence gates pending
+- **Revision:** 7
 - **Author:** ewhauser (rev 3 drafted with Claude; rev 4 revised from
   maintainer review and PR 00 evidence; rev 5 records PR 02 persistence
   contracts; rev 6 records PR 03 runtime evidence and Eve 0.38 transport
-  limits)
+  limits; rev 7 records PR 04 workflow, test-policy, and publication evidence)
 - **Date:** 2026-08-16
-- **Target package:** `packages/eve-agent-builder` (PR 03 direct runtime;
-  workflow, skills, and triggers pending)
+- **Target package:** `packages/eve-agent-builder` (PR 04 build/direct runtime;
+  skills and triggers pending)
 - **Framework target:** `eve@0.38.0`, tag commit
   [`692c5c62b86e9a968c65c593fcf5b4f32d780788`](https://github.com/vercel/eve/tree/692c5c62b86e9a968c65c593fcf5b4f32d780788)
 
-PR 03 audits its load-bearing lifecycle and public-type claims against that
+PRs 03 and 04 audit their load-bearing lifecycle and public-type claims against that
 unmodified tag source. The repository workspace installs the same version with
-its tracked Eve patch, so the committed built-host eval is evidence for the
-patched workspace runtime. PR 03 validation also packs the extension into a
-clean consumer and runs the same six evals against the unpatched registry
+its tracked Eve patch, so the committed built-host evals are evidence for the
+patched workspace runtime. Validation also packs the extension into a clean
+consumer and runs the same applicable seven evals against the unpatched registry
 `eve@0.38.0` artifact; both runtime variants must pass.
 
 ## Summary
@@ -49,9 +49,10 @@ one-mount setup, and hard persona isolation. V1 chooses an explicit,
 reproducible persona and capability boundary. Hosts that cannot supply a
 user-authority-preserving trigger adapter operate in **direct-only mode**.
 
-The RFC remains “Proposed” because later workflow, authority, skill, trigger,
-and convergence contracts still require proof. PR 03 adds the isolated direct
-runtime described below, but does not make the package production-ready.
+The RFC remains “Proposed” because later skill, trigger, audit, and convergence
+contracts still require proof. PR 04 adds the durable build workflow and
+fail-closed test/publication policy described below, but does not make the
+package production-ready.
 
 ## User-facing behavior
 
@@ -166,11 +167,18 @@ not inferred from a newer Eve version.
    capability tool execution, and atomically closes abandoned ready/running
    leases when that parent turn terminates. A host that cannot preserve that
    same-turn authenticated boundary cannot enable direct execution.
-8. Nested `ask_question` works when the root channel has
-   `capabilities.requestInput: true`; Eve proxies descendant input requests.
-   It is absent from scheduled/task roots and descendant chains without that
-   capability. See
-   [the capability gate](https://github.com/vercel/eve/blob/692c5c62b86e9a968c65c593fcf5b4f32d780788/packages/eve/src/harness/tools.ts).
+8. `ask_question` is a root-only client input tool gated by
+   `capabilities.requestInput: true`. Its answer is an ordinary tool result and
+   the public Eve 0.38 approval/hook APIs expose no authorizer that binds that
+   answer to a later capability call. It therefore cannot serve as a
+   consequential-action grant. Eve tool approval is call-bound: the response
+   callback receives the exact request/call/tool input plus the authenticated
+   responder. PR 04 composes that policy onto the real lowered capability and
+   uses a host-supplied verified-input availability/authorization boundary for
+   channel facts Eve does not expose. See
+   [the capability gate](https://github.com/vercel/eve/blob/692c5c62b86e9a968c65c593fcf5b4f32d780788/packages/eve/src/harness/tools.ts)
+   and
+   [the approval types](https://github.com/vercel/eve/blob/692c5c62b86e9a968c65c593fcf5b4f32d780788/packages/eve/src/public/definitions/approval.ts).
 9. Dynamic skills resolve on `session.started` or `turn.started`, support maps
    of entries, and require sandbox access when loaded.
 
@@ -414,13 +422,14 @@ Hiding a tool from the prompt is not sufficient authorization.
 | Role | Extension-owned tools | Host capabilities | Forbidden |
 |---|---|---|---|
 | Root | owner-scoped list/search/get; create draft; issue role/run bootstrap; request test; publish; activate version; archive; restore; delete; inspect provisioning | Root's ordinary host tools, outside agent-builder's guarantee | Direct draft field mutation; accepting owner IDs from model input |
-| PM | bootstrap/read current draft; patch name, description, kind, PM brief, requirements; submit PM handoff | `ask_question` when the channel supports it | Instructions, capability list, trigger wiring, publish/archive/delete, runner tools |
+| PM | bootstrap/read current draft; patch name, description, kind, and PM brief/requirements; submit PM handoff | Structured `needs_user_input`; a host may expose non-authorizing `ask_question` | Instructions, capability list, trigger wiring, publish/archive/delete, runner tools |
 | Implementor | bootstrap/read draft; search eligible capability registry; patch instructions, capability requirements, trigger definitions; submit implementation handoff | Read-only capability metadata only | PM identity fields except explicit returned conflict; QA verdict; publish/archive/delete; executing runner capabilities |
-| QA | bootstrap/read draft/version; patch checklist and QA findings; request a test run; submit verdict | `ask_question`; no production capability execution | Rewriting PM brief or implementation fields; publish/archive/delete; direct capability calls |
-| Test runner | bootstrap; read exact draft snapshot; resolve selected capabilities; append scoped test outcome/audit | Only capability IDs selected for that draft and allowed in test mode; `ask_question` only when supported | Any draft/version/lifecycle/trigger mutation; capabilities outside registry result; unattended execution |
+| QA | bootstrap/read draft/version; patch checklist and QA findings; request a test run; submit verdict | Structured `needs_user_input`; no production capability execution | Rewriting PM brief or implementation fields; publish/archive/delete; direct capability calls |
+| Test runner | bootstrap; read exact draft snapshot; resolve selected capabilities; append scoped test evidence | Only capability IDs selected for that draft and allowed in test mode; consequential calls require exact-call verified approval | Any draft/version/lifecycle/trigger mutation; capabilities outside registry result; unattended execution |
 | Active runner | bootstrap; read exact immutable version; resolve selected capabilities; append invocation outcome/audit | Only capability IDs selected in that version | All builder/lifecycle/provisioning mutations; drafts; other agents; capability discovery beyond selected IDs |
 
-Field-scoped patch inputs omit owner, agent ID, status, revisions, timestamps,
+The root allocates system-owned family/draft/workflow IDs; PM is the authoring
+role that completes the user-facing requirements. Field-scoped patch inputs omit owner, agent ID, status, revisions, timestamps,
 and fields owned by other roles. The executor derives those values from the
 lease and store. All lifecycle mutations use explicit user approval policies
 where consequential; delete always requires approval. Tool approval remains
@@ -658,6 +667,20 @@ A failed store transaction publishes nothing. A successful publication may
 coexist with `pending_create`, `pending_update`, `failed`, or
 `blocked_authority` trigger state; the user is told exactly that.
 
+Publication requires the exact durable `publish_ready` workflow and an
+explicit current-user decision on the root publish operation. The default uses
+Eve's call-bound approval response policy. A host whose Eve channel/runtime
+cannot settle that lifecycle MAY configure `verifiedPublishApprovalPolicy`;
+that callback receives the exact owner/agent/session/turn/call and the current
+authenticated user message, must reject by default, and is invoked before the
+single atomic store transaction. Agent Builder never persists that message.
+
+If the user requests an edit from `publish_ready`, the root first invokes the
+owner-scoped `agent_builder__workflow_reopen` CAS transition. That transition
+invalidates exact test/QA evidence and returns the unchanged draft to
+`pm_work`; a fresh PM child must author the edit and the implementation, test,
+and QA sequence must complete again before publication.
+
 ### Deterministic roster and search fallback
 
 The root resolves only the current owner's active agent families at
@@ -724,11 +747,21 @@ external mutations, money movement, permission changes, code execution, and
 sensitive-data disclosure all classify as consequential. A model may upgrade
 but never downgrade the host classification.
 
-In interactive test mode, the runner MUST obtain real `ask_question` input
-before each not-already-approved consequential step described by the test
-policy. If `ask_question` is unavailable, the request is cancelled, ambiguous,
-stale, or incomplete, the runner records `INPUT_REQUIRED` and performs no
-consequential action. It never interprets silence as approval.
+In interactive test mode, a read-only side-effect-free capability MAY execute
+without Builder approval unless its real host tool is stricter. A consequential
+or unknown capability MUST carry a current, exact-call user approval. Builder
+composes its response authorizer with the real host tool's schema, credential
+closure, approval, and adapter; it cannot downgrade host policy.
+
+An `ask_question` answer is not such an approval in Eve 0.38. Builder approval
+is scoped to owner, workflow/test run, lease/child, execution turn, capability
+and schema, call/step fingerprint, expiry, request, and authenticated responder,
+and is consumed once before adapter execution. The host
+`verifiedTestInputPolicy` supplies fail-closed availability and any additional
+response validation for channel facts Eve omits. Missing policy, unavailable
+input, scheduled/unattended context, cancellation, denial, timeout, stale or
+malformed/ambiguous response, lease expiry, owner switch, target drift, or
+replay returns a typed input/policy failure and invokes the adapter zero times.
 
 PM and QA likewise stop with structured `needs_user_input` when an answer is
 required and input capability is absent. Unattended runs never synthesize an
@@ -1072,12 +1105,12 @@ RFC amendment.
 | A03 | Mutable draft, immutable versions, atomic active pointer, CAS | PR 02, PR 09 | Reusable PR 02 store conformance covers typed conflicts, atomic races, historical names, operation replay, rollback with a retained draft, max-history publication, quota, archive, restore, tombstone delete, and retained history |
 | A04 | Single-use owner/role/spec/expiry/lineage bootstrap | PR 03, PR 09 | Reusable atomic store/bootstrap conformance rejects replay, races, expiry, wrong owner/role/draft/spec/version/lineage/child and parent-terminal races; parser and built-host tests reject spoofed/unknown-child starts |
 | A05 | Two-turn persistent bootstrap with no first-turn task/tools | PR 03, PR 09 | Real nested subagent E2E observes structured `ready`, continues the same child, injects the saved system persona, executes once, and proves unknown or terminal child continuation fails before another model call |
-| A06 | Enforced role matrix and field ownership | PR 03, PR 04, PR 09 | Each role attempts every forbidden extension mutation; service and model-visible surfaces both deny it |
+| A06 | Enforced role matrix and field ownership | PR 03, PR 04, PR 09 | PR 04 reusable workflow conformance exhaustively rejects every foreign PM/implementor/QA field and invalid outcome; built mounts expose only the matching atomic submit tool |
 | A07 | Stable capability registry and explicit runner surface | PR 03, PR 09 | Runner sees selected registry entries only; added root/raw connection tools never leak |
-| A08 | Required/optional drift and conservative consequence | PR 03, PR 04, PR 09 | Missing/incompatible required tool blocks; optional omission reports; unknown class is consequential |
-| A09 | `ask_question` fail-closed and nested input | PR 04, PR 09 | Direct test parks/resumes; no-input and unattended fixtures perform zero consequential calls |
+| A08 | Required/optional drift and conservative consequence | PR 03, PR 04, PR 09 | PR 04 test evidence gates QA on every required capability and records optional omissions; policy conformance treats unknown/consequential as approval-required |
+| A09 | Fail-closed verified user input | PR 04, PR 09 | PR 04 exact-call/store conformance covers unavailable, denied, stale, expired, owner/workflow/lease/child/schema/step mismatch and replay with zero execution records; built host executes read-only test mode and omits the unavailable consequential fixture. Exact Eve 0.38 local-Workflow approval response settlement remains a documented substrate limitation rather than an `ask_question` authorization claim |
 | A10 | Deterministic roster truncation/search/run-by-ID | PR 03, PR 09 | Random insertion order produces identical roster/pages; every omitted ID remains searchable/runnable |
-| A11 | PM → implementor → QA field-owned workflow and immediate publish | PR 04, PR 09 | Nested build eval publishes atomically; current-turn get/run and next-turn roster observe exact version |
+| A11 | PM → implementor → QA field-owned workflow and immediate publish | PR 04, PR 09 | PR 04 built eval resumes across authenticated turns, performs PM → implementor → QA → isolated test → QA approval, atomically reopens and invalidates evidence for a requested edit, repeats the fresh-child sequence, refuses unverified publish, atomically publishes, and proves current-turn get/direct run plus next-turn roster observe the exact revised version; reusable conformance covers exact-lease test evidence, rollback, schema bindings, and replay |
 | A12 | Turn-scoped private saved skills and sandbox fallback | PR 05, PR 09 | Two Slack users alternate in one session; publish/archive/delete switch files; no-sandbox publish fails/converts explicitly |
 | A13 | Verified stable-ID external envelope and idempotent admission | PR 06, PR 09 | Invalid auth/owner/version/trigger/destination/expiry/replay reject; duplicate key returns one invocation |
 | A14 | Complete provisioning state machine and audit | PR 06, PR 09 | Model/fake adapter drives every table transition, stale generation, CAS conflict, retry, and audit record |
@@ -1218,7 +1251,7 @@ saved agent.
   sandbox; saved-agent conversion is the no-sandbox fallback.
 - Required capability drift blocks; optional drift is explicit; unknown
   consequence defaults to consequential.
-- Missing/failed `ask_question` never implies consent.
+- `ask_question` output is never an authorization grant; missing or failed verified input never implies consent.
 - Roster truncation and search order are deterministic.
 - Minimal invocation/provisioning audits are required; full transcripts are
   not.

@@ -1,5 +1,9 @@
 import type { SessionAuthContext } from "eve/context";
-import { defineTool } from "eve/tools";
+import {
+  defineTool,
+  type ApprovalContext,
+  type ApprovalResponseContext,
+} from "eve/tools";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -38,6 +42,13 @@ import {
 } from "../src/roles.js";
 import { AgentBuilderService } from "../src/service.js";
 import type { AgentBuilderStore } from "../src/store.js";
+import { scopedToolOperationId } from "../extension/lib/runtime/service.js";
+import {
+  composeConsequentialTestApproval,
+  type TestCapabilityStepScope,
+  type TestInputGrantRecord,
+  type TestInputUnavailableCode,
+} from "../src/test-policy.js";
 import { createMemoryAgentBuilderStore } from "../stores/memory.js";
 
 const OWNER_A: OwnerScope = { tenantKey: "tenant", ownerKey: "owner-a" };
@@ -264,7 +275,7 @@ describe("stable runner capability registry", () => {
     }
   });
 
-  it("rejects unauthorized extras, duplicate model names, stable-ID model names, and unattended drift", async () => {
+  it("rejects unauthorized extras, stable-ID model names, and unattended drift while selecting consequential tests", async () => {
     expect(() =>
       defineRunnerCapability({
         descriptor: resolved.descriptor,
@@ -308,15 +319,14 @@ describe("stable runner capability registry", () => {
       ok: false,
       error: { code: "CAPABILITY_REGISTRY_CONTRACT_VIOLATION" },
     });
-    expect(
-      await new RunnerCapabilityService(registry()).prepare({
+    const testPrepared = await new RunnerCapabilityService(registry()).prepare({
         owner: OWNER_A,
         requirements: [requirement],
         mode: "test",
-      }),
-    ).toMatchObject({
-      ok: false,
-      error: { code: "REQUIRED_CAPABILITY_UNAVAILABLE", reason: "disabled" },
+      });
+    expect(testPrepared).toMatchObject({
+      ok: true,
+      value: { plan: { mode: "test", selected: [{ consequential: true }] } },
     });
   });
 
@@ -344,6 +354,149 @@ describe("stable runner capability registry", () => {
       ok: false,
       error: { code: "CAPABILITY_REGISTRY_CONTRACT_VIOLATION" },
     });
+  });
+});
+
+describe("consequential test approval composition", () => {
+  const step = {} as TestCapabilityStepScope;
+  const requestContext = {
+    callId: "capability-call",
+    toolInput: { value: "opaque" },
+    toolName: "fixture_consequential",
+  } as ApprovalContext<unknown>;
+  const responseContext = {
+    request: {
+      callId: "capability-call",
+      requestId: "approval-request",
+      toolInput: { value: "opaque" },
+      toolName: "fixture_consequential",
+    },
+    responder: principal("owner-a"),
+  } as ApprovalResponseContext<unknown>;
+
+  function configuration(input: Parameters<typeof composeConsequentialTestApproval>[0]) {
+    const approval = composeConsequentialTestApproval(input);
+    if (typeof approval === "function") throw new Error("Expected composed approval policies");
+    return approval;
+  }
+
+  it("denies every unavailable input condition before a grant or adapter call", async () => {
+    const unavailableCodes: readonly TestInputUnavailableCode[] = [
+      "INPUT_REQUIRED",
+      "INPUT_UNAVAILABLE",
+      "INPUT_DENIED",
+      "INPUT_CANCELLED",
+      "INPUT_TIMEOUT",
+      "INPUT_STALE",
+      "INPUT_MALFORMED",
+      "INPUT_AMBIGUOUS",
+      "UNATTENDED_INPUT_FORBIDDEN",
+    ];
+    for (const code of unavailableCodes) {
+      let grantCalls = 0;
+      let adapterCalls = 0;
+      const approval = configuration({
+        getStep: async () => ({ ok: true, value: step }),
+        getResponseStep: async () => ({ ok: true, value: step }),
+        inputPolicy: {
+          availability: () => ({ status: "unavailable", code, message: code }),
+        },
+        authorize: async () => {
+          grantCalls += 1;
+          return { ok: true, value: {} as TestInputGrantRecord };
+        },
+      });
+      const decision = await approval.request(requestContext);
+      if (decision === "user-approval") adapterCalls += 1;
+      expect(decision).toEqual({ type: "denied", reason: code });
+      expect(grantCalls).toBe(0);
+      expect(adapterCalls).toBe(0);
+    }
+  });
+
+  it("preserves host denial and rejects denied responses before storing a grant", async () => {
+    let availabilityCalls = 0;
+    let grantCalls = 0;
+    const hostDenied = configuration({
+      hostApproval: () => ({ type: "denied", reason: "HOST_DENIED" }),
+      getStep: async () => ({ ok: true, value: step }),
+      getResponseStep: async () => ({ ok: true, value: step }),
+      inputPolicy: {
+        availability: () => {
+          availabilityCalls += 1;
+          return { status: "available" };
+        },
+      },
+      authorize: async () => {
+        grantCalls += 1;
+        return { ok: true, value: {} as TestInputGrantRecord };
+      },
+    });
+    expect(await hostDenied.request(requestContext)).toEqual({
+      type: "denied",
+      reason: "HOST_DENIED",
+    });
+    expect(availabilityCalls).toBe(0);
+
+    const responseDenied = configuration({
+      hostApproval: {
+        request: () => "user-approval",
+        response: () => ({ status: "rejected", reason: "HOST_RESPONSE_DENIED" }),
+      },
+      getStep: async () => ({ ok: true, value: step }),
+      getResponseStep: async () => ({ ok: true, value: step }),
+      inputPolicy: { availability: () => ({ status: "available" }) },
+      authorize: async () => {
+        grantCalls += 1;
+        return { ok: true, value: {} as TestInputGrantRecord };
+      },
+    });
+    expect(await responseDenied.response?.(responseContext)).toEqual({
+      status: "rejected",
+      reason: "HOST_RESPONSE_DENIED",
+    });
+    expect(grantCalls).toBe(0);
+
+    const policyDenied = configuration({
+      getStep: async () => ({ ok: true, value: step }),
+      getResponseStep: async () => ({ ok: true, value: step }),
+      inputPolicy: {
+        availability: () => ({ status: "available" }),
+        authorizeResponse: () => ({ status: "rejected", reason: "INPUT_STALE" }),
+      },
+      authorize: async () => {
+        grantCalls += 1;
+        return { ok: true, value: {} as TestInputGrantRecord };
+      },
+    });
+    expect(await policyDenied.response?.(responseContext)).toEqual({
+      status: "rejected",
+      reason: "INPUT_STALE",
+    });
+    expect(grantCalls).toBe(0);
+  });
+
+  it("stores one grant only after host and Builder response policies allow the exact call", async () => {
+    let grantCalls = 0;
+    const approval = configuration({
+      hostApproval: {
+        request: () => "user-approval",
+        response: () => ({ status: "allowed" }),
+      },
+      getStep: async () => ({ ok: true, value: step }),
+      getResponseStep: async () => ({ ok: true, value: step }),
+      inputPolicy: {
+        availability: () => ({ status: "available" }),
+        authorizeResponse: () => ({ status: "allowed" }),
+      },
+      authorize: async () => {
+        grantCalls += 1;
+        return { ok: true, value: {} as TestInputGrantRecord };
+      },
+    });
+    expect(await approval.request(requestContext)).toBe("user-approval");
+    expect(await approval.response?.(responseContext)).toEqual({ status: "allowed" });
+    expect(grantCalls).toBe(1);
   });
 });
 
@@ -464,6 +617,26 @@ describe("deterministic owner-scoped discovery", () => {
   });
 });
 
+describe("trusted Eve operation identity", () => {
+  it("scopes a model tool-call ID to its exact session and turn", async () => {
+    const context = (sessionId: string, turnId: string, callId: string) =>
+      ({ callId, session: { id: sessionId, turn: { id: turnId } } }) as Parameters<
+        typeof scopedToolOperationId
+      >[0];
+    const first = await scopedToolOperationId(context("session-a", "turn-a", "reused-call"));
+    expect(
+      await scopedToolOperationId(context("session-a", "turn-a", "reused-call")),
+    ).toBe(first);
+    expect(
+      await scopedToolOperationId(context("session-b", "turn-a", "reused-call")),
+    ).not.toBe(first);
+    expect(
+      await scopedToolOperationId(context("session-a", "turn-b", "reused-call")),
+    ).not.toBe(first);
+    expect(first).toMatch(/^sha256:[a-f0-9]{64}$/u);
+  });
+});
+
 describe("bootstrap service and role authorization", () => {
   it("parses only an exact raw or singly wrapped two-field bootstrap payload", () => {
     const token = `ab1_${"a".repeat(43)}`;
@@ -566,11 +739,11 @@ describe("bootstrap service and role authorization", () => {
 
   it("keeps the role matrix exhaustive and rejects cross-field and cross-owner patches", async () => {
     const expected = {
-      root: ["draft_create", "bootstrap_issue", "agent_discovery", "test_request", "publish", "activate", "archive", "restore", "delete"],
-      pm: ["draft_read", "pm_patch"],
-      implementor: ["draft_read", "implementor_patch", "capability_metadata"],
-      qa: ["draft_read", "qa_patch", "test_request"],
-      test_runner: ["draft_read", "capability_execute"],
+      root: ["draft_create", "workflow_allocate", "workflow_reopen", "bootstrap_issue", "agent_discovery", "test_request", "publish", "activate", "archive", "restore", "delete"],
+      pm: ["draft_read", "pm_patch", "pm_submit"],
+      implementor: ["draft_read", "implementor_patch", "implementor_submit", "capability_metadata"],
+      qa: ["draft_read", "qa_patch", "qa_submit", "test_request"],
+      test_runner: ["draft_read", "capability_execute", "test_submit"],
       active_runner: ["capability_execute"],
     } as const;
     for (const [role, allowed] of Object.entries(expected)) {

@@ -1,11 +1,10 @@
 # eve-agent-builder
 
 `eve-agent-builder` is an unreleased, experimental control plane for private,
-owner-scoped saved agents in Eve 0.38. PR 03 adds host-declared PM,
-implementor, QA, test-runner, and active-runner mounts; single-use bootstrap
-grants and session leases; a stable host capability registry; deterministic
-active-agent discovery; and direct two-turn execution of an immutable
-published version.
+owner-scoped saved agents in Eve 0.38. PR 04 adds a durable PM → implementor →
+QA workflow, isolated test evidence, fail-closed consequential test policy,
+and explicit atomic publication on top of PR 03's declared runners,
+single-use leases, capability registry, discovery, and immutable direct runs.
 
 It does not generate agent code or subagent directories. The host declares
 every child boundary and mounts only the package helpers intended for that
@@ -30,6 +29,18 @@ export default agentBuilder(config);
 and a `RunnerCapabilityRegistry`. Production hosts must provide durable store
 transactions. `createMemoryAgentBuilderStore` from
 `eve-agent-builder/stores/memory` is for tests and local development only.
+
+`verifiedTestInputPolicy` supplies request-input availability and any
+additional response validation Eve 0.38 does not expose to dynamic approval
+callbacks. `ask_question` output is never accepted as authorization.
+Consequential test tools retain their host schema, credential closure, and
+approval while Builder adds an exact-call, single-use check.
+
+Publication uses Eve's exact-call approval by default. A runtime that cannot
+settle it may provide `verifiedPublishApprovalPolicy`; the callback receives
+the exact owner, agent, session, turn, call, and current authenticated user
+input, must fail closed, and runs before the transaction. Agent Builder does
+not persist that input.
 
 The root mounts the dynamic roster and control tools explicitly:
 
@@ -63,6 +74,30 @@ sent on a second call to the same parked child. The execution turn injects
 saved text beneath the static security policy and exposes only the selected
 registry adapters.
 Completion, failure, cancellation, or expiry closes the single-run lease.
+Each later authenticated workflow turn issues a fresh grant/child. A parked
+child is reused only inside that parent turn; Eve 0.38 does not refresh
+`auth.current` on a later persistent-child resume.
+
+## Build workflow and publication
+
+`agent_builder__workflow_allocate` creates system-owned family, draft, and
+workflow IDs. PM owns only `name`, `description`, `kind`, and `pmBrief`;
+implementor owns only `instructions`, `toolRequirements`, and `triggers`; QA
+owns only `testChecklist`, `qaFindings`, and its typed outcome. Each submit is
+one atomic patch plus role handoff/verdict.
+
+Records bind complete owner scope, workflow/family/draft identity, exact
+revisions, role, trusted operation ID, and timestamps. CAS conflicts, stale
+leases/handoffs, owner changes, and replay mismatches stop explicitly. An edit
+after QA approval begins with `agent_builder__workflow_reopen`: its atomic CAS
+transition clears test/approval evidence and returns the exact draft to PM
+work. A fresh PM child then authors the requested edit, which creates a new
+draft revision and requires implementation, test, and QA approval again.
+
+QA approval is bound to the exact tested revision and required capability
+plan. Publication atomically appends the immutable max-history version, moves
+the active pointer, clears the draft, and records the workflow result. Exact
+retries replay the typed result; a failed transaction publishes nothing.
 
 The clear credential necessarily crosses Eve's model-mediated root-tool and
 subagent-message transport. Agent Builder persists only its SHA-256 digest and
@@ -99,21 +134,30 @@ saved skill is distinguishable in search/get and returns
 
 New bootstrap operations are atomic and owner-scoped: reserve a hash-only
 grant, redeem it once while creating a lease, claim the one execution turn,
-and close it terminally. Adapter authors should run both reusable suites:
+and close it terminally. Adapter authors should run all reusable suites:
 
 - `eve-agent-builder/testing/store-conformance`
 - `eve-agent-builder/testing/bootstrap-conformance`
+- `eve-agent-builder/testing/workflow-conformance`
+- `eve-agent-builder/testing/test-policy-conformance`
 
 Core contracts are available from the package root and from `/domain`,
-`/service`, `/store`, `/bootstrap`, `/capabilities`, `/discovery`, and `/roles`.
+`/service`, `/store`, `/bootstrap`, `/capabilities`, `/discovery`, `/roles`,
+`/workflow`, `/workflow-service`, and `/test-policy`.
 Explicit host helpers are under `/mounts/*` and `/runtime/*`.
 
 ## Current limits
 
-This PR proves direct execution and establishes test-runner infrastructure with
-deterministic models. It does not claim live-model obedience. PM to implementor
-to QA orchestration, handoffs/evaluation, and consequential interactive test
-policy remain PR 04. Saved-skill materialization remains PR 05. External
+This PR proves durable build orchestration, side-effect-free isolated testing,
+fail-closed consequential policy, explicit publication, and immediate
+observation with deterministic models. It does not claim live-model obedience.
+Eve 0.38 has no public binding from an `ask_question` answer to a later call,
+and its local Workflow/eval runtime did not settle the tested nested approval
+continuation. Unavailable consequential test capabilities are blocked and
+recorded; reusable conformance proves exact grant consumption and
+zero-execution negatives.
+
+Saved-skill materialization remains PR 05. External
 invocation envelopes, schedules/events, provisioning, production audit, and
 release readiness remain later work.
 

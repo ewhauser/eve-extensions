@@ -10,6 +10,9 @@ import type {
 import type { AgentBuilderServiceOptions } from "./lib/service.js";
 import type { AgentBuilderStore } from "./lib/store.js";
 import type { ResolveOwner } from "./lib/domain.js";
+import type { VerifiedTestInputPolicy } from "./lib/test-policy.js";
+import type { BuildWorkflowCoordinatorIdFactory } from "./lib/workflow-service.js";
+import type { VerifiedPublishApprovalPolicy } from "./lib/workflow.js";
 
 function hasMethods(value: unknown, methods: readonly string[]): boolean {
   return (
@@ -27,6 +30,7 @@ const storeSchema = z.custom<AgentBuilderStore>(
       "getVersion",
       "listVersions",
       "listActiveFamilies",
+      "getBuildWorkflow",
       "mutate",
       "createBootstrapGrant",
       "redeemBootstrapGrant",
@@ -34,6 +38,10 @@ const storeSchema = z.custom<AgentBuilderStore>(
       "beginExecutionLease",
       "closeExecutionLease",
       "closeParentTurnExecutionLeases",
+      "authorizeTestInput",
+      "beginTestCapabilityExecution",
+      "completeTestCapabilityExecution",
+      "listTestCapabilityExecutions",
     ]),
   { message: "store must implement AgentBuilderStore" },
 );
@@ -63,9 +71,28 @@ const bootstrapIdsSchema = z.custom<BootstrapIdFactory>(
   { message: "bootstrapIds must provide grantId() and leaseId()" },
 );
 
+const workflowIdsSchema = z.custom<BuildWorkflowCoordinatorIdFactory>(
+  (value) =>
+    hasMethods(value, ["agentId", "draftId", "specId", "workflowId", "testRunId"]),
+  {
+    message:
+      "workflowIds must provide agentId(), draftId(), specId(), workflowId(), and testRunId()",
+  },
+);
+
 const tokenSourceSchema = z.custom<BootstrapTokenSource>(
   (value) => hasMethods(value, ["bytes"]),
   { message: "tokenSource must provide bytes(length)" },
+);
+
+const verifiedTestInputPolicySchema = z.custom<VerifiedTestInputPolicy>(
+  (value) => hasMethods(value, ["availability"]),
+  { message: "verifiedTestInputPolicy must provide availability()" },
+);
+
+const verifiedPublishApprovalPolicySchema = z.custom<VerifiedPublishApprovalPolicy>(
+  (value) => hasMethods(value, ["authorize"]),
+  { message: "verifiedPublishApprovalPolicy must provide authorize()" },
 );
 
 const config = z
@@ -76,7 +103,10 @@ const config = z
     clock: clockSchema.optional(),
     serviceIds: serviceIdsSchema.optional(),
     bootstrapIds: bootstrapIdsSchema.optional(),
+    workflowIds: workflowIdsSchema.optional(),
     tokenSource: tokenSourceSchema.optional(),
+    verifiedTestInputPolicy: verifiedTestInputPolicySchema.optional(),
+    verifiedPublishApprovalPolicy: verifiedPublishApprovalPolicySchema.optional(),
     maxAgentFamiliesPerOwner: z.number().int().positive().optional(),
     maxBootstrapGrantTtlMs: z.number().int().positive().max(5 * 60 * 1_000).optional(),
     executionLeaseTtlMs: z.number().int().positive().optional(),

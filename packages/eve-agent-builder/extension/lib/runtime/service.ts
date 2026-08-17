@@ -22,7 +22,15 @@ import {
   type Timestamp,
 } from "../domain.js";
 import { createRoleScopedAgentBuilderService, type RoleScopedAgentBuilderService } from "../roles.js";
-import { createAgentBuilderService, type AgentBuilderService } from "../service.js";
+import {
+  createAgentBuilderService,
+  fingerprintMutationRequest,
+  type AgentBuilderService,
+} from "../service.js";
+import {
+  createBuildWorkflowCoordinator,
+  type BuildWorkflowCoordinator,
+} from "../workflow-service.js";
 import { ownerCacheKey, ownerInputFromDynamic } from "./owner.js";
 
 export interface PreparedRunnerTurn {
@@ -39,6 +47,7 @@ export interface AgentBuilderRuntime {
   readonly capabilities: RunnerCapabilityService;
   readonly discovery: AgentDiscoveryService;
   readonly roles: RoleScopedAgentBuilderService;
+  readonly workflow: BuildWorkflowCoordinator;
 }
 
 const runtimes = new WeakMap<object, AgentBuilderRuntime>();
@@ -70,21 +79,22 @@ export function getAgentBuilderRuntime(): AgentBuilderRuntime {
       : { maxAgentFamiliesPerOwner: config.maxAgentFamiliesPerOwner }),
   });
   const capabilities = createRunnerCapabilityService(config.capabilities);
+  const bootstrap = createBootstrapService({
+    store: config.store,
+    ...(config.clock === undefined ? {} : { clock: config.clock }),
+    ...(config.bootstrapIds === undefined ? {} : { ids: config.bootstrapIds }),
+    ...(config.tokenSource === undefined ? {} : { tokenSource: config.tokenSource }),
+    ...(config.maxBootstrapGrantTtlMs === undefined
+      ? {}
+      : { maxGrantTtlMs: config.maxBootstrapGrantTtlMs }),
+    ...(config.executionLeaseTtlMs === undefined
+      ? {}
+      : { executionLeaseTtlMs: config.executionLeaseTtlMs }),
+  });
   const runtime: AgentBuilderRuntime = Object.freeze({
     config,
     service,
-    bootstrap: createBootstrapService({
-      store: config.store,
-      ...(config.clock === undefined ? {} : { clock: config.clock }),
-      ...(config.bootstrapIds === undefined ? {} : { ids: config.bootstrapIds }),
-      ...(config.tokenSource === undefined ? {} : { tokenSource: config.tokenSource }),
-      ...(config.maxBootstrapGrantTtlMs === undefined
-        ? {}
-        : { maxGrantTtlMs: config.maxBootstrapGrantTtlMs }),
-      ...(config.executionLeaseTtlMs === undefined
-        ? {}
-        : { executionLeaseTtlMs: config.executionLeaseTtlMs }),
-    }),
+    bootstrap,
     capabilities,
     discovery: createAgentDiscoveryService({
       store: config.store,
@@ -97,6 +107,16 @@ export function getAgentBuilderRuntime(): AgentBuilderRuntime {
       store: config.store,
       ...(config.clock === undefined ? {} : { clock: config.clock }),
     }),
+    workflow: createBuildWorkflowCoordinator({
+      store: config.store,
+      resolveOwner: config.resolveOwner,
+      bootstrap,
+      ...(config.clock === undefined ? {} : { clock: config.clock }),
+      ...(config.workflowIds === undefined ? {} : { ids: config.workflowIds }),
+      ...(config.maxAgentFamiliesPerOwner === undefined
+        ? {}
+        : { maxAgentFamiliesPerOwner: config.maxAgentFamiliesPerOwner }),
+    }),
   });
   runtimes.set(config.store as object, runtime);
   return runtime;
@@ -104,6 +124,22 @@ export function getAgentBuilderRuntime(): AgentBuilderRuntime {
 
 export function runtimeTimestamp(runtime: AgentBuilderRuntime): Timestamp {
   return timestampSchema.parse(runtime.config.clock?.now() ?? new Date().toISOString());
+}
+
+/**
+ * Eve tool-call IDs are only meaningful inside their session/turn. Persist a
+ * compact trusted identity over the complete execution scope so two fresh
+ * children may safely reuse the same model-authored call ID.
+ */
+export function scopedToolOperationId(
+  ctx: Pick<import("eve/tools").ToolContext, "callId" | "session">,
+): Promise<string> {
+  return fingerprintMutationRequest({
+    sessionId: ctx.session.id,
+    turnId: ctx.session.turn.id,
+    callId: ctx.callId,
+    schema: "eve-tool-operation-v1",
+  });
 }
 
 export function eventTurnId(event: unknown): string {

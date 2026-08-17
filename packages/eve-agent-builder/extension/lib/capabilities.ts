@@ -1,4 +1,5 @@
 import type {
+  Approval,
   DynamicToolEntry,
   DynamicToolSet,
   ToolContext,
@@ -416,15 +417,6 @@ export class RunnerCapabilityService {
           resolution.compatibleSchemaFingerprints?.includes(requirement.schemaFingerprint) ===
             true;
         if (!compatible) reason = "incompatible";
-        if (
-          reason === null &&
-          mode.data === "test" &&
-          effectiveConsequential(resolution.descriptor, requirement)
-        ) {
-          // PR 03 intentionally establishes only non-consequential test-runner
-          // infrastructure. Interactive ask_question policy arrives in PR 04.
-          reason = "disabled";
-        }
       }
       if (reason !== null) {
         const outcome = unavailable(requirement, reason);
@@ -490,7 +482,17 @@ export function lowerResolvedCapabilities(
   assertExecutionAllowed: (
     capability: ResolvedRunnerCapability,
     ctx: ToolContext,
-  ) => Promise<void>,
+    toolInput: unknown,
+  ) => Promise<
+    | void
+    | Readonly<{
+        complete(status: "succeeded" | "failed", errorCode?: string): Promise<void>;
+      }>
+  >,
+  approvalFor?: (
+    capability: ResolvedRunnerCapability,
+    hostApproval: Approval<unknown> | undefined,
+  ) => Approval<unknown> | undefined,
 ): DynamicToolSet {
   const lowered: Record<string, DynamicToolEntry<any, any>> = {};
   for (const capability of capabilities) {
@@ -502,21 +504,35 @@ export function lowerResolvedCapabilities(
       throw new TypeError(`Duplicate lowered tool name: ${capability.modelToolName}`);
     }
     const tool = capability.tool;
+    const approval = approvalFor?.(
+      capability,
+      tool.approval as Approval<unknown> | undefined,
+    ) ?? tool.approval;
     lowered[capability.modelToolName] = defineTool({
       description: tool.description,
       inputSchema: tool.inputSchema as ToolDefinition<any, any>["inputSchema"],
       ...(tool.outputSchema === undefined
         ? {}
         : { outputSchema: tool.outputSchema as ToolDefinition<any, any>["outputSchema"] }),
-      ...(tool.approval === undefined
+      ...(approval === undefined
         ? {}
-        : { approval: tool.approval as ToolDefinition<any, any>["approval"] }),
+        : { approval: approval as ToolDefinition<any, any>["approval"] }),
       ...(tool.toModelOutput === undefined
         ? {}
         : { toModelOutput: tool.toModelOutput as ToolDefinition<any, any>["toModelOutput"] }),
       execute: async (toolInput, ctx) => {
-        await assertExecutionAllowed(capability, ctx);
-        return tool.execute.call(tool, toolInput, ctx);
+        const permit = await assertExecutionAllowed(capability, ctx, toolInput);
+        try {
+          const result = await tool.execute.call(tool, toolInput, ctx);
+          await permit?.complete("succeeded");
+          return result;
+        } catch (error) {
+          await permit?.complete(
+            "failed",
+            error instanceof Error && error.name.length > 0 ? error.name : "CAPABILITY_EXECUTION_FAILED",
+          );
+          throw error;
+        }
       },
     } as ToolDefinition<any, any>) as DynamicToolEntry<any, any>;
   }

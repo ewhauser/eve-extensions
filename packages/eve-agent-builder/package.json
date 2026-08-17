@@ -1,7 +1,7 @@
 {
   "name": "eve-agent-builder",
   "version": "0.0.0",
-  "description": "Experimental owner-scoped saved-agent control plane and isolated direct runner for Eve.",
+  "description": "Experimental owner-scoped saved-agent build workflow and isolated runner for Eve.",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -48,6 +48,18 @@
       "types": "./dist/extension/lib/store.d.ts",
       "default": "./dist/extension/lib/store.mjs"
     },
+    "./test-policy": {
+      "types": "./dist/extension/lib/test-policy.d.ts",
+      "default": "./dist/extension/lib/test-policy.mjs"
+    },
+    "./workflow": {
+      "types": "./dist/extension/lib/workflow.d.ts",
+      "default": "./dist/extension/lib/workflow.mjs"
+    },
+    "./workflow-service": {
+      "types": "./dist/extension/lib/workflow-service.d.ts",
+      "default": "./dist/extension/lib/workflow-service.mjs"
+    },
     "./stores/memory": {
       "types": "./dist/extension/lib/stores/memory.d.ts",
       "default": "./dist/extension/lib/stores/memory.mjs"
@@ -59,6 +71,14 @@
     "./testing/bootstrap-conformance": {
       "types": "./dist/extension/lib/testing/bootstrap-conformance.d.ts",
       "default": "./dist/extension/lib/testing/bootstrap-conformance.mjs"
+    },
+    "./testing/workflow-conformance": {
+      "types": "./dist/extension/lib/testing/workflow-conformance.d.ts",
+      "default": "./dist/extension/lib/testing/workflow-conformance.mjs"
+    },
+    "./testing/test-policy-conformance": {
+      "types": "./dist/extension/lib/testing/test-policy-conformance.d.ts",
+      "default": "./dist/extension/lib/testing/test-policy-conformance.mjs"
     },
     "./runtime/*": {
       "types": "./dist/extension/lib/runtime/*.d.ts",

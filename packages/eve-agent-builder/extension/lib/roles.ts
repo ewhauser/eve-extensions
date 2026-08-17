@@ -25,11 +25,17 @@ import type { AgentBuilderStore } from "./store.js";
 
 export type AgentBuilderRoleOperation =
   | "draft_create"
+  | "workflow_allocate"
+  | "workflow_reopen"
   | "bootstrap_issue"
   | "draft_read"
   | "pm_patch"
   | "implementor_patch"
   | "qa_patch"
+  | "pm_submit"
+  | "implementor_submit"
+  | "qa_submit"
+  | "test_submit"
   | "capability_metadata"
   | "capability_execute"
   | "test_request"
@@ -43,11 +49,17 @@ export type AgentBuilderRoleOperation =
 
 const ALL_OPERATIONS: readonly AgentBuilderRoleOperation[] = Object.freeze([
   "draft_create",
+  "workflow_allocate",
+  "workflow_reopen",
   "bootstrap_issue",
   "draft_read",
   "pm_patch",
   "implementor_patch",
   "qa_patch",
+  "pm_submit",
+  "implementor_submit",
+  "qa_submit",
+  "test_submit",
   "capability_metadata",
   "capability_execute",
   "test_request",
@@ -67,6 +79,8 @@ export const rolePermissionMatrix: Readonly<
 > = Object.freeze({
   root: new Set<AgentBuilderRoleOperation>([
     "draft_create",
+    "workflow_allocate",
+    "workflow_reopen",
     "bootstrap_issue",
     "agent_discovery",
     "test_request",
@@ -76,14 +90,24 @@ export const rolePermissionMatrix: Readonly<
     "restore",
     "delete",
   ]),
-  pm: new Set<AgentBuilderRoleOperation>(["draft_read", "pm_patch"]),
+  pm: new Set<AgentBuilderRoleOperation>(["draft_read", "pm_patch", "pm_submit"]),
   implementor: new Set<AgentBuilderRoleOperation>([
     "draft_read",
     "implementor_patch",
+    "implementor_submit",
     "capability_metadata",
   ]),
-  qa: new Set<AgentBuilderRoleOperation>(["draft_read", "qa_patch", "test_request"]),
-  test_runner: new Set<AgentBuilderRoleOperation>(["draft_read", "capability_execute"]),
+  qa: new Set<AgentBuilderRoleOperation>([
+    "draft_read",
+    "qa_patch",
+    "qa_submit",
+    "test_request",
+  ]),
+  test_runner: new Set<AgentBuilderRoleOperation>([
+    "draft_read",
+    "capability_execute",
+    "test_submit",
+  ]),
   active_runner: new Set<AgentBuilderRoleOperation>(["capability_execute"]),
 });
 
@@ -264,6 +288,15 @@ export class RoleScopedAgentBuilderService {
     rawPatch: unknown,
     schema: z.ZodType<Patch>,
   ): Promise<RoleServiceResult<AgentBuilderStoreMutationSuccess>> {
+    if (input.lease.workflow !== undefined) {
+      return {
+        ok: false,
+        error: {
+          code: "ROLE_FORBIDDEN",
+          message: "Workflow-scoped roles must use one atomic patch-and-handoff submission",
+        },
+      };
+    }
     const owner = await this.#service.resolveOwner(input.mutationContext.ownerResolution);
     if (!owner.ok) return owner;
     const authorized = await this.#authorize(role, operation, owner.owner, input.lease);

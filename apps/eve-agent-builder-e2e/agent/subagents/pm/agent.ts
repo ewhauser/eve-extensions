@@ -10,7 +10,7 @@ export default defineAgentBuilderRoleAgent({
     personaMarker: "host-declared Agent Builder PM",
     executionTools: [
       "agent_builder__draft_get",
-      "agent_builder__pm_patch",
+      "agent_builder__pm_submit",
       "agent_builder__run_context",
     ],
   }),

@@ -11,9 +11,10 @@ export default defineAgentBuilderRoleAgent({
     executionTools: [
       "agent_builder__draft_get",
       "agent_builder__run_context",
+      "agent_builder__test_submit",
       "fixture_read",
     ],
   }),
   modelContextWindowTokens: 32_000,
-  description: "Isolated saved-draft test runner; consequential interaction policy arrives in PR 04.",
+  description: "Isolated saved-draft test runner with exact-call interactive approval policy.",
 });
