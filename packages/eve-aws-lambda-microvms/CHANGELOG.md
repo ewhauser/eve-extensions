@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.5.1...eve-aws-lambda-microvms-v0.6.0) (2026-08-17)
+
+
+### Features
+
+* **lambda-microvms:** separate image reconciliation from runtime ([#83](https://github.com/ewhauser/eve-extensions/issues/83)) ([8a9af6e](https://github.com/ewhauser/eve-extensions/commit/8a9af6e9491097c16f835bf32e6fec5a8dcd4294))
+
 ## [0.5.1](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.5.0...eve-aws-lambda-microvms-v0.5.1) (2026-08-16)
 
 
