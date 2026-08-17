@@ -111,7 +111,7 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
           "arn:aws:lambda:us-east-1:999999999999:network-connector:build-egress",
         ],
       },
-      /buildRoleArn belongs to 123456789012/,
+      /configured image\/build role belongs to 123456789012/,
     ],
     [
       {

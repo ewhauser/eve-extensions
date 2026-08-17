@@ -10,6 +10,7 @@ export {
   serializeAwsLambdaMicrovmActivationEnvelope,
   validateAwsLambdaMicrovmActivationEnvelope,
 } from "./activation.js";
+export { reconcileAwsLambdaMicrovmImage } from "./reconcile.js";
 export type {
   AwsLambdaMicrovmActivationEnvelope,
   AwsLambdaMicrovmActivationProvider,
@@ -28,4 +29,5 @@ export type {
   AwsLambdaMicrovmMemoryMiB,
   AwsLambdaMicrovmNetworkingMode,
   AwsLambdaMicrovmSandboxOptions,
+  AwsLambdaMicrovmVerifiedImage,
 } from "./types.js";

@@ -18,6 +18,29 @@ export interface AwsLambdaMicrovmBaseImage {
   readonly version: string;
 }
 
+/**
+ * Immutable result of a successful, environment-specific image reconciliation.
+ *
+ * The identity includes every build trigger that can change the guest image.
+ * It is safe to store in deployment configuration: it contains no credentials,
+ * private key material, or provider tokens.
+ */
+export interface AwsLambdaMicrovmVerifiedImage {
+  readonly schemaVersion: 1;
+  readonly applicationId: string;
+  readonly artifactSha256: string;
+  readonly baseImage: AwsLambdaMicrovmBaseImage;
+  readonly buildEgressNetworkConnectorArns: readonly string[];
+  readonly buildNetworkLaneId?: string;
+  readonly configSha256: string;
+  readonly controllerProtocolVersion: number;
+  readonly egressProxyCaSha256?: string;
+  readonly imageArn: string;
+  readonly imageVersion: string;
+  readonly memoryMiB: AwsLambdaMicrovmMemoryMiB;
+  readonly region: string;
+}
+
 /** CloudWatch logging configuration for image builds and MicroVM sessions. */
 export interface AwsLambdaMicrovmCloudWatchLogging {
   readonly logGroup?: string;
@@ -42,8 +65,11 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly artifactBucket: string;
   /** Optional KMS key identifier for explicit SSE-KMS S3 writes. */
   readonly artifactKmsKeyId?: string;
-  /** IAM role AWS assumes while building the MicroVM image. */
-  readonly buildRoleArn: string;
+  /**
+   * IAM role AWS assumes while building the MicroVM image. Required by image
+   * reconciliation when `verifiedImage` is not supplied.
+   */
+  readonly buildRoleArn?: string;
   /** Prefix inside `artifactBucket`; defaults to an application-scoped eve prefix. */
   readonly artifactPrefix?: string;
   /** Optional execution role exposed to code inside the MicroVM through IMDS. */
@@ -56,6 +82,12 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly idlePolicy?: Partial<AwsLambdaMicrovmIdlePolicy>;
   /** Exact managed base image. Omit to use the newest available AL2023 image. */
   readonly baseImage?: AwsLambdaMicrovmBaseImage;
+  /**
+   * Exact verified image selected by deployment configuration. When supplied,
+   * the backend only verifies and runs this version; it never uploads a
+   * controller artifact or calls CreateMicrovmImage.
+   */
+  readonly verifiedImage?: AwsLambdaMicrovmVerifiedImage;
   /**
    * `customer-managed` fails closed unless both phases name exactly one
    * same-account, same-region customer connector. Omitted/`legacy` preserves

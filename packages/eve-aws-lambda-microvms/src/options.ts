@@ -7,6 +7,7 @@ import type {
   AwsLambdaMicrovmIdlePolicy,
   AwsLambdaMicrovmMemoryMiB,
   AwsLambdaMicrovmSandboxOptions,
+  AwsLambdaMicrovmVerifiedImage,
 } from "./types.js";
 
 const MEMORY_VALUES = new Set<AwsLambdaMicrovmMemoryMiB>([512, 1024, 2048, 4096, 8192]);
@@ -21,7 +22,7 @@ export interface ResolvedAwsLambdaMicrovmOptions {
   readonly baseImage?: AwsLambdaMicrovmBaseImage;
   readonly buildEgressNetworkConnectorArns: readonly string[];
   readonly buildNetworkLaneId?: string;
-  readonly buildRoleArn: string;
+  readonly buildRoleArn?: string;
   readonly executionRoleArn?: string;
   readonly egressProxyCaBundlePem?: string;
   readonly egressProxyCaSha256?: string;
@@ -36,6 +37,7 @@ export interface ResolvedAwsLambdaMicrovmOptions {
   readonly runtimeLogging: AwsLambdaMicrovmCloudWatchLogging | false;
   readonly shellIngressNetworkConnectorArn?: string;
   readonly tags: Readonly<Record<string, string>>;
+  readonly verifiedImage?: AwsLambdaMicrovmVerifiedImage;
 }
 
 export function resolveAwsLambdaMicrovmOptions(
@@ -44,7 +46,13 @@ export function resolveAwsLambdaMicrovmOptions(
   const applicationId = expectNonEmpty("applicationId", options.applicationId);
   const region = expectNonEmpty("region", options.region);
   const artifactBucket = expectNonEmpty("artifactBucket", options.artifactBucket);
-  const buildRoleArn = expectNonEmpty("buildRoleArn", options.buildRoleArn);
+  const verifiedImage = normalizeVerifiedImage(options.verifiedImage);
+  const buildRoleArn = optionalNonEmpty("buildRoleArn", options.buildRoleArn);
+  if (verifiedImage === undefined && buildRoleArn === undefined) {
+    throw new Error(
+      "AWS Lambda MicroVM buildRoleArn is required when verifiedImage is not supplied.",
+    );
+  }
   const artifactKmsKeyId = optionalNonEmpty("artifactKmsKeyId", options.artifactKmsKeyId);
   const baseImage =
     options.baseImage === undefined
@@ -54,7 +62,7 @@ export function resolveAwsLambdaMicrovmOptions(
           version: expectNonEmpty("baseImage.version", options.baseImage.version),
         };
   const applicationHash = sha256(applicationId).slice(0, 20);
-  const memoryMiB = options.memoryMiB ?? 2048;
+  const memoryMiB = options.memoryMiB ?? verifiedImage?.memoryMiB ?? 2048;
   if (!MEMORY_VALUES.has(memoryMiB)) {
     throw new Error("AWS Lambda MicroVM memoryMiB must be one of 512, 1024, 2048, 4096, or 8192.");
   }
@@ -90,7 +98,10 @@ export function resolveAwsLambdaMicrovmOptions(
   if (networkingMode !== "legacy" && networkingMode !== "customer-managed") {
     throw new Error(`AWS Lambda MicroVM networkingMode ${String(networkingMode)} is unsupported.`);
   }
-  const buildNetworkLaneId = optionalNonEmpty("buildNetworkLaneId", options.buildNetworkLaneId);
+  const buildNetworkLaneId = optionalNonEmpty(
+    "buildNetworkLaneId",
+    options.buildNetworkLaneId ?? verifiedImage?.buildNetworkLaneId,
+  );
   const runtimeNetworkLaneId = optionalNonEmpty(
     "runtimeNetworkLaneId",
     options.runtimeNetworkLaneId,
@@ -98,6 +109,7 @@ export function resolveAwsLambdaMicrovmOptions(
   const buildEgressNetworkConnectorArns = normalizeStringArray(
     "buildEgressNetworkConnectorArns",
     options.buildEgressNetworkConnectorArns ??
+      verifiedImage?.buildEgressNetworkConnectorArns ??
       (networkingMode === "customer-managed" ? [] : [internetEgress]),
   );
   const runtimeEgressNetworkConnectorArns = normalizeStringArray(
@@ -111,7 +123,10 @@ export function resolveAwsLambdaMicrovmOptions(
       maxIdleDurationSeconds: maximumDurationSeconds,
       suspendedDurationSeconds: 1,
     };
-    const account = accountFromBuildRoleArn(buildRoleArn);
+    const account =
+      buildRoleArn === undefined
+        ? accountFromImageArn(verifiedImage!.imageArn)
+        : accountFromBuildRoleArn(buildRoleArn);
     validateCustomerManagedConnector(
       "buildEgressNetworkConnectorArns",
       buildEgressNetworkConnectorArns,
@@ -168,6 +183,57 @@ export function resolveAwsLambdaMicrovmOptions(
     shellIngressNetworkConnectorArn:
       options.shellAccess === true ? `${managedConnectorPrefix}:SHELL_INGRESS` : undefined,
     tags: normalizeTags(options.tags),
+    verifiedImage,
+  };
+}
+
+function normalizeVerifiedImage(
+  value: AwsLambdaMicrovmVerifiedImage | undefined,
+): AwsLambdaMicrovmVerifiedImage | undefined {
+  if (value === undefined) return undefined;
+  if (value.schemaVersion !== 1) {
+    throw new Error("AWS Lambda MicroVM verifiedImage.schemaVersion must be 1.");
+  }
+  if (!MEMORY_VALUES.has(value.memoryMiB)) {
+    throw new Error("AWS Lambda MicroVM verifiedImage.memoryMiB is unsupported.");
+  }
+  const region = expectNonEmpty("verifiedImage.region", value.region);
+  const imageArn = expectNonEmpty("verifiedImage.imageArn", value.imageArn);
+  const imageArnMatch = /^arn:[^:]+:lambda:([^:]+):(\d{12}):microvm-image:.+/.exec(imageArn);
+  if (imageArnMatch === null || imageArnMatch[1] !== region) {
+    throw new Error(
+      "AWS Lambda MicroVM verifiedImage.imageArn must be an account-scoped image ARN in verifiedImage.region.",
+    );
+  }
+  return {
+    schemaVersion: 1,
+    applicationId: expectNonEmpty("verifiedImage.applicationId", value.applicationId),
+    artifactSha256: expectSha256("verifiedImage.artifactSha256", value.artifactSha256),
+    baseImage: {
+      arn: expectNonEmpty("verifiedImage.baseImage.arn", value.baseImage.arn),
+      version: expectNonEmpty("verifiedImage.baseImage.version", value.baseImage.version),
+    },
+    buildEgressNetworkConnectorArns: normalizeStringArray(
+      "verifiedImage.buildEgressNetworkConnectorArns",
+      value.buildEgressNetworkConnectorArns,
+    ),
+    buildNetworkLaneId: optionalNonEmpty(
+      "verifiedImage.buildNetworkLaneId",
+      value.buildNetworkLaneId,
+    ),
+    configSha256: expectSha256("verifiedImage.configSha256", value.configSha256),
+    controllerProtocolVersion: expectPositiveInteger(
+      "verifiedImage.controllerProtocolVersion",
+      value.controllerProtocolVersion,
+    ),
+    egressProxyCaSha256:
+      value.egressProxyCaSha256 === undefined
+        ? undefined
+        : expectSha256("verifiedImage.egressProxyCaSha256", value.egressProxyCaSha256),
+    imageArn,
+    imageVersion: expectNonEmpty("verifiedImage.imageVersion", value.imageVersion),
+    memoryMiB: value.memoryMiB,
+    region,
   };
 }
 
@@ -209,6 +275,16 @@ function accountFromBuildRoleArn(value: string): string {
   return match[2]!;
 }
 
+function accountFromImageArn(value: string): string {
+  const match = /^arn:[^:]+:lambda:[^:]+:(\d{12}):microvm-image:.+/.exec(value);
+  if (match === null) {
+    throw new Error(
+      "AWS Lambda MicroVM verifiedImage.imageArn must be an account-scoped image ARN.",
+    );
+  }
+  return match[1]!;
+}
+
 function validateCustomerManagedConnector(
   name: string,
   values: readonly string[],
@@ -237,7 +313,7 @@ function validateCustomerManagedConnector(
   }
   if (match[3] !== account) {
     throw new Error(
-      `AWS Lambda MicroVM ${name}[0] belongs to account ${match[3]}, but buildRoleArn belongs to ${account}.`,
+      `AWS Lambda MicroVM ${name}[0] belongs to account ${match[3]}, but the configured image/build role belongs to ${account}.`,
     );
   }
 }
@@ -252,6 +328,21 @@ function expectNonEmpty(name: string, value: string): string {
 
 function optionalNonEmpty(name: string, value: string | undefined): string | undefined {
   return value === undefined ? undefined : expectNonEmpty(name, value);
+}
+
+function expectSha256(name: string, value: string): string {
+  const normalized = expectNonEmpty(name, value);
+  if (!/^[a-f0-9]{64}$/.test(normalized)) {
+    throw new Error(`AWS Lambda MicroVM ${name} must be a lowercase SHA-256 digest.`);
+  }
+  return normalized;
+}
+
+function expectPositiveInteger(name: string, value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`AWS Lambda MicroVM ${name} must be a positive integer.`);
+  }
+  return value;
 }
 
 function normalizePrefix(value: string): string {
