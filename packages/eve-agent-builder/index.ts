@@ -5,3 +5,6 @@ export * from "./src/domain.js";
 export * from "./src/roles.js";
 export * from "./src/service.js";
 export * from "./src/store.js";
+export * from "./src/test-policy.js";
+export * from "./src/workflow.js";
+export * from "./src/workflow-service.js";

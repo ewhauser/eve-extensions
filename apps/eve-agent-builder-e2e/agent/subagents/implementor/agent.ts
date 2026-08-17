@@ -11,7 +11,7 @@ export default defineAgentBuilderRoleAgent({
     executionTools: [
       "agent_builder__capability_list",
       "agent_builder__draft_get",
-      "agent_builder__implementor_patch",
+      "agent_builder__implementor_submit",
       "agent_builder__run_context",
     ],
   }),

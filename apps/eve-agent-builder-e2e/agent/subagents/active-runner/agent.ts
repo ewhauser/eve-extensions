@@ -52,12 +52,14 @@ const model = mockModel((request) => {
     };
   }
   if (request.userMessageCount === 2) {
+    const expectedExecutionTools = toolNames.includes("fixture_notify")
+      ? ["agent_builder__run_context", "fixture_notify", "fixture_read"]
+      : ["agent_builder__run_context", "fixture_read"];
     if (
       request.lastUserMessage !== FIXTURE_TASK ||
       !system.includes(SAVED_INSTRUCTION_MARKER) ||
       system.includes(ROOT_INSTRUCTION_MARKER) ||
-      JSON.stringify(toolNames) !==
-        JSON.stringify(["agent_builder__run_context", "fixture_read"])
+      JSON.stringify(toolNames) !== JSON.stringify(expectedExecutionTools)
     ) {
       throw new Error(`EXECUTION_SURFACE_NOT_ISOLATED:${JSON.stringify(toolNames)}`);
     }

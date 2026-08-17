@@ -17,6 +17,12 @@ import {
   type Timestamp,
 } from "./domain.js";
 import type { AgentBuilderStore } from "./store.js";
+import {
+  buildWorkflowIdSchema,
+  testRunIdSchema,
+  type BuildWorkflowId,
+  type TestRunId,
+} from "./workflow.js";
 
 export const AGENT_BUILDER_BOOTSTRAP_PROTOCOL_VERSION = 1 as const;
 export const DEFAULT_BOOTSTRAP_GRANT_TTL_MS = 5 * 60 * 1_000;
@@ -37,6 +43,20 @@ export const executionRoleSchema = z.enum([
   "test_runner",
   "active_runner",
 ]);
+
+export interface BuildExecutionScope {
+  readonly workflowId: BuildWorkflowId;
+  readonly workflowRevision: number;
+  readonly testRunId?: TestRunId | undefined;
+}
+
+export const buildExecutionScopeSchema: z.ZodType<BuildExecutionScope> = z
+  .object({
+    workflowId: buildWorkflowIdSchema,
+    workflowRevision: positiveRevisionSchema,
+    testRunId: testRunIdSchema.optional(),
+  })
+  .strict();
 
 export type BootstrapTarget =
   | Readonly<{
@@ -80,6 +100,7 @@ export interface BootstrapGrantRecord {
   readonly owner: OwnerScope;
   readonly role: ExecutionRole;
   readonly target: BootstrapTarget;
+  readonly workflow?: BuildExecutionScope;
   readonly parentSessionId: string;
   readonly parentTurnId?: string;
   readonly parentCallId?: string;
@@ -96,6 +117,7 @@ export const bootstrapGrantRecordSchema = z
     owner: ownerScopeSchema,
     role: executionRoleSchema,
     target: bootstrapTargetSchema,
+    workflow: buildExecutionScopeSchema.optional(),
     parentSessionId: z.string().min(1).max(512),
     parentTurnId: z.string().min(1).max(512).optional(),
     parentCallId: z.string().min(1).max(512).optional(),
@@ -187,6 +209,7 @@ export interface ExecutionLeaseRecord {
   readonly owner: OwnerScope;
   readonly role: ExecutionRole;
   readonly target: BootstrapTarget;
+  readonly workflow?: BuildExecutionScope;
   readonly parentSessionId: string;
   readonly parentTurnId?: string;
   readonly parentCallId: string;
@@ -208,6 +231,7 @@ export const executionLeaseRecordSchema = z
     owner: ownerScopeSchema,
     role: executionRoleSchema,
     target: bootstrapTargetSchema,
+    workflow: buildExecutionScopeSchema.optional(),
     parentSessionId: z.string().min(1).max(512),
     parentTurnId: z.string().min(1).max(512).optional(),
     parentCallId: z.string().min(1).max(512),
@@ -269,6 +293,7 @@ export interface RedeemBootstrapGrantStoreCommand {
   readonly owner: OwnerScope;
   readonly role: ExecutionRole;
   readonly expectedTarget?: BootstrapTarget;
+  readonly expectedWorkflow?: BuildExecutionScope;
   readonly parentSessionId: string;
   readonly parentTurnId?: string;
   readonly parentCallId: string;
@@ -351,6 +376,7 @@ export interface IssueBootstrapGrantInput {
   readonly owner: OwnerScope;
   readonly role: ExecutionRole;
   readonly target: BootstrapTarget;
+  readonly workflow?: BuildExecutionScope;
   readonly parentSessionId: string;
   readonly parentTurnId?: string;
   readonly parentCallId?: string;
@@ -362,6 +388,7 @@ export interface IssuedBootstrapGrant {
   readonly token: string;
   readonly role: ExecutionRole;
   readonly target: BootstrapTarget;
+  readonly workflow?: BuildExecutionScope;
   readonly expiresAt: Timestamp;
 }
 
@@ -370,6 +397,7 @@ export interface RedeemBootstrapGrantInput {
   readonly owner: OwnerScope;
   readonly role: ExecutionRole;
   readonly expectedTarget?: BootstrapTarget;
+  readonly expectedWorkflow?: BuildExecutionScope;
   readonly parentSessionId: string;
   readonly parentTurnId?: string;
   readonly parentCallId: string;
@@ -526,6 +554,7 @@ export class BootstrapService {
         owner: ownerScopeSchema,
         role: executionRoleSchema,
         target: bootstrapTargetSchema,
+        workflow: buildExecutionScopeSchema.optional(),
         parentSessionId: z.string().min(1).max(512),
         parentTurnId: z.string().min(1).max(512).optional(),
         parentCallId: z.string().min(1).max(512).optional(),
@@ -595,6 +624,7 @@ export class BootstrapService {
         owner: parsed.data.owner,
         role: parsed.data.role,
         target: parsed.data.target,
+        ...(parsed.data.workflow === undefined ? {} : { workflow: parsed.data.workflow }),
         parentSessionId: parsed.data.parentSessionId,
         ...(parsed.data.parentTurnId === undefined
           ? {}
@@ -614,6 +644,7 @@ export class BootstrapService {
             token,
             role: grant.role,
             target: grant.target,
+            ...(grant.workflow === undefined ? {} : { workflow: grant.workflow }),
             expiresAt,
           },
         };
@@ -638,6 +669,7 @@ export class BootstrapService {
         owner: ownerScopeSchema,
         role: executionRoleSchema,
         expectedTarget: bootstrapTargetSchema.optional(),
+        expectedWorkflow: buildExecutionScopeSchema.optional(),
         parentSessionId: z.string().min(1).max(512),
         parentTurnId: z.string().min(1).max(512).optional(),
         parentCallId: z.string().min(1).max(512),
@@ -671,6 +703,9 @@ export class BootstrapService {
       ...(parsed.data.expectedTarget === undefined
         ? {}
         : { expectedTarget: parsed.data.expectedTarget }),
+      ...(parsed.data.expectedWorkflow === undefined
+        ? {}
+        : { expectedWorkflow: parsed.data.expectedWorkflow }),
       parentSessionId: parsed.data.parentSessionId,
       ...(parsed.data.parentTurnId === undefined
         ? {}
@@ -760,4 +795,18 @@ export function createBootstrapService(options: BootstrapServiceOptions): Bootst
 
 export function bootstrapTargetsEqual(left: BootstrapTarget, right: BootstrapTarget): boolean {
   return targetsEqual(left, right);
+}
+
+export function buildExecutionScopesEqual(
+  left: BuildExecutionScope | undefined,
+  right: BuildExecutionScope | undefined,
+): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.workflowId === right.workflowId &&
+      left.workflowRevision === right.workflowRevision &&
+      left.testRunId === right.testRunId)
+  );
 }

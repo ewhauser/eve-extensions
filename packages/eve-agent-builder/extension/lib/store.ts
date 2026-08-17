@@ -28,6 +28,25 @@ import type {
   ExecutionLeaseRecord,
   RedeemBootstrapGrantStoreCommand,
 } from "./bootstrap.js";
+import type {
+  AuthorizeTestInputStoreCommand,
+  BeginTestCapabilityExecutionStoreCommand,
+  CompleteTestCapabilityExecutionStoreCommand,
+  TestCapabilityExecutionQuery,
+  TestCapabilityExecutionRecord,
+  TestInputGrantRecord,
+  TestPolicyResult,
+} from "./test-policy.js";
+import {
+  buildWorkflowRecordSchema,
+  type BuildWorkflowId,
+  type BuildWorkflowQuery,
+  type BuildWorkflowRecord,
+  type ImplementorSubmissionResult,
+  type PmSubmissionResult,
+  type QaSubmissionResult,
+  type TestRunId,
+} from "./workflow.js";
 
 interface StoreMutationBase {
   readonly owner: OwnerScope;
@@ -99,6 +118,64 @@ export interface DeleteFamilyStoreCommand extends StoreMutationBase {
   readonly expectedRevision: number;
 }
 
+export interface AllocateBuildWorkflowStoreCommand extends StoreMutationBase {
+  readonly type: "allocate_build_workflow";
+  readonly workflowId: BuildWorkflowId;
+  readonly agentId: AgentId;
+  readonly draftId: DraftId;
+  readonly maxFamilies: number;
+  readonly canonicalName: string;
+  readonly fields: SavedAgentEditableFields;
+}
+
+export interface SubmitBuildRoleStoreCommand extends StoreMutationBase {
+  readonly type: "submit_build_role";
+  readonly workflowId: BuildWorkflowId;
+  readonly expectedWorkflowRevision: number;
+  readonly role: "pm" | "implementor" | "qa";
+  readonly leaseId: string;
+  readonly childSessionId: string;
+  readonly executionTurnId: string;
+  readonly expectedRevision: number;
+  readonly expectedDraftRevision: number;
+  readonly canonicalName: string;
+  readonly fields: SavedAgentEditableFields;
+  readonly result: PmSubmissionResult | ImplementorSubmissionResult | QaSubmissionResult;
+  readonly testRunId?: TestRunId;
+}
+
+export interface RecordBuildTestStoreCommand extends StoreMutationBase {
+  readonly type: "record_build_test";
+  readonly workflowId: BuildWorkflowId;
+  readonly expectedWorkflowRevision: number;
+  readonly testRunId: TestRunId;
+  readonly leaseId: string;
+  readonly childSessionId: string;
+  readonly executionTurnId: string;
+  readonly status: "passed" | "input_required" | "failed";
+  readonly errorCodes: readonly string[];
+}
+
+export interface ReopenBuildWorkflowStoreCommand extends StoreMutationBase {
+  readonly type: "reopen_build_workflow";
+  readonly workflowId: BuildWorkflowId;
+  readonly expectedWorkflowRevision: number;
+  readonly agentId: AgentId;
+  readonly expectedRevision: number;
+  readonly expectedDraftRevision: number;
+}
+
+export interface PublishBuildWorkflowStoreCommand extends StoreMutationBase {
+  readonly type: "publish_build_workflow";
+  readonly workflowId: BuildWorkflowId;
+  readonly expectedWorkflowRevision: number;
+  readonly agentId: AgentId;
+  readonly expectedRevision: number;
+  readonly expectedDraftRevision: number;
+  readonly specId: SpecId;
+  readonly publishedBy: string;
+}
+
 /**
  * Complete trusted command set for one durable store transaction.
  *
@@ -108,13 +185,18 @@ export interface DeleteFamilyStoreCommand extends StoreMutationBase {
  */
 export type AgentBuilderStoreCommand =
   | ActivateVersionStoreCommand
+  | AllocateBuildWorkflowStoreCommand
   | ArchiveFamilyStoreCommand
   | BeginRevisionStoreCommand
   | CreateFamilyStoreCommand
   | DeleteFamilyStoreCommand
   | PatchDraftStoreCommand
+  | PublishBuildWorkflowStoreCommand
   | PublishDraftStoreCommand
-  | RestoreFamilyStoreCommand;
+  | RecordBuildTestStoreCommand
+  | ReopenBuildWorkflowStoreCommand
+  | RestoreFamilyStoreCommand
+  | SubmitBuildRoleStoreCommand;
 
 export type AgentBuilderStoreMutationSuccess =
   | {
@@ -159,6 +241,37 @@ export type AgentBuilderStoreMutationSuccess =
       readonly type: "family_deleted";
       readonly family: SavedAgentFamily;
       readonly previousLifecycle: Exclude<AgentLifecycle, "deleted">;
+    }
+  | {
+      readonly ok: true;
+      readonly type: "workflow_allocated";
+      readonly family: SavedAgentFamily;
+      readonly workflow: BuildWorkflowRecord;
+    }
+  | {
+      readonly ok: true;
+      readonly type: "workflow_role_submitted";
+      readonly family: SavedAgentFamily;
+      readonly workflow: BuildWorkflowRecord;
+    }
+  | {
+      readonly ok: true;
+      readonly type: "workflow_test_recorded";
+      readonly family: SavedAgentFamily;
+      readonly workflow: BuildWorkflowRecord;
+    }
+  | {
+      readonly ok: true;
+      readonly type: "workflow_reopened";
+      readonly family: SavedAgentFamily;
+      readonly workflow: BuildWorkflowRecord;
+    }
+  | {
+      readonly ok: true;
+      readonly type: "workflow_published";
+      readonly family: SavedAgentFamily;
+      readonly workflow: BuildWorkflowRecord;
+      readonly publishedVersion: PublishedAgentVersion;
     };
 
 export type AgentBuilderStoreError =
@@ -201,6 +314,17 @@ export type AgentBuilderStoreError =
   | Readonly<{
       code: "STORE_INVARIANT_VIOLATION";
       message: string;
+    }>
+  | Readonly<{
+      code:
+        | "WORKFLOW_NOT_FOUND"
+        | "WORKFLOW_CONFLICT"
+        | "WORKFLOW_INVALID_TRANSITION"
+        | "ROLE_FORBIDDEN"
+        | "TEST_EVIDENCE_REQUIRED"
+        | "PUBLISH_NOT_READY";
+      message: string;
+      currentWorkflowRevision?: number;
     }>;
 
 export type AgentBuilderStoreMutationResult =
@@ -219,6 +343,11 @@ const storeOperationSchema = z.enum([
   "archive_family",
   "restore_family",
   "delete_family",
+  "allocate_build_workflow",
+  "submit_build_role",
+  "record_build_test",
+  "reopen_build_workflow",
+  "publish_build_workflow",
 ]);
 
 export const agentBuilderStoreErrorSchema = z.discriminatedUnion("code", [
@@ -268,11 +397,30 @@ export const agentBuilderStoreErrorSchema = z.discriminatedUnion("code", [
         "family_archived",
         "family_restored",
         "family_deleted",
+        "workflow_allocated",
+        "workflow_role_submitted",
+        "workflow_test_recorded",
+        "workflow_reopened",
+        "workflow_published",
       ]),
     })
     .strict(),
   z
     .object({ code: z.literal("STORE_INVARIANT_VIOLATION"), message: z.string() })
+    .strict(),
+  z
+    .object({
+      code: z.enum([
+        "WORKFLOW_NOT_FOUND",
+        "WORKFLOW_CONFLICT",
+        "WORKFLOW_INVALID_TRANSITION",
+        "ROLE_FORBIDDEN",
+        "TEST_EVIDENCE_REQUIRED",
+        "PUBLISH_NOT_READY",
+      ]),
+      message: z.string(),
+      currentWorkflowRevision: z.number().int().safe().positive().optional(),
+    })
     .strict(),
 ]) as unknown as z.ZodType<AgentBuilderStoreError>;
 
@@ -314,6 +462,47 @@ export const agentBuilderStoreMutationSuccessSchema = z.discriminatedUnion("type
       type: z.literal("family_deleted"),
       family: savedAgentFamilySchema,
       previousLifecycle: z.enum(["draft_only", "active", "archived"]),
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      type: z.literal("workflow_allocated"),
+      family: savedAgentFamilySchema,
+      workflow: buildWorkflowRecordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      type: z.literal("workflow_role_submitted"),
+      family: savedAgentFamilySchema,
+      workflow: buildWorkflowRecordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      type: z.literal("workflow_test_recorded"),
+      family: savedAgentFamilySchema,
+      workflow: buildWorkflowRecordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      type: z.literal("workflow_reopened"),
+      family: savedAgentFamilySchema,
+      workflow: buildWorkflowRecordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      type: z.literal("workflow_published"),
+      family: savedAgentFamilySchema,
+      workflow: buildWorkflowRecordSchema,
+      publishedVersion: publishedAgentVersionSchema,
     })
     .strict(),
 ]) as unknown as z.ZodType<AgentBuilderStoreMutationSuccess>;
@@ -373,6 +562,7 @@ export interface AgentBuilderStore {
   listVersions(query: FamilyStoreQuery): Promise<readonly PublishedAgentVersion[]>;
   /** Returns only active families for exactly one opaque owner scope. */
   listActiveFamilies(owner: OwnerScope): Promise<readonly ActiveFamilyStoreRecord[]>;
+  getBuildWorkflow(query: BuildWorkflowQuery): Promise<BuildWorkflowRecord | null>;
   mutate(command: AgentBuilderStoreCommand): Promise<AgentBuilderStoreMutationResult>;
 
   /** Atomically reserves a hash-only, unredeemed bootstrap grant. */
@@ -403,6 +593,19 @@ export interface AgentBuilderStore {
   closeParentTurnExecutionLeases(
     command: CloseParentTurnLeasesStoreCommand,
   ): Promise<BootstrapStoreResult<readonly ExecutionLeaseRecord[]>>;
+
+  authorizeTestInput(
+    command: AuthorizeTestInputStoreCommand,
+  ): Promise<TestPolicyResult<TestInputGrantRecord>>;
+  beginTestCapabilityExecution(
+    command: BeginTestCapabilityExecutionStoreCommand,
+  ): Promise<TestPolicyResult<TestCapabilityExecutionRecord>>;
+  completeTestCapabilityExecution(
+    command: CompleteTestCapabilityExecutionStoreCommand,
+  ): Promise<TestPolicyResult<TestCapabilityExecutionRecord>>;
+  listTestCapabilityExecutions(
+    query: TestCapabilityExecutionQuery,
+  ): Promise<readonly TestCapabilityExecutionRecord[]>;
 }
 
 export type AgentBuilderStoreFactory = () => AgentBuilderStore | Promise<AgentBuilderStore>;
