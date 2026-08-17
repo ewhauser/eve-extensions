@@ -44,7 +44,55 @@ export default defineSandbox({
 
 The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
-`eve dev` and `eve start` provision authored bootstrap and workspace templates. Eve's Vercel build hook also prewarms them during `eve build`. When Eve supplies no template key, this package lazily provisions an empty application template during the first session create. That caller therefore needs image-build permissions unless the same default template was already provisioned.
+`eve dev` and `eve start` provision authored bootstrap and workspace templates. Eve's Vercel build hook also prewarms them during `eve build`. When Eve supplies no template key, this package lazily provisions an empty application template during the first session create. A legacy caller therefore needs image-build permissions unless the same default template was already provisioned.
+
+### Separate image reconciliation from runtime
+
+Production deployments can make image creation an explicit environment step.
+Call `reconcileAwsLambdaMicrovmImage()` under a dedicated bake identity, persist
+its returned JSON, and pass that exact identity back as `verifiedImage` at
+runtime:
+
+```ts
+import {
+  awsLambdaMicrovm,
+  reconcileAwsLambdaMicrovmImage,
+} from "eve-aws-lambda-microvms";
+
+const verifiedImage = await reconcileAwsLambdaMicrovmImage({
+  applicationId: "analytics-agent-production",
+  region: "us-east-1",
+  artifactBucket: "company-eve-sandboxes-production",
+  buildRoleArn: process.env.EVE_AWS_BUILD_ROLE_ARN!,
+  baseImage: {
+    arn: process.env.EVE_AWS_AL2023_IMAGE_ARN!,
+    version: process.env.EVE_AWS_AL2023_IMAGE_VERSION!,
+  },
+});
+
+const backend = awsLambdaMicrovm({
+  applicationId: "analytics-agent-production",
+  region: "us-east-1",
+  artifactBucket: "company-eve-sandboxes-production",
+  verifiedImage,
+});
+```
+
+The returned schema-versioned identity records the controller artifact digest,
+controller protocol, exact base image ARN/version, public CA digest, build
+connector and lane identities, memory, image ARN/version, Region, and complete
+configuration digest. Reconciliation is deterministic and idempotent: the same
+inputs reuse the same successful image version. Selecting a previously recorded
+identity is an explicit rollback.
+
+The verified runtime path rebuilds only the deterministic bytes in memory to
+check their digest, checks the complete configuration identity, and reads the
+exact AWS image version to require an active successful result. It does not
+upload image artifacts, discover a newer base image, call `CreateMicrovmImage`,
+or require `buildRoleArn`. Keep the bake and runtime identities in separate IAM
+roles and accounts/environments as appropriate. The identity contains public CA
+digests and public configuration only; never put a CA private key in any option
+or artifact.
 
 ## Persistence and lifecycle
 

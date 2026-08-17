@@ -8,6 +8,7 @@ import {
 } from "./image-artifact.js";
 import type { ResolvedAwsLambdaMicrovmOptions } from "./options.js";
 import type { AwsLambdaMicrovmStorage } from "./storage.js";
+import type { AwsLambdaMicrovmBaseImage, AwsLambdaMicrovmVerifiedImage } from "./types.js";
 
 const IMAGE_BUILD_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -15,6 +16,7 @@ export interface ProvisionedAwsLambdaMicrovmImage {
   readonly configHash: string;
   readonly imageArn: string;
   readonly imageVersion: string;
+  readonly verifiedImage: AwsLambdaMicrovmVerifiedImage;
 }
 
 export async function ensureAwsLambdaMicrovmImage(input: {
@@ -26,6 +28,14 @@ export async function ensureAwsLambdaMicrovmImage(input: {
   const artifact = await buildAwsLambdaMicrovmImageArtifact({
     egressProxyCaBundlePem: input.options.egressProxyCaBundlePem,
   });
+  if (input.options.verifiedImage !== undefined) {
+    return await verifyAwsLambdaMicrovmImage({
+      api: input.api,
+      artifactSha256: artifact.sha256,
+      options: input.options,
+      verifiedImage: input.options.verifiedImage,
+    });
+  }
   const baseImage = await resolveBaseImage(input.api, input.options);
   const imageHash = hashStable({
     artifact: artifact.sha256,
@@ -34,19 +44,7 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
     memoryMiB: input.options.memoryMiB,
   });
-  const configHash = hashStable({
-    buildNetworkLaneId: input.options.buildNetworkLaneId,
-    imageHash,
-    executionRoleArn: input.options.executionRoleArn,
-    egressProxyCaSha256: input.options.egressProxyCaSha256,
-    idlePolicy: input.options.idlePolicy,
-    maximumDurationSeconds: input.options.maximumDurationSeconds,
-    networkingMode: input.options.networkingMode,
-    runtimeEgress: input.options.runtimeEgressNetworkConnectorArns,
-    runtimeNetworkLaneId: input.options.runtimeNetworkLaneId,
-    runtimeLogging: input.options.runtimeLogging,
-    shellIngress: input.options.shellIngressNetworkConnectorArn,
-  });
+  const configHash = configSha256(imageHash, input.options);
   const artifactKey = `${input.options.artifactPrefix}/images/${artifact.sha256}.zip`;
   const imageName = `eve-${input.options.applicationHash}-${imageHash.slice(0, 12)}`;
 
@@ -70,7 +68,14 @@ export async function ensureAwsLambdaMicrovmImage(input: {
         existing.latestActiveImageVersion,
       )) ?? (await waitForCreatedImageVersion(input.api, existing.imageArn, input.log));
     input.log?.(`reusing MicroVM image ${existing.imageArn}:${version.imageVersion}`);
-    return { configHash, imageArn: existing.imageArn, imageVersion: version.imageVersion };
+    return provisionedImage({
+      artifactSha256: artifact.sha256,
+      baseImage,
+      configHash,
+      imageArn: existing.imageArn,
+      imageVersion: version.imageVersion,
+      options: input.options,
+    });
   }
 
   input.log?.(`building MicroVM image ${imageName}`);
@@ -79,7 +84,7 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     created = await input.api.createImage({
       baseImageArn: baseImage.arn,
       baseImageVersion: baseImage.version,
-      buildRoleArn: input.options.buildRoleArn,
+      buildRoleArn: input.options.buildRoleArn!,
       clientToken: imageHash,
       codeArtifactUri: `s3://${input.options.artifactBucket}/${artifactKey}`,
       description: `eve sandbox image for ${input.options.applicationId}`,
@@ -103,7 +108,14 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     const version =
       (await resolveExistingVersion(input.api, raced.imageArn, raced.latestActiveImageVersion)) ??
       (await waitForCreatedImageVersion(input.api, raced.imageArn, input.log));
-    return { configHash, imageArn: raced.imageArn, imageVersion: version.imageVersion };
+    return provisionedImage({
+      artifactSha256: artifact.sha256,
+      baseImage,
+      configHash,
+      imageArn: raced.imageArn,
+      imageVersion: version.imageVersion,
+      options: input.options,
+    });
   }
 
   const active = await waitForImageVersion(
@@ -112,7 +124,99 @@ export async function ensureAwsLambdaMicrovmImage(input: {
     created.imageVersion,
     input.log,
   );
-  return { configHash, imageArn: active.imageArn, imageVersion: active.imageVersion };
+  return provisionedImage({
+    artifactSha256: artifact.sha256,
+    baseImage,
+    configHash,
+    imageArn: active.imageArn,
+    imageVersion: active.imageVersion,
+    options: input.options,
+  });
+}
+
+async function verifyAwsLambdaMicrovmImage(input: {
+  readonly api: AwsLambdaMicrovmApi;
+  readonly artifactSha256: string;
+  readonly options: ResolvedAwsLambdaMicrovmOptions;
+  readonly verifiedImage: AwsLambdaMicrovmVerifiedImage;
+}): Promise<ProvisionedAwsLambdaMicrovmImage> {
+  const identity = input.verifiedImage;
+  const imageHash = hashStable({
+    artifact: input.artifactSha256,
+    baseImage: identity.baseImage,
+    buildEgress: input.options.buildEgressNetworkConnectorArns,
+    controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+    memoryMiB: input.options.memoryMiB,
+  });
+  const configHash = configSha256(imageHash, input.options);
+  const mismatches = [
+    identity.applicationId === input.options.applicationId || "applicationId",
+    identity.region === input.options.region || "region",
+    identity.artifactSha256 === input.artifactSha256 || "artifactSha256",
+    identity.controllerProtocolVersion === AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION ||
+      "controllerProtocolVersion",
+    identity.egressProxyCaSha256 === input.options.egressProxyCaSha256 ||
+      "egressProxyCaSha256",
+    identity.memoryMiB === input.options.memoryMiB || "memoryMiB",
+    identity.buildNetworkLaneId === input.options.buildNetworkLaneId || "buildNetworkLaneId",
+    arraysEqual(
+      identity.buildEgressNetworkConnectorArns,
+      input.options.buildEgressNetworkConnectorArns,
+    ) || "buildEgressNetworkConnectorArns",
+    identity.configSha256 === configHash || "configSha256",
+  ].filter((entry): entry is string => entry !== true);
+  if (mismatches.length > 0) {
+    throw new Error(
+      `AWS Lambda MicroVM verified image is incompatible with runtime configuration: ${mismatches.join(", ")}.`,
+    );
+  }
+  const active = await input.api.getImageVersion(identity.imageArn, identity.imageVersion);
+  if (
+    active.imageArn !== identity.imageArn ||
+    active.imageVersion !== identity.imageVersion ||
+    active.state !== "SUCCESSFUL" ||
+    active.status === "INACTIVE"
+  ) {
+    throw new Error(
+      `AWS Lambda MicroVM verified image ${identity.imageArn}:${identity.imageVersion} is not active.`,
+    );
+  }
+  return {
+    configHash,
+    imageArn: identity.imageArn,
+    imageVersion: identity.imageVersion,
+    verifiedImage: identity,
+  };
+}
+
+function provisionedImage(input: {
+  readonly artifactSha256: string;
+  readonly baseImage: AwsLambdaMicrovmBaseImage;
+  readonly configHash: string;
+  readonly imageArn: string;
+  readonly imageVersion: string;
+  readonly options: ResolvedAwsLambdaMicrovmOptions;
+}): ProvisionedAwsLambdaMicrovmImage {
+  return {
+    configHash: input.configHash,
+    imageArn: input.imageArn,
+    imageVersion: input.imageVersion,
+    verifiedImage: {
+      schemaVersion: 1,
+      applicationId: input.options.applicationId,
+      artifactSha256: input.artifactSha256,
+      baseImage: input.baseImage,
+      buildEgressNetworkConnectorArns: input.options.buildEgressNetworkConnectorArns,
+      buildNetworkLaneId: input.options.buildNetworkLaneId,
+      configSha256: input.configHash,
+      controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+      egressProxyCaSha256: input.options.egressProxyCaSha256,
+      imageArn: input.imageArn,
+      imageVersion: input.imageVersion,
+      memoryMiB: input.options.memoryMiB,
+      region: input.options.region,
+    },
+  };
 }
 
 async function waitForCreatedImageVersion(
@@ -230,6 +334,26 @@ function compareVersionsDescending(left: string, right: string): number {
 
 function hashStable(value: unknown): string {
   return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
+function configSha256(imageHash: string, options: ResolvedAwsLambdaMicrovmOptions): string {
+  return hashStable({
+    buildNetworkLaneId: options.buildNetworkLaneId,
+    imageHash,
+    executionRoleArn: options.executionRoleArn,
+    egressProxyCaSha256: options.egressProxyCaSha256,
+    idlePolicy: options.idlePolicy,
+    maximumDurationSeconds: options.maximumDurationSeconds,
+    networkingMode: options.networkingMode,
+    runtimeEgress: options.runtimeEgressNetworkConnectorArns,
+    runtimeNetworkLaneId: options.runtimeNetworkLaneId,
+    runtimeLogging: options.runtimeLogging,
+    shellIngress: options.shellIngressNetworkConnectorArn,
+  });
+}
+
+function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function stableStringify(value: unknown): string {
