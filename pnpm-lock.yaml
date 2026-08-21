@@ -32,7 +32,7 @@ catalogs:
       version: 4.4.3
 
 patchedDependencies:
-  eve@0.38.0: 1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49
+  eve@0.38.0: 2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a
 
 importers:
 
@@ -42,7 +42,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -67,7 +67,7 @@ importers:
         version: 3.1075.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -90,7 +90,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -127,7 +127,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
@@ -151,7 +151,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -179,7 +179,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -198,7 +198,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -217,10 +217,29 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+
+  packages/eve-progress:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.2.0
+      eve:
+        specifier: 'catalog:'
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
@@ -236,7 +255,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -258,7 +277,7 @@ importers:
         version: 7.0.64(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -2111,7 +2130,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.38.0(patch_hash=1075ee9f481ccb4d9638ff8e2f3627800c27bc7a394c1dcc34b5e468a39cef49)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11)):
+  eve@0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11)):
     dependencies:
       ai: 7.0.64(zod@4.4.3)
       nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))

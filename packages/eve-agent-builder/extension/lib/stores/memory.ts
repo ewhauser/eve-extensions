@@ -993,6 +993,7 @@ export class MemoryAgentBuilderStore implements AgentBuilderStore {
       lease.leaseId !== command.leaseId ||
       lease.role !== command.role ||
       lease.status !== "running" ||
+      Date.parse(command.occurredAt) >= Date.parse(lease.expiresAt) ||
       lease.executionTurnId !== command.executionTurnId ||
       lease.target.kind !== "draft" ||
       lease.target.agentId !== workflow.agentId ||
@@ -1212,6 +1213,7 @@ export class MemoryAgentBuilderStore implements AgentBuilderStore {
       lease.leaseId !== command.leaseId ||
       lease.role !== "test_runner" ||
       lease.status !== "running" ||
+      Date.parse(command.occurredAt) >= Date.parse(lease.expiresAt) ||
       lease.executionTurnId !== command.executionTurnId ||
       lease.workflow?.workflowId !== workflow.workflowId ||
       lease.workflow.testRunId !== command.testRunId ||

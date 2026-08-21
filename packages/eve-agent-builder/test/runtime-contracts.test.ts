@@ -42,6 +42,10 @@ import {
 } from "../src/roles.js";
 import { AgentBuilderService } from "../src/service.js";
 import type { AgentBuilderStore } from "../src/store.js";
+import {
+  createOwnerApproval,
+  ownerChannelFromContext,
+} from "../extension/lib/runtime/owner.js";
 import { scopedToolOperationId } from "../extension/lib/runtime/service.js";
 import {
   composeConsequentialTestApproval,
@@ -67,6 +71,49 @@ function ownerInput(id = "owner-a"): OwnerResolutionInput {
   const current = principal(id);
   return { current, initiator: current, channel: { kind: "test" } };
 }
+
+describe("owner-scoped runtime authorization", () => {
+  it("preserves channel scope and rejects approval responders from another owner", async () => {
+    const channel = ownerChannelFromContext({
+      kind: "slack",
+      metadata: { teamId: "team-a", channelId: "channel-a" },
+    });
+    const seen: OwnerResolutionInput[] = [];
+    const approval = createOwnerApproval({
+      owner: OWNER_A,
+      channel,
+      resolveOwner: async (input) => {
+        seen.push(input);
+        if (input.current === null) {
+          return {
+            ok: false,
+            error: { code: "USER_PRINCIPAL_REQUIRED", message: "Current user required" },
+          };
+        }
+        return {
+          ok: true,
+          owner: input.current.principalId === "owner-a" ? OWNER_A : OWNER_B,
+          principal: input.current,
+        };
+      },
+    });
+    const responseContext = (responder: SessionAuthContext) =>
+      ({
+        responder,
+        session: { initiator: principal("owner-a") },
+      }) as ApprovalResponseContext<unknown>;
+
+    expect(await approval.request({} as ApprovalContext<unknown>)).toBe("user-approval");
+    expect(await approval.response?.(responseContext(principal("owner-b")))).toEqual({
+      status: "rejected",
+      reason: "OWNER_MISMATCH",
+    });
+    expect(await approval.response?.(responseContext(principal("owner-a")))).toEqual({
+      status: "allowed",
+    });
+    expect(seen.map((input) => input.channel)).toEqual([channel, channel]);
+  });
+});
 
 function fields(
   name: string,

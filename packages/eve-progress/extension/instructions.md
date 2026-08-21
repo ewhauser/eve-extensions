@@ -1,0 +1,1 @@
+For substantial multi-step work, use Eve's built-in `todo` tool and keep its full list current as the work changes. Do not create a plan for simple or immediately answerable requests. Load the work-plan skill contributed by this extension when you need detailed planning guidance.

@@ -28,7 +28,11 @@ import {
   qaBuildSubmissionInputSchema,
   recordBuildTestInputSchema,
 } from "../workflow-service.js";
-import { ownerInputFromSession, ownersEqual } from "../runtime/owner.js";
+import {
+  ownerChannelFromContext,
+  ownerInputFromSession,
+  ownersEqual,
+} from "../runtime/owner.js";
 import {
   cachedRunnerTurn,
   eventTurnId,
@@ -335,6 +339,7 @@ export function createAgentBuilderRunnerTools(input: {
       "step.started": async (event, dynamicCtx) => {
         const runtime = getAgentBuilderRuntime();
         const owner = await resolveDynamicOwner(runtime, dynamicCtx);
+        const runtimeChannel = ownerChannelFromContext(dynamicCtx.channel);
         const lease = await runtime.config.store.getExecutionLease({
           owner,
           childSessionId: dynamicCtx.session.id,
@@ -348,7 +353,9 @@ export function createAgentBuilderRunnerTools(input: {
               inputSchema: emptySchema,
               execute: async (_empty, toolCtx) => {
                 if (toolCtx.session.parent === undefined) throw new Error("BOOTSTRAP_BINDING_MISMATCH");
-                const resolved = await runtime.service.resolveOwner(ownerInputFromSession(toolCtx));
+                const resolved = await runtime.service.resolveOwner(
+                  ownerInputFromSession(toolCtx, runtimeChannel),
+                );
                 if (!resolved.ok) throw new Error(resolved.error.code);
                 if (!ownersEqual(resolved.owner, owner)) throw new Error("OWNER_MISMATCH");
                 return runtime.bootstrap.redeem({
@@ -385,26 +392,16 @@ export function createAgentBuilderRunnerTools(input: {
           },
         });
         return {
-          ...roleControlTools(input.role, prepared.value.lease, {
-            ...(dynamicCtx.channel.kind === undefined
-              ? {}
-              : { kind: dynamicCtx.channel.kind }),
-            ...(dynamicCtx.channel.metadata === undefined
-              ? {}
-              : { metadata: dynamicCtx.channel.metadata }),
-          }),
+          ...roleControlTools(input.role, prepared.value.lease, runtimeChannel),
           ...(input.role === "test_runner" || input.role === "active_runner"
             ? lowerResolvedCapabilities(
                 prepared.value.capabilities.resolved,
                 async (capability, ctx, toolInput) => {
-                  const currentOwner = await executeOwner(ctx, prepared.value.lease, {
-                    ...(dynamicCtx.channel.kind === undefined
-                      ? {}
-                      : { kind: dynamicCtx.channel.kind }),
-                    ...(dynamicCtx.channel.metadata === undefined
-                      ? {}
-                      : { metadata: dynamicCtx.channel.metadata }),
-                  });
+                  const currentOwner = await executeOwner(
+                    ctx,
+                    prepared.value.lease,
+                    runtimeChannel,
+                  );
                   const authoritative = await runtime.config.store.getExecutionLease({
                     owner: currentOwner,
                     childSessionId: ctx.session.id,
@@ -484,14 +481,7 @@ export function createAgentBuilderRunnerTools(input: {
                       if (selected?.consequential !== true) return hostApproval;
                       const resolveRequestOwner = async (ctx: ApprovalContext<unknown>) => {
                         const resolved = await runtime.service.resolveOwner(
-                          ownerInputFromSession(ctx, {
-                            ...(dynamicCtx.channel.kind === undefined
-                              ? {}
-                              : { kind: dynamicCtx.channel.kind }),
-                            ...(dynamicCtx.channel.metadata === undefined
-                              ? {}
-                              : { metadata: dynamicCtx.channel.metadata }),
-                          }),
+                          ownerInputFromSession(ctx, runtimeChannel),
                         );
                         return resolved.ok && ownersEqual(resolved.owner, prepared.value.owner)
                           ? resolved.owner
@@ -519,14 +509,7 @@ export function createAgentBuilderRunnerTools(input: {
                         const resolved = await runtime.service.resolveOwner({
                           current: ctx.responder,
                           initiator: ctx.session.initiator,
-                          channel: {
-                            ...(dynamicCtx.channel.kind === undefined
-                              ? {}
-                              : { kind: dynamicCtx.channel.kind }),
-                            ...(dynamicCtx.channel.metadata === undefined
-                              ? {}
-                              : { metadata: dynamicCtx.channel.metadata }),
-                          },
+                          channel: runtimeChannel,
                         });
                         return !resolved.ok || !ownersEqual(resolved.owner, prepared.value.owner)
                           ? ({

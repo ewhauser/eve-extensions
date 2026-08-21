@@ -2,7 +2,7 @@ import { defineHook, type HookContext } from "eve/hooks";
 
 import type { ExecutionRole } from "../bootstrap.js";
 import { clearPreparedRunnerTurn, getAgentBuilderRuntime, runtimeTimestamp } from "../runtime/service.js";
-import { ownerInputFromSession } from "../runtime/owner.js";
+import { ownerChannelFromContext, ownerInputFromSession } from "../runtime/owner.js";
 
 export function createAgentBuilderLeaseHooks(role: ExecutionRole) {
   async function close(
@@ -11,7 +11,9 @@ export function createAgentBuilderLeaseHooks(role: ExecutionRole) {
     ctx: HookContext,
   ): Promise<void> {
     const runtime = getAgentBuilderRuntime();
-    const owner = await runtime.service.resolveOwner(ownerInputFromSession(ctx));
+    const owner = await runtime.service.resolveOwner(
+      ownerInputFromSession(ctx, ownerChannelFromContext(ctx.channel)),
+    );
     if (!owner.ok) return;
     clearPreparedRunnerTurn(runtime, owner.owner, ctx.session.id, ctx.session.turn.id);
     const lease = await runtime.config.store.getExecutionLease({
