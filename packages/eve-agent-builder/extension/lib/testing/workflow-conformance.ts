@@ -907,6 +907,88 @@ export const buildWorkflowStoreConformanceCases: readonly BuildWorkflowStoreConf
     },
   },
   {
+    name: "expired running leases cannot commit role handoffs or test evidence",
+    run: async (store) => {
+      const allocated = await allocate(store, "expired-role", OWNER_A, {
+        ...BASE_FIELDS,
+        name: "Expired role target",
+      });
+      const pmLease = await runningLease({
+        store,
+        workflow: allocated.workflow,
+        role: "pm",
+        key: "expired-role-pm",
+        second: 10,
+      });
+      expectError(
+        await store.mutate(
+          roleCommand({
+            workflow: allocated.workflow,
+            family: allocated.family,
+            lease: pmLease,
+            role: "pm",
+            result: "completed_handoff",
+            fields: { ...editableFields(allocated.family), pmBrief: "Must not commit" },
+            operation: "expired-role-submit",
+            second: 810,
+          }),
+        ),
+        "ROLE_FORBIDDEN",
+      );
+      equal(
+        (await store.getBuildWorkflow({ owner: OWNER_A, agentId: allocated.family.agentId }))?.phase,
+        "pm_work",
+        "Expired role lease advanced the workflow",
+      );
+
+      const qa = await driveToQa({
+        store,
+        key: "expired-test",
+        capabilities: true,
+      });
+      const requested = await requestTest({
+        store,
+        workflow: qa.workflow,
+        family: qa.family,
+        key: "expired-test",
+        second: 30,
+      });
+      const runner = await runningLease({
+        store,
+        workflow: requested.workflow,
+        role: "test_runner",
+        key: "expired-test-runner",
+        second: 40,
+        capabilityPlan: testPlan(),
+      });
+      const testRunId = requested.workflow.testRunId;
+      assert(testRunId !== undefined, "Expired test workflow lacked a test run ID");
+      expectError(
+        await store.mutate({
+          type: "record_build_test",
+          owner: OWNER_A,
+          mutation: mutation("expired-test-submit"),
+          occurredAt: timestamp(840),
+          workflowId: requested.workflow.workflowId,
+          expectedWorkflowRevision: requested.workflow.revision,
+          testRunId,
+          leaseId: runner.leaseId,
+          childSessionId: runner.childSessionId,
+          executionTurnId: runner.executionTurnId ?? "missing-execution-turn",
+          status: "passed",
+          errorCodes: [],
+        }),
+        "TEST_EVIDENCE_REQUIRED",
+      );
+      equal(
+        (await store.getBuildWorkflow({ owner: OWNER_A, agentId: requested.family.agentId }))
+          ?.testEvidence,
+        undefined,
+        "Expired test lease recorded evidence",
+      );
+    },
+  },
+  {
     name: "QA approval requires passing evidence for the exact run and required plan",
     run: async (store) => {
       const qa = await driveToQa({ store, key: "gate", capabilities: true });

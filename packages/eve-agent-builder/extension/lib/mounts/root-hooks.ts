@@ -1,6 +1,6 @@
 import { defineHook, type HookContext } from "eve/hooks";
 
-import { ownerInputFromSession } from "../runtime/owner.js";
+import { ownerChannelFromContext, ownerInputFromSession } from "../runtime/owner.js";
 import { getAgentBuilderRuntime, runtimeTimestamp } from "../runtime/service.js";
 
 async function close(
@@ -9,7 +9,9 @@ async function close(
   ctx: HookContext,
 ): Promise<void> {
   const runtime = getAgentBuilderRuntime();
-  const owner = await runtime.service.resolveOwner(ownerInputFromSession(ctx));
+  const owner = await runtime.service.resolveOwner(
+    ownerInputFromSession(ctx, ownerChannelFromContext(ctx.channel)),
+  );
   if (!owner.ok) return;
   const result = await runtime.bootstrap.closeParentTurn({
     owner: owner.owner,

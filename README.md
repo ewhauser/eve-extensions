@@ -23,6 +23,9 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
   card on every turn, and guides the agent to use already-mounted Notion,
   Linear, or custom tools without owning provider credentials.
   It is licensed under MIT.
+- [`eve-progress`](packages/eve-progress) — projects Eve's durable built-in
+  todo state into transport-neutral agent progress, with one independently
+  mutable Slack plan message per agent or subagent. It is licensed under MIT.
 - [`eve-slack-participation`](packages/eve-slack-participation) — gives Eve a
   bounded, fail-quiet participation policy for active multi-human Slack
   threads while preserving direct messages, explicit mentions, and dyadic
@@ -96,7 +99,7 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-agent-builder`, `eve-project-link`, `eve-slack-participation`,
-`eve-openai-compaction`, `eve-openai-connectors`, `eve-openai-plugins`, and
-`eve-openai-imagegen` are MIT-licensed, while `eve-aws-lambda-microvms` is
-Apache-2.0-licensed.
+`eve-agent-builder`, `eve-project-link`, `eve-progress`,
+`eve-slack-participation`, `eve-openai-compaction`, `eve-openai-connectors`,
+`eve-openai-plugins`, and `eve-openai-imagegen` are MIT-licensed, while
+`eve-aws-lambda-microvms` is Apache-2.0-licensed.

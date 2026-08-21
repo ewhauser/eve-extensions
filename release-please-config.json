@@ -10,6 +10,11 @@
       "package-name": "eve-project-link",
       "release-type": "node"
     },
+    "packages/eve-progress": {
+      "component": "eve-progress",
+      "package-name": "eve-progress",
+      "release-type": "node"
+    },
     "packages/eve-slack-participation": {
       "component": "eve-slack-participation",
       "package-name": "eve-slack-participation",

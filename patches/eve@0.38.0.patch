@@ -429,3 +429,24 @@ index b3718ab..764f105 100644
  }
  /**
   * Internal/compiled tool definition shape. Carries `name` because the
+diff --git a/dist/src/context/hook-lifecycle.js b/dist/src/context/hook-lifecycle.js
+index 51c23c37..fa676be5 100644
+--- a/dist/src/context/hook-lifecycle.js
++++ b/dist/src/context/hook-lifecycle.js
+@@ -1 +1 @@
+-import{ContinuationTokenKey}from"./keys.js";import{getAdapterKind}from"#channel/adapter.js";import{buildCallbackContext}from"#context/build-callback-context.js";import{BundleKey,ChannelKey}from"#runtime/sessions/runtime-context-keys.js";async function dispatchStreamEventHooks(e){let t=e.registry.streamEventsByType.get(e.event.type)??[],n=e.registry.streamEventsWildcard;if(t.length===0&&n.length===0)return;let r=buildHookContext(e.ctx);for(let n of t)await n.handler(e.event,r);for(let t of n)await t.handler(e.event,r)}function buildHookContext(i){let a=i.require(BundleKey),o=i.get(ChannelKey),s=i.get(ContinuationTokenKey),c=o===void 0?void 0:getAdapterKind(o);return{...buildCallbackContext(),agent:{name:a.turnAgent.id,nodeId:a.nodeId},channel:{kind:c,continuationToken:s}}}export{dispatchStreamEventHooks};
+\ No newline at end of file
++import{ChannelInstrumentationKey,ContinuationTokenKey}from"./keys.js";import{getAdapterKind}from"#channel/adapter.js";import{buildCallbackContext}from"#context/build-callback-context.js";import{BundleKey,ChannelKey}from"#runtime/sessions/runtime-context-keys.js";async function dispatchStreamEventHooks(e){let t=e.registry.streamEventsByType.get(e.event.type)??[],n=e.registry.streamEventsWildcard;if(t.length===0&&n.length===0)return;let r=buildHookContext(e.ctx);for(let n of t)await n.handler(e.event,r);for(let t of n)await t.handler(e.event,r)}function buildHookContext(i){let a=i.require(BundleKey),o=i.get(ChannelKey),s=i.get(ContinuationTokenKey),c=i.get(ChannelInstrumentationKey),l=o===void 0?void 0:getAdapterKind(o);return{...buildCallbackContext(),agent:{name:a.turnAgent.id,nodeId:a.nodeId},channel:{kind:l,continuationToken:s,metadata:c?.metadata}}}export{dispatchStreamEventHooks};
+diff --git a/dist/src/public/definitions/hook.d.ts b/dist/src/public/definitions/hook.d.ts
+index db6d2eb1..ad217890 100644
+--- a/dist/src/public/definitions/hook.d.ts
++++ b/dist/src/public/definitions/hook.d.ts
+@@ -65,6 +65,8 @@ export interface HookContext extends SessionContext {
+     readonly channel: {
+         readonly kind?: string;
+         readonly continuationToken?: string;
++        /** Read-only adapter-projected metadata for the active channel. */
++        readonly metadata?: Readonly<Record<string, unknown>>;
+     };
+ }
+ /**

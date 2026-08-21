@@ -8,7 +8,12 @@ import {
   resolveDynamicOwner,
   scopedToolOperationId,
 } from "../runtime/service.js";
-import { ownerInputFromSession, ownersEqual } from "../runtime/owner.js";
+import {
+  createOwnerApproval,
+  ownerChannelFromContext,
+  ownerInputFromSession,
+  ownersEqual,
+} from "../runtime/owner.js";
 
 const searchSchema = z
   .object({
@@ -67,12 +72,7 @@ export default defineDynamic({
     "step.started": async (_event, dynamicCtx) => {
       const runtime = getAgentBuilderRuntime();
       const dynamicOwner = await resolveDynamicOwner(runtime, dynamicCtx);
-      const channel = {
-        ...(dynamicCtx.channel.kind === undefined ? {} : { kind: dynamicCtx.channel.kind }),
-        ...(dynamicCtx.channel.metadata === undefined
-          ? {}
-          : { metadata: dynamicCtx.channel.metadata }),
-      };
+      const channel = ownerChannelFromContext(dynamicCtx.channel);
 
       async function currentOwner(toolCtx: Parameters<Parameters<typeof defineTool>[0]["execute"]>[1]) {
         const resolved = await runtime.service.resolveOwner(ownerInputFromSession(toolCtx, channel));
@@ -81,19 +81,11 @@ export default defineDynamic({
         return resolved.owner;
       }
 
-      const publishApproval = {
-        request: () => "user-approval" as const,
-        response: async (ctx: import("eve/tools").ApprovalResponseContext<unknown>) => {
-          const resolved = await runtime.service.resolveOwner({
-            current: ctx.responder,
-            initiator: ctx.session.initiator,
-            channel,
-          });
-          return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
-            ? ({ status: "allowed" } as const)
-            : ({ status: "rejected", reason: "OWNER_MISMATCH" } as const);
-        },
-      };
+      const ownerApproval = createOwnerApproval({
+        owner: dynamicOwner,
+        channel,
+        resolveOwner: (input) => runtime.service.resolveOwner(input),
+      });
 
       return {
         agent_builder__workflow_allocate: defineTool({
@@ -268,7 +260,7 @@ export default defineDynamic({
             "Atomically publish only the current QA-approved exact draft and advance the durable workflow. Requires this exact tool call's real user approval.",
           inputSchema: byIdSchema,
           ...(runtime.config.verifiedPublishApprovalPolicy === undefined
-            ? { approval: publishApproval }
+            ? { approval: ownerApproval }
             : {}),
           execute: async (input, ctx) => {
             const owner = await currentOwner(ctx);
@@ -301,7 +293,7 @@ export default defineDynamic({
         agent_builder__activate: defineTool({
           description: "Atomically select an immutable published version as the active version.",
           inputSchema: activateSchema,
-          approval: () => "user-approval",
+          approval: ownerApproval,
           execute: async (input, ctx) => {
             await currentOwner(ctx);
             return runtime.service.activateVersion(
@@ -316,7 +308,7 @@ export default defineDynamic({
         agent_builder__archive: defineTool({
           description: "Archive an owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: () => "user-approval",
+          approval: ownerApproval,
           execute: async (input, ctx) => {
             await currentOwner(ctx);
             return runtime.service.archiveFamily(
@@ -331,7 +323,7 @@ export default defineDynamic({
         agent_builder__restore: defineTool({
           description: "Restore an archived owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: () => "user-approval",
+          approval: ownerApproval,
           execute: async (input, ctx) => {
             await currentOwner(ctx);
             return runtime.service.restoreFamily(
@@ -346,7 +338,7 @@ export default defineDynamic({
         agent_builder__delete: defineTool({
           description: "Irreversibly tombstone an owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: () => "user-approval",
+          approval: ownerApproval,
           execute: async (input, ctx) => {
             await currentOwner(ctx);
             return runtime.service.deleteFamily(
