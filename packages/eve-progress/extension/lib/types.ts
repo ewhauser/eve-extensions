@@ -98,17 +98,6 @@ export interface ProgressSurface {
   readonly fingerprint: string;
 }
 
-/**
- * Durable application-owned state for Slack routing and message ownership.
- * Production implementations should make writes linearizable per key.
- */
-export interface ProgressSurfaceStore {
-  getRoot(rootSessionId: string): Promise<ProgressRootBinding | null>;
-  putRoot(binding: ProgressRootBinding): Promise<void>;
-  getSurface(rootSessionId: string, sessionId: string): Promise<ProgressSurface | null>;
-  putSurface(surface: ProgressSurface): Promise<void>;
-}
-
 export interface SlackProgressApiInput {
   readonly botToken: SlackBotToken | undefined;
   readonly operation: "chat.postMessage" | "chat.update";
@@ -130,7 +119,6 @@ export type SlackProgressTokenResolver = (
 ) => SlackBotToken | Promise<SlackBotToken>;
 
 export interface SlackProgressPublisherOptions {
-  readonly store: ProgressSurfaceStore;
   readonly botToken?: SlackBotToken;
   readonly resolveBotToken?: SlackProgressTokenResolver;
   readonly api?: SlackProgressApi;

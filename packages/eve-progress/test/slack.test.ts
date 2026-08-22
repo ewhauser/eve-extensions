@@ -1,12 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createSlackProgressPublisher, renderSlackProgress } from "../extension/slack.js";
-import { createMemoryProgressSurfaceStore } from "../extension/stores/memory.js";
 import type {
   AgentProgressSnapshot,
   ProgressPublicationContext,
   SlackProgressApiInput,
 } from "../extension/lib/types.js";
+import {
+  ContextContainer,
+  contextStorage,
+} from "../node_modules/eve/dist/src/context/container.js";
+import {
+  deserializeContext,
+  serializeContext,
+} from "../node_modules/eve/dist/src/context/serialize.js";
 
 function context(sessionId = "root", rootSessionId = "root"): ProgressPublicationContext {
   return {
@@ -29,7 +36,10 @@ function context(sessionId = "root", rootSessionId = "root"): ProgressPublicatio
             kind: "slack",
             metadata: { channelId: "C123", teamId: "T123", threadTs: "100.200" },
           }
-        : { kind: "subagent" },
+        : {
+            kind: "subagent",
+            metadata: { channelId: "C123", teamId: "T123", threadTs: "100.200" },
+          },
   };
 }
 
@@ -101,26 +111,32 @@ describe("Slack rendering", () => {
 
 describe("Slack publisher", () => {
   it("posts one message per agent, updates it in place, and skips replays", async () => {
-    const store = createMemoryProgressSurfaceStore();
     const calls: SlackProgressApiInput[] = [];
     const api = vi.fn(async (input: SlackProgressApiInput) => {
       calls.push(input);
       return { ok: true, ts: `message-${calls.length}` };
     });
-    const publisher = createSlackProgressPublisher({ store, botToken: "xoxb-test", api });
+    const publisher = createSlackProgressPublisher({ botToken: "xoxb-test", api });
     const rootContext = context();
+    const rootState = new ContextContainer();
 
-    await publisher.bind(rootContext);
-    await publisher.publish(snapshot(), rootContext);
-    await publisher.publish(snapshot("root", "root", 2, "completed"), rootContext);
-    await publisher.publish(snapshot("root", "root", 2, "completed"), rootContext);
-    await publisher.publish(
-      { ...snapshot("root", "root", 3, "completed"), tasks: [] },
-      rootContext,
-    );
+    await contextStorage.run(rootState, async () => {
+      await publisher.bind(rootContext);
+      await publisher.publish(snapshot(), rootContext);
+      await publisher.publish(snapshot("root", "root", 2, "completed"), rootContext);
+      await publisher.publish(snapshot("root", "root", 2, "completed"), rootContext);
+      await publisher.publish(
+        { ...snapshot("root", "root", 3, "completed"), tasks: [] },
+        rootContext,
+      );
+    });
 
     const childContext = context("child", "root");
-    await publisher.publish(snapshot("child", "root"), childContext);
+    const childState = new ContextContainer();
+    await contextStorage.run(childState, async () => {
+      await publisher.bind(childContext);
+      await publisher.publish(snapshot("child", "root"), childContext);
+    });
 
     expect(calls.map((call) => call.operation)).toEqual([
       "chat.postMessage",
@@ -132,20 +148,57 @@ describe("Slack publisher", () => {
     expect(calls[1]?.body).toMatchObject({ channel: "C123", ts: "message-1" });
     expect(calls[2]?.body).toMatchObject({ channel: "C123", ts: "message-1" });
     expect(calls[3]?.body).toMatchObject({ channel: "C123", thread_ts: "100.200" });
-    expect(
-      await store.getSurface("root", "child"),
-    ).toMatchObject({ messageTs: "message-4", sessionId: "child" });
   });
 
   it("does not create an empty initial surface or publish without a root binding", async () => {
-    const store = createMemoryProgressSurfaceStore();
     const api = vi.fn(async () => ({ ok: true, ts: "message-1" }));
-    const publisher = createSlackProgressPublisher({ store, api });
+    const publisher = createSlackProgressPublisher({ api });
     const noTasks = { ...snapshot(), tasks: [] };
 
-    await publisher.publish(noTasks, context());
-    await publisher.publish(snapshot("child", "missing"), context("child", "missing"));
+    await contextStorage.run(new ContextContainer(), async () => {
+      await publisher.bind(context());
+      await publisher.publish(noTasks, context());
+    });
+    await contextStorage.run(new ContextContainer(), async () => {
+      await publisher.publish(snapshot("child", "missing"), context("child", "missing"));
+    });
 
     expect(api).not.toHaveBeenCalled();
+  });
+
+  it("updates the same Slack message after durable context serialization", async () => {
+    const calls: SlackProgressApiInput[] = [];
+    const api = vi.fn(async (input: SlackProgressApiInput) => {
+      calls.push(input);
+      return { ok: true, ts: "message-1" };
+    });
+    const firstPublisher = createSlackProgressPublisher({ api });
+    const childContext = context("child", "root");
+    const firstWorker = new ContextContainer();
+
+    await contextStorage.run(firstWorker, async () => {
+      await firstPublisher.bind(childContext);
+      await firstPublisher.publish(snapshot("child", "root"), childContext);
+    });
+
+    const persisted = JSON.parse(JSON.stringify(serializeContext(firstWorker))) as Record<
+      string,
+      unknown
+    >;
+    const coldWorker = await deserializeContext(persisted);
+    const restartedPublisher = createSlackProgressPublisher({ api });
+    await contextStorage.run(coldWorker, async () => {
+      await restartedPublisher.bind(childContext);
+      await restartedPublisher.publish(
+        snapshot("child", "root", 2, "completed"),
+        childContext,
+      );
+    });
+
+    expect(calls.map((call) => call.operation)).toEqual([
+      "chat.postMessage",
+      "chat.update",
+    ]);
+    expect(calls[1]?.body).toMatchObject({ channel: "C123", ts: "message-1" });
   });
 });

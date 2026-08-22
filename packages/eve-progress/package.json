@@ -29,10 +29,6 @@
       "types": "./dist/extension/lib/projection.d.ts",
       "default": "./dist/extension/lib/projection.mjs"
     },
-    "./stores/memory": {
-      "types": "./dist/extension/stores/memory.d.ts",
-      "default": "./dist/extension/stores/memory.mjs"
-    },
     "./types": {
       "types": "./dist/extension/lib/types.d.ts",
       "default": "./dist/extension/lib/types.mjs"

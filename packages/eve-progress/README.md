@@ -39,11 +39,8 @@ Create `agent/extensions/progress.ts`:
 import progress from "eve-progress";
 import { createSlackProgressPublisher } from "eve-progress/slack";
 
-import { progressSurfaceStore } from "../../src/progress-surface-store.js";
-
 export default progress({
   publisher: createSlackProgressPublisher({
-    store: progressSurfaceStore,
     // Omit botToken to use SLACK_BOT_TOKEN. Multi-workspace hosts can instead
     // provide resolveBotToken(binding).
   }),
@@ -59,35 +56,28 @@ export default progress({
 
 Mount the extension explicitly in every declared long-running subagent, for
 example `agent/subagents/researcher/extensions/progress.ts`. Each Eve session
-has its own durable projection state; the shared surface store routes child
-messages to the root session's Slack thread without sharing task namespaces.
+has its own durable projection and Slack surface state. Eve propagates the
+originating channel metadata to child sessions, so each child can route its own
+message to the root Slack thread without sharing task namespaces or requiring
+application database tables.
 
-## Store contract
+## Durable state
 
-The Slack publisher requires an application-owned `ProgressSurfaceStore`.
-Use durable storage in production with these unique keys:
+The Slack publisher keeps these values in Eve's session-scoped extension state:
 
-- root binding: `rootSessionId` to Slack channel and thread;
-- progress surface: `(rootSessionId, sessionId)` to Slack message `ts`, applied
-  revision, and render fingerprint.
+- the inherited Slack channel, thread, and optional team binding;
+- that session's Slack message `ts`, applied revision, and render fingerprint.
 
-Writes should be linearizable per key. Slack updates are naturally repeatable,
-and initial posts carry a deterministic `client_msg_id`; durable surface state
-suppresses ordinary hook replay. The included memory store is only for tests
-and local development:
-
-```ts
-import { createMemoryProgressSurfaceStore } from "eve-progress/stores/memory";
-
-export const progressSurfaceStore = createMemoryProgressSurfaceStore();
-```
+This state is serialized with the rest of the Eve session, including across
+worker restarts. Slack updates are naturally repeatable, and initial posts carry
+a deterministic `client_msg_id`; the stored revision and fingerprint suppress
+ordinary hook replay. No external progress store is required.
 
 For multi-workspace Slack installations, use the projected `teamId` to resolve
 the correct credential:
 
 ```ts
 createSlackProgressPublisher({
-  store: progressSurfaceStore,
   resolveBotToken: async ({ teamId }) => {
     if (teamId === undefined) throw new Error("Slack teamId is required");
     return tokenStore.requireSlackBotToken(teamId);
