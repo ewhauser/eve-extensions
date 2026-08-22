@@ -207,7 +207,8 @@ export function createSlackProgressPublisher(
 
   return {
     async bind(context: ProgressPublicationContext): Promise<void> {
-      const isRootSlack = context.parent === undefined && context.channel.kind === "slack";
+      const isRootSlack =
+        context.parent === undefined && context.channel.kind === "channel:slack";
       const isChildWithInheritedMetadata = context.parent !== undefined;
       if (!isRootSlack && !isChildWithInheritedMetadata) return;
       const channelId = metadataString(context.channel.metadata, "channelId");

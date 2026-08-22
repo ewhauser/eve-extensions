@@ -33,7 +33,7 @@ function context(sessionId = "root", rootSessionId = "root"): ProgressPublicatio
     channel:
       sessionId === rootSessionId
         ? {
-            kind: "slack",
+            kind: "channel:slack",
             metadata: { channelId: "C123", teamId: "T123", threadTs: "100.200" },
           }
         : {
