@@ -27,6 +27,7 @@ jobs:
       imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
       openai-tag: ${{ steps.release.outputs['packages/eve-openai-connectors--tag_name'] }}
       plugins-tag: ${{ steps.release.outputs['packages/eve-openai-plugins--tag_name'] }}
+      progress-tag: ${{ steps.release.outputs['packages/eve-progress--tag_name'] }}
       project-link-tag: ${{ steps.release.outputs['packages/eve-project-link--tag_name'] }}
       slack-participation-tag: ${{ steps.release.outputs['packages/eve-slack-participation--tag_name'] }}
       paths-released: ${{ steps.release.outputs.paths_released }}
@@ -103,6 +104,7 @@ jobs:
       NPM_CONFIG_PROVENANCE: "true"
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
       PLUGINS_TAG: ${{ needs.release-please.outputs.plugins-tag }}
+      PROGRESS_TAG: ${{ needs.release-please.outputs.progress-tag }}
       PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
       SLACK_PARTICIPATION_TAG: ${{ needs.release-please.outputs.slack-participation-tag }}
     steps:
@@ -162,6 +164,9 @@ jobs:
               eve-openai-imagegen)
                 expected_tag="${IMAGEGEN_TAG}"
                 ;;
+              eve-progress)
+                expected_tag="${PROGRESS_TAG}"
+                ;;
               *)
                 echo "Refusing unexpected package: ${package_name}" >&2
                 exit 1
@@ -212,6 +217,7 @@ jobs:
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
       OPENAI_TAG: ${{ needs.release-please.outputs.openai-tag }}
       PLUGINS_TAG: ${{ needs.release-please.outputs.plugins-tag }}
+      PROGRESS_TAG: ${{ needs.release-please.outputs.progress-tag }}
       PROJECT_LINK_TAG: ${{ needs.release-please.outputs.project-link-tag }}
       SLACK_PARTICIPATION_TAG: ${{ needs.release-please.outputs.slack-participation-tag }}
     steps:
@@ -255,3 +261,4 @@ jobs:
           publish_release eve-openai-connectors "${OPENAI_TAG}"
           publish_release eve-openai-plugins "${PLUGINS_TAG}"
           publish_release eve-openai-imagegen "${IMAGEGEN_TAG}"
+          publish_release eve-progress "${PROGRESS_TAG}"
