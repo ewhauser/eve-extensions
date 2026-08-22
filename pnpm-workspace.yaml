@@ -6,9 +6,10 @@ catalog:
   "@ai-sdk/openai": ^4.0.30
   "@aws-sdk/client-lambda-microvms": 3.1075.0
   "@types/node": ^26.1.2
+  "@typescript/typescript6": ^6.0.2
   ai: ^7.0.58
   eve: 0.38.0
-  typescript: ^5.6.0
+  typescript: ^7.0.2
   vitest: ^4.1.10
   zod: ^4.4.3
 

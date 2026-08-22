@@ -29,12 +29,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "typescript": "catalog:"
+    "@typescript/typescript6": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "eve": "catalog:",
     "eve-openai-connectors": "workspace:*",
+    "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
