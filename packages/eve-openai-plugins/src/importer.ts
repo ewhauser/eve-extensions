@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 import { accessPolicySource, generatePlugin } from "./generator.js";
 import { inspectPlugin } from "./manifest.js";
