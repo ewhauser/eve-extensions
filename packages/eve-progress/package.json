@@ -1,6 +1,6 @@
 {
   "name": "eve-progress",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Transport-neutral Eve agent progress projected from the durable todo tool, with Slack plan rendering.",
   "license": "MIT",
   "type": "module",
