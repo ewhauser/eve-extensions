@@ -8,6 +8,7 @@ import type {
   SlackProgressApi,
   SlackProgressPublisherOptions,
 } from "./lib/types.js";
+import { slackProgressSessionState } from "./lib/state.js";
 
 export type SlackPlanTaskStatus = "pending" | "in_progress" | "complete" | "error";
 
@@ -177,8 +178,8 @@ const defaultApi: SlackProgressApi = async (input) =>
   });
 
 /**
- * Creates the Slack adapter. It owns a separate message per Eve session and
- * uses the root binding to route child-agent plans into the originating thread.
+ * Creates the Slack adapter. Each Eve session durably owns its own Slack
+ * binding and message metadata in extension state.
  */
 export function createSlackProgressPublisher(
   options: SlackProgressPublisherOptions,
@@ -206,16 +207,30 @@ export function createSlackProgressPublisher(
 
   return {
     async bind(context: ProgressPublicationContext): Promise<void> {
-      if (context.channel.kind !== "slack" || context.sessionId !== context.rootSessionId) return;
+      const isRootSlack = context.parent === undefined && context.channel.kind === "slack";
+      const isChildWithInheritedMetadata = context.parent !== undefined;
+      if (!isRootSlack && !isChildWithInheritedMetadata) return;
       const channelId = metadataString(context.channel.metadata, "channelId");
       const threadTs = metadataString(context.channel.metadata, "threadTs");
       if (channelId === undefined || threadTs === undefined) return;
       const teamId = metadataString(context.channel.metadata, "teamId");
-      await options.store.putRoot({
+      const binding: ProgressRootBinding = {
         rootSessionId: context.rootSessionId,
         channelId,
         threadTs,
         ...(teamId === undefined ? {} : { teamId }),
+      };
+      slackProgressSessionState.update((current) => {
+        const previous = current.binding;
+        const sameDestination =
+          previous?.rootSessionId === binding.rootSessionId &&
+          previous.channelId === binding.channelId &&
+          previous.threadTs === binding.threadTs &&
+          previous.teamId === binding.teamId;
+        return {
+          binding,
+          surface: sameDestination ? current.surface : null,
+        };
       });
     },
 
@@ -225,9 +240,14 @@ export function createSlackProgressPublisher(
     ): Promise<void> {
       const key = `${snapshot.rootSessionId}\u0000${snapshot.sessionId}`;
       await serialized(key, async () => {
-        const binding = await options.store.getRoot(snapshot.rootSessionId);
+        const state = slackProgressSessionState.get();
+        const binding = state.binding;
         if (binding === null) return;
-        const current = await options.store.getSurface(snapshot.rootSessionId, snapshot.sessionId);
+        const current =
+          state.surface?.rootSessionId === snapshot.rootSessionId &&
+          state.surface.sessionId === snapshot.sessionId
+            ? state.surface
+            : null;
         if (current === null && snapshot.tasks.length === 0) return;
 
         const rendered = renderSlackProgress(snapshot, {
@@ -236,7 +256,10 @@ export function createSlackProgressPublisher(
         });
         if (current !== null && current.fingerprint === rendered.fingerprint) {
           if (snapshot.revision > current.revision) {
-            await options.store.putSurface({ ...current, revision: snapshot.revision });
+            slackProgressSessionState.update((value) => ({
+              ...value,
+              surface: { ...current, revision: snapshot.revision },
+            }));
           }
           return;
         }
@@ -269,7 +292,7 @@ export function createSlackProgressPublisher(
             revision: snapshot.revision,
             fingerprint: rendered.fingerprint,
           };
-          await options.store.putSurface(surface);
+          slackProgressSessionState.update((value) => ({ ...value, surface }));
           return;
         }
 
@@ -284,11 +307,14 @@ export function createSlackProgressPublisher(
           },
         });
         if (response.ok !== true) throw slackError("chat.update", response);
-        await options.store.putSurface({
-          ...current,
-          revision: snapshot.revision,
-          fingerprint: rendered.fingerprint,
-        });
+        slackProgressSessionState.update((value) => ({
+          ...value,
+          surface: {
+            ...current,
+            revision: snapshot.revision,
+            fingerprint: rendered.fingerprint,
+          },
+        }));
       });
     },
   };

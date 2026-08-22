@@ -40,7 +40,6 @@ export function getEveProgressConfig(): EveProgressConfig {
 
 export default extension;
 export { createSlackProgressPublisher, renderSlackProgress } from "./slack.js";
-export { createMemoryProgressSurfaceStore } from "./stores/memory.js";
 export {
   initialProgressProjectionState,
   normalizeTaskTitle,
@@ -61,7 +60,6 @@ export type {
   ProgressPublishFailure,
   ProgressRootBinding,
   ProgressSurface,
-  ProgressSurfaceStore,
   ProgressTask,
   ProgressTaskPriority,
   ProgressTaskStatus,
