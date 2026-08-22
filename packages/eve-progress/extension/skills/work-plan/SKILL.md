@@ -1,11 +1,11 @@
 ---
 name: work-plan
-description: Maintain an accurate Eve todo plan for substantial multi-step work so users can follow progress in external surfaces.
+description: Maintain an accurate todo plan for substantial multi-step work so users can follow progress in external surfaces.
 ---
 
 # Work plan
 
-Use Eve's built-in `todo` tool as the sole authoritative plan. Do not duplicate
+Use the built-in `todo` tool as the sole authoritative plan. Do not duplicate
 the plan in prose unless the user asks for it.
 
 - Create a plan only for substantial work with multiple meaningful steps.
