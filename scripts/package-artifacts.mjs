@@ -142,7 +142,6 @@ export const packages = new Map([
         "dist/extension/lib/types.mjs",
         "dist/extension/slack.d.ts",
         "dist/extension/slack.mjs",
-        "dist/extension/skills/work-plan/SKILL.md",
         "patches/eve@0.38.0.patch",
         "LICENSE",
         "README.md",

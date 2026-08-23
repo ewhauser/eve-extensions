@@ -104,9 +104,9 @@ createSlackProgressPublisher({
 ## Agent policy
 
 The extension includes a small always-on instruction: use `todo` for
-substantial multi-step work, keep the full list current, and skip plans for
-simple requests. The optional `work-plan` skill gives the agent the detailed
-replacement, status, rename, and final-reconciliation rules only when needed.
+substantial multi-step work, keep it current, and skip plans for simple
+requests. The built-in tool definition supplies the replacement and status
+rules.
 
 ## Core adapter API
 
