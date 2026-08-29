@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.1...eve-progress-v0.3.2) (2026-08-29)
+
+
+### Bug Fixes
+
+* **progress:** remove redundant work-plan skill ([#94](https://github.com/ewhauser/eve-extensions/issues/94)) ([0b1949b](https://github.com/ewhauser/eve-extensions/commit/0b1949b025cbe83dc9368954b5c1f314ffb2cab4))
+
 ## [0.3.1](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.0...eve-progress-v0.3.1) (2026-08-22)
 
 

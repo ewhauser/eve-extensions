@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-plugins-v0.3.0...eve-openai-plugins-v0.3.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **openai-connectors:** make approvals durable on Eve 0.45 ([#99](https://github.com/ewhauser/eve-extensions/issues/99)) ([75699ce](https://github.com/ewhauser/eve-extensions/commit/75699ce65b9d7ac837aa470fb785c54b29086abe))
+
 ## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-plugins-v0.2.0...eve-openai-plugins-v0.3.0) (2026-08-14)
 
 
