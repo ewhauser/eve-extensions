@@ -1,4 +1,4 @@
-import type { ApprovalPolicy } from "eve/tools";
+import type { ApprovalPolicy } from "eve/tools/approval";
 import type {
   ApprovalAction,
   ApprovalsConfig,

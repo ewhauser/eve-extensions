@@ -6,6 +6,7 @@ import {
   isDeferredTool,
   resolveToolSearchProviderTool,
 } from "../node_modules/eve/dist/src/harness/provider-tools.js";
+import { getAdvertisedTools } from "../node_modules/eve/dist/src/harness/advertised-tools.js";
 import { createOpenAI } from "../node_modules/eve/dist/src/compiled/@ai-sdk/openai/index.js";
 import {
   CLIENT_TOOL_SEARCH_DESCRIPTION,
@@ -92,6 +93,30 @@ describe("Eve client tool-search provider bridge", () => {
       isProviderExecuted: false,
       id: "openai.tool_search",
       args: {},
+    });
+  });
+
+  test("replaces a final advertised client marker after dynamic tools are assembled", async () => {
+    const marker = markerForCatalogSize(50);
+    const advertised = await getAdvertisedTools({
+      modelTools: { client_marker: marker },
+      session: {
+        agent: { modelReference: { id: "openai/gpt-5.4" } },
+      },
+      tools: new Map(),
+    } as never);
+
+    expect(advertised.modelTools.client_marker).toBeUndefined();
+    expect(advertised.modelTools.tool_search).toMatchObject({
+      type: "provider",
+      isProviderExecuted: false,
+      id: "openai.tool_search",
+      args: {
+        execution: "client",
+        description: CLIENT_TOOL_SEARCH_DESCRIPTION,
+        parameters: CLIENT_TOOL_SEARCH_PARAMETERS,
+      },
+      execute: marker.execute,
     });
   });
 

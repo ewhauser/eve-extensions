@@ -171,6 +171,7 @@ export const packages = new Map([
         "dist/index.mjs",
         "dist/tools/index.d.ts",
         "dist/tools/index.mjs",
+        "patches/eve@0.45.0.patch",
         "LICENSE",
         "README.md",
       ],

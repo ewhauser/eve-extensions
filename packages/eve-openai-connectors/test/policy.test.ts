@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { ApprovalContext } from "eve/tools";
+import type { ApprovalContext } from "eve/tools/approval";
 import {
   buildApprovalPolicy,
   compileMatchPattern,

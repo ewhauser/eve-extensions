@@ -36,6 +36,7 @@ catalogs:
 
 patchedDependencies:
   eve@0.38.0: 2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a
+  eve@0.45.0: 4f7f62cb481e187ca423ae1c4fea77ae69a13c16e57291f43713aa408106f7aa
 
 importers:
 
@@ -181,8 +182,8 @@ importers:
         specifier: 'catalog:'
         version: 7.0.64(zod@4.4.3)
       eve:
-        specifier: 'catalog:'
-        version: 0.38.0(patch_hash=2b77c8631a8a8d4230043495d18675b0408600277795585728dfaeb7c431d13a)(ai@7.0.64(zod@4.4.3))(microsandbox@0.6.9)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+        specifier: 0.45.0
+        version: 0.45.0(patch_hash=4f7f62cb481e187ca423ae1c4fea77ae69a13c16e57291f43713aa408106f7aa)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1183,6 +1184,26 @@ packages:
       ai: ^7.0.58
       braintrust: ^3.0.0
       just-bash: ^3.0.0
+      microsandbox: ^0.5.0
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+      braintrust:
+        optional: true
+      just-bash:
+        optional: true
+      microsandbox:
+        optional: true
+
+  eve@0.45.0:
+    resolution: {integrity: sha512-jbx7iYc4IwUx7vzSo619uSxzF5pX6G6RHH+J9kE05VXwdR9Isl65m99PSYSXNhV5/WwJnRR4G7QfHuhvbt5Irw==}
+    engines: {node: '>=24'}
+    hasBin: true
+    peerDependencies:
+      '@opentelemetry/api': ^1.0.0
+      ai: ^7.0.58
+      braintrust: ^3.0.0
+      just-bash: ^3.1.0
       microsandbox: ^0.5.0
     peerDependenciesMeta:
       '@opentelemetry/api':
@@ -2336,6 +2357,51 @@ snapshots:
       undici: 8.9.0
     optionalDependencies:
       microsandbox: 0.6.9
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@netlify/runtime'
+      - '@planetscale/database'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - '@vercel/queue'
+      - aws4fetch
+      - better-sqlite3
+      - chokidar
+      - dotenv
+      - drizzle-orm
+      - giget
+      - idb-keyval
+      - ioredis
+      - jiti
+      - lru-cache
+      - miniflare
+      - mongodb
+      - mysql2
+      - rollup
+      - sqlite3
+      - uploadthing
+      - vite
+      - wrangler
+      - xml2js
+      - zephyr-agent
+
+  eve@0.45.0(patch_hash=4f7f62cb481e187ca423ae1c4fea77ae69a13c16e57291f43713aa408106f7aa)(ai@7.0.64(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11)):
+    dependencies:
+      ai: 7.0.64(zod@4.4.3)
+      nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.11))
+      undici: 8.9.0
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'

@@ -271,18 +271,22 @@ export default openaiConnectors({ getToken: () => null });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.38.0", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.45.0", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });
-    await symlink(resolve(packageRoot, "node_modules/eve"), resolve(project, "node_modules/eve"), "dir");
+    await symlink(
+      resolve(packageRoot, "../eve-openai-connectors/node_modules/eve"),
+      resolve(project, "node_modules/eve"),
+      "dir",
+    );
     await symlink(resolve(packageRoot, "../eve-openai-connectors"), resolve(project, "node_modules/eve-openai-connectors"), "dir");
     await applyPluginImport({
       projectRoot: project,
       source: { kind: "local", path: plugin },
       allowStaticConnections: true,
     });
-    const eveBin = resolve(packageRoot, "node_modules/eve/bin/eve.js");
+    const eveBin = resolve(project, "node_modules/eve/bin/eve.js");
     const result = await execFileAsync(process.execPath, [eveBin, "build"], {
       cwd: project,
       maxBuffer: 10 * 1024 * 1024,
