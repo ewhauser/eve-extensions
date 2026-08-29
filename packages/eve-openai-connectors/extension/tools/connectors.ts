@@ -1,4 +1,16 @@
-import { defineDynamic, defineTool, type DynamicToolEntry } from "eve/tools";
+import {
+  defineDynamic,
+  defineTool,
+  type DynamicToolEntry,
+  type ToolContext,
+} from "eve/tools";
+import type {
+  Approval,
+  ApprovalContext,
+  ApprovalResponseContext,
+  ApprovalResponseDecision,
+  ApprovalStatus,
+} from "eve/tools/approval";
 
 import extension from "../extension.js";
 import {
@@ -13,7 +25,12 @@ import {
   CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
 } from "../lib/client-search.js";
 import { getOrCreateDeferredToolSet } from "../lib/tool-cache.js";
-import type { ApprovalsConfig, CreateConnectorsOptions } from "../lib/types.js";
+import type {
+  ApprovalsConfig,
+  ConnectorToolItem,
+  CreateConnectorsOptions,
+  JsonObject,
+} from "../lib/types.js";
 import {
   connectorWorkingSet,
   mergeConnectorWorkingSet,
@@ -76,6 +93,124 @@ function getConnectors(): Connectors {
 }
 
 const ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX = "eve:absolute:";
+const DURABLE_DYNAMIC_TOOL_CALLBACKS = Symbol.for("eve:durable-dynamic-tool-callbacks");
+
+type DurableCallback = (
+  closure: JsonObject,
+  ...args: readonly unknown[]
+) => unknown;
+
+interface DurableCallbackDescriptor {
+  readonly callback: DurableCallback;
+  readonly closure: JsonObject;
+}
+
+interface DurableToolCallbacks {
+  readonly execute: DurableCallbackDescriptor;
+  readonly approvalRequest?: DurableCallbackDescriptor;
+  readonly approvalResponse?: DurableCallbackDescriptor;
+}
+
+function stampDurableCallbacks(
+  tool: DynamicToolEntry,
+  callbacks: DurableToolCallbacks,
+): DynamicToolEntry {
+  Object.defineProperty(tool, DURABLE_DYNAMIC_TOOL_CALLBACKS, {
+    configurable: true,
+    value: callbacks,
+  });
+  return tool;
+}
+
+function connectorItemFromClosure(closure: JsonObject): ConnectorToolItem {
+  const candidate = closure.item;
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    throw new Error("Connector tool callback metadata is invalid.");
+  }
+  const item = candidate as Partial<ConnectorToolItem>;
+  if (
+    typeof item.name !== "string" ||
+    typeof item.upstream !== "string" ||
+    typeof item.service !== "string" ||
+    typeof item.description !== "string" ||
+    typeof item.inputSchema !== "object" ||
+    item.inputSchema === null ||
+    Array.isArray(item.inputSchema) ||
+    typeof item.readOnly !== "boolean" ||
+    typeof item.destructive !== "boolean"
+  ) {
+    throw new Error("Connector tool callback metadata is invalid.");
+  }
+  return item as ConnectorToolItem;
+}
+
+async function executeMaterializedConnector(
+  closure: JsonObject,
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<unknown> {
+  const item = connectorItemFromClosure(closure);
+  return getConnectors().call(ctx, item.upstream, input, item);
+}
+
+async function requestMaterializedConnectorApproval(
+  closure: JsonObject,
+  ctx: ApprovalContext,
+): Promise<ApprovalStatus> {
+  const approval = getConnectors().approvalFor(connectorItemFromClosure(closure));
+  const request = typeof approval === "function" ? approval : approval.request;
+  return request(ctx);
+}
+
+async function authorizeMaterializedConnectorApproval(
+  closure: JsonObject,
+  ctx: ApprovalResponseContext,
+): Promise<ApprovalResponseDecision> {
+  const approval = getConnectors().approvalFor(connectorItemFromClosure(closure));
+  const response = typeof approval === "function" ? undefined : approval.response;
+  if (!response) {
+    return {
+      status: "rejected",
+      reason: "Connector approval response authorization is unavailable.",
+    };
+  }
+  return response(ctx);
+}
+
+function defineMaterializedConnectorTool(
+  item: ConnectorToolItem,
+  description: string,
+  providerOptions?: typeof DEFER_PROVIDER_OPTIONS,
+): DynamicToolEntry {
+  const approval: Approval = getConnectors().approvalFor(item);
+  const tool = defineTool({
+    description,
+    inputSchema: item.inputSchema,
+    approval,
+    ...(providerOptions === undefined ? {} : { providerOptions }),
+    execute: async (input, ctx) =>
+      getConnectors().call(ctx, item.upstream, input, item),
+  });
+  const closure = { item } as unknown as JsonObject;
+  return stampDurableCallbacks(tool, {
+    execute: {
+      callback: executeMaterializedConnector as DurableCallback,
+      closure,
+    },
+    approvalRequest: {
+      callback: requestMaterializedConnectorApproval as DurableCallback,
+      closure,
+    },
+    ...(typeof approval === "function" || approval.response === undefined
+      ? {}
+      : {
+          approvalResponse: {
+            callback: authorizeMaterializedConnectorApproval as DurableCallback,
+            closure,
+          },
+        }),
+  });
+}
 
 function absoluteDynamicToolName(name: string): string {
   return `${ABSOLUTE_DYNAMIC_TOOL_NAME_PREFIX}${name}`;
@@ -115,14 +250,12 @@ export default defineDynamic({
           () => {
             const deferredTools: Record<string, DynamicToolEntry<any, any>> = {};
             for (const item of session.deferred) {
-              deferredTools[absoluteDynamicToolName(item.name)] = defineTool({
-                description: item.description,
-                inputSchema: item.inputSchema,
-                approval: connectors.approvalFor(item),
-                providerOptions: DEFER_PROVIDER_OPTIONS,
-                execute: async (input, toolCtx) =>
-                  connectors.call(toolCtx, item.upstream, input, item),
-              });
+              deferredTools[absoluteDynamicToolName(item.name)] =
+                defineMaterializedConnectorTool(
+                  item,
+                  item.description,
+                  DEFER_PROVIDER_OPTIONS,
+                );
             }
             return Object.freeze(deferredTools);
           },
@@ -186,23 +319,17 @@ export default defineDynamic({
       }
 
       for (const item of session.discovered) {
-        tools[absoluteDynamicToolName(item.name)] = defineTool({
-          description: item.description,
-          inputSchema: item.inputSchema,
-          approval: connectors.approvalFor(item),
-          execute: async (input, toolCtx) =>
-            connectors.call(toolCtx, item.upstream, input, item),
-        });
+        tools[absoluteDynamicToolName(item.name)] = defineMaterializedConnectorTool(
+          item,
+          item.description,
+        );
       }
       for (const loaded of session.loaded) {
         const item = loaded.item;
-        tools[absoluteDynamicToolName(item.name)] = defineTool({
-          description: loaded.description,
-          inputSchema: item.inputSchema,
-          approval: connectors.approvalFor(item),
-          execute: async (input, toolCtx) =>
-            connectors.call(toolCtx, item.upstream, input, item),
-        });
+        tools[absoluteDynamicToolName(item.name)] = defineMaterializedConnectorTool(
+          item,
+          loaded.description,
+        );
       }
 
       return tools;

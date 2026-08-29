@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Approval } from "eve/tools";
+import type { Approval } from "eve/tools/approval";
 import {
   buildInventory,
   InventoryCache,

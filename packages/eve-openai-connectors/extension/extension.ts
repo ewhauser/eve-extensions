@@ -1,5 +1,5 @@
-import type { Approval } from "eve/tools";
 import { defineExtension } from "eve/extension";
+import type { Approval } from "eve/tools/approval";
 import { z } from "zod";
 
 import type {

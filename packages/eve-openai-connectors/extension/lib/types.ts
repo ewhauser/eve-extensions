@@ -1,4 +1,5 @@
-import type { DynamicResolveContext, Approval } from "eve/tools";
+import type { DynamicResolveContext } from "eve/tools";
+import type { Approval } from "eve/tools/approval";
 import type { CacheMetrics } from "./cache.js";
 import type { ConnectorAuthError } from "./errors.js";
 
@@ -269,7 +270,7 @@ export interface CreateConnectorsOptions {
    *   tool; works with unpatched Eve.
    * - `"deferred"` — expose the full catalog as deferred tools and let
    *   Anthropic or OpenAI perform provider-native tool search. Requires the
-   *   Eve 0.38.0 patch shipped with this package. Falls back to search when
+   *   Eve 0.45.0 patch shipped with this package. Falls back to search when
    *   the catalog is unavailable.
    */
   discovery?: ConnectorDiscovery;

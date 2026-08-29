@@ -26,3 +26,4 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   eve@0.38.0: patches/eve@0.38.0.patch
+  eve@0.45.0: packages/eve-openai-connectors/patches/eve@0.45.0.patch

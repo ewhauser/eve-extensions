@@ -11,23 +11,23 @@ The user authorizes each service once in ChatGPT. The extension talks to OpenAI'
 Add the extension to the Eve agent project:
 
 ```sh
-pnpm add eve@0.38.0 eve-openai-connectors
+pnpm add eve@0.45.0 eve-openai-connectors
 ```
 
 ### Install the required Eve patch
 
-Client-executed and provider-native deferred discovery require a small patch to Eve 0.38.0. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
+Client-executed and provider-native deferred discovery require a small patch to Eve 0.45.0. The package ships the exact patch used by this monorepo, but pnpm does not apply patches from dependencies automatically. Copy it into your application:
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-openai-connectors/patches/eve@0.38.0.patch patches/eve@0.38.0.patch
+cp node_modules/eve-openai-connectors/patches/eve@0.45.0.patch patches/eve@0.45.0.patch
 ```
 
 Register it in the top-level `pnpm-workspace.yaml`, preserving any existing settings:
 
 ```yaml
 patchedDependencies:
-  eve@0.38.0: patches/eve@0.38.0.patch
+  eve@0.45.0: patches/eve@0.45.0.patch
 ```
 
 Then apply it:
@@ -36,7 +36,7 @@ Then apply it:
 pnpm install
 ```
 
-The patch forwards per-tool `providerOptions` through Eve and recognizes the connector extension's explicit service-qualified-name marker. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.38.0` and revalidate or replace the patch before upgrading. The corresponding provider-search work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
+The patch forwards per-tool `providerOptions` through Eve's durable dynamic-tool metadata and recognizes the connector extension's explicit service-qualified-name marker. For OpenAI it turns the extension's fixed marker into client-executed `tool_search`; for explicit hosted deferred mode it injects Anthropic or OpenAI's native search implementation. It is version-specific: keep Eve pinned to `0.45.0` and revalidate or replace the patch before upgrading. The corresponding provider-search work is [vercel/eve#1741](https://github.com/vercel/eve/pull/1741).
 
 ## Mount the extension
 
@@ -108,7 +108,7 @@ On providers without OpenAI client-executed tool search, the same marker remains
 2. The compact result identifies loaded names and short summaries without JSON schemas.
 3. On the next step, those tools are materialized under service namespaces such as `github__` or `zoom__` and become callable.
 
-Set `discovery: "search"` to use ordinary progressive extension search all the time. Discovered tools survive turns, external compaction, worker restarts, and redeploys through extension-owned state, but materialization always requires the current authorized catalog. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
+Set `discovery: "search"` to use ordinary progressive extension search all the time. Discovered tools survive turns, external compaction, worker restarts, and redeploys through extension-owned state and Eve 0.45 durable execute/approval callback descriptors, but materialization always requires the current authorized catalog. Set `discovery: "deferred"` only for the compatibility path that advertises the complete catalog as deferred definitions and uses hosted Anthropic or OpenAI search.
 
 Sessions created by versions before this durable manifest existed are not migrated from transcript tool results. Those legacy results are deliberately ignored because they can contain stale schemas and policy. The agent must search again once; subsequent discoveries use durable state.
 
