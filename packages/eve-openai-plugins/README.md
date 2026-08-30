@@ -7,7 +7,7 @@ current ChatGPT user's app tools at runtime; this package installs the rest of
 a plugin's declared capabilities at build time and uses Eve's dynamic
 resolvers to decide which caller can see them.
 
-The package targets `eve@0.38.0` and Node.js 24 or newer.
+The package targets `eve@0.45.0` and Node.js 24 or newer.
 
 ## Capability mapping
 

@@ -8,7 +8,7 @@ catalog:
   "@types/node": ^26.1.2
   "@typescript/typescript6": ^6.0.2
   ai: ^7.0.83
-  eve: 0.38.0
+  eve: 0.45.0
   typescript: ^7.0.2
   vitest: ^4.1.11
   zod: ^4.4.3
@@ -22,8 +22,7 @@ allowBuilds:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - eve@0.38.0
+  - eve@0.45.0
 
 patchedDependencies:
-  eve@0.38.0: patches/eve@0.38.0.patch
-  eve@0.45.0: packages/eve-openai-connectors/patches/eve@0.45.0.patch
+  eve@0.45.0: patches/eve@0.45.0.patch

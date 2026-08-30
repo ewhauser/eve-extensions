@@ -595,7 +595,6 @@ const model = mockModel(async (request) => {
 });
 
 export default defineAgent({
-  experimental: { subagentPersistentSessions: true },
   model,
   modelContextWindowTokens: 32_000,
 });

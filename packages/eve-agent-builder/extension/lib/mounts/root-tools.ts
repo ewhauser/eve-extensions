@@ -9,11 +9,12 @@ import {
   scopedToolOperationId,
 } from "../runtime/service.js";
 import {
-  createOwnerApproval,
   ownerChannelFromContext,
   ownerInputFromSession,
   ownersEqual,
 } from "../runtime/owner.js";
+import type { OwnerScope } from "../domain.js";
+import type { ToolContext } from "eve/tools";
 
 const searchSchema = z
   .object({
@@ -67,25 +68,30 @@ function latestUserMessage(messages: readonly unknown[]): string {
   return "";
 }
 
+type RuntimeChannel = ReturnType<typeof ownerChannelFromContext>;
+
+async function currentOwner(
+  toolCtx: ToolContext,
+  expectedOwner: OwnerScope,
+  channel: RuntimeChannel,
+): Promise<OwnerScope> {
+  const resolved = await getAgentBuilderRuntime().service.resolveOwner(
+    ownerInputFromSession(toolCtx, channel),
+  );
+  if (!resolved.ok) throw new Error(resolved.error.code);
+  if (!ownersEqual(resolved.owner, expectedOwner)) throw new Error("OWNER_MISMATCH");
+  return resolved.owner;
+}
+
 export default defineDynamic({
   events: {
     "step.started": async (_event, dynamicCtx) => {
       const runtime = getAgentBuilderRuntime();
       const dynamicOwner = await resolveDynamicOwner(runtime, dynamicCtx);
       const channel = ownerChannelFromContext(dynamicCtx.channel);
-
-      async function currentOwner(toolCtx: Parameters<Parameters<typeof defineTool>[0]["execute"]>[1]) {
-        const resolved = await runtime.service.resolveOwner(ownerInputFromSession(toolCtx, channel));
-        if (!resolved.ok) throw new Error(resolved.error.code);
-        if (!ownersEqual(resolved.owner, dynamicOwner)) throw new Error("OWNER_MISMATCH");
-        return resolved.owner;
-      }
-
-      const ownerApproval = createOwnerApproval({
-        owner: dynamicOwner,
-        channel,
-        resolveOwner: (input) => runtime.service.resolveOwner(input),
-      });
+      const usesVerifiedPublishApproval =
+        runtime.config.verifiedPublishApprovalPolicy !== undefined;
+      const publishUserInput = latestUserMessage(dynamicCtx.messages);
 
       return {
         agent_builder__workflow_allocate: defineTool({
@@ -93,8 +99,8 @@ export default defineDynamic({
             "Atomically allocate a private build workflow and system-owned family/draft IDs. The PM authors all user-facing requirements afterward.",
           inputSchema: emptySchema,
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.workflow.allocate(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().workflow.allocate(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -107,8 +113,8 @@ export default defineDynamic({
           description: "Return the typed durable state and deterministic next step for one private build.",
           inputSchema: byIdSchema,
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.workflow.getNext(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().workflow.getNext(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 agentId: input.agentId,
@@ -122,8 +128,8 @@ export default defineDynamic({
             "Issue a fresh current-turn bootstrap for only the role or test runner required by typed workflow state.",
           inputSchema: byIdSchema,
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            const prepared = await runtime.workflow.prepareNext(
+            await currentOwner(ctx, dynamicOwner, channel);
+            const prepared = await getAgentBuilderRuntime().workflow.prepareNext(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 agentId: input.agentId,
@@ -151,7 +157,7 @@ export default defineDynamic({
             "Search this authenticated user's active saved agents and skills by normalized prefix/token matching. Cursors are owner-bound.",
           inputSchema: searchSchema,
           execute: async (input, ctx) =>
-            runtime.discovery.search(await currentOwner(ctx), {
+            getAgentBuilderRuntime().discovery.search(await currentOwner(ctx, dynamicOwner, channel), {
               ...(input.query === undefined ? {} : { query: input.query }),
               ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
               ...(input.limit === undefined ? {} : { limit: input.limit }),
@@ -160,17 +166,22 @@ export default defineDynamic({
         agent_builder__agent_get: defineTool({
           description: "Get one active saved agent or skill owned by the authenticated user.",
           inputSchema: byIdSchema,
-          execute: async (input, ctx) => runtime.discovery.get(await currentOwner(ctx), input.agentId),
+          execute: async (input, ctx) =>
+            getAgentBuilderRuntime().discovery.get(
+              await currentOwner(ctx, dynamicOwner, channel),
+              input.agentId,
+            ),
         }),
         agent_builder__prepare_active_run: defineTool({
           description:
             "Issue a one-use active-runner bootstrap for one immutable active saved agent. A saved skill returns load_skill_required instead.",
           inputSchema: byIdSchema,
           execute: async (input, ctx) => {
-            const owner = await currentOwner(ctx);
-            const admission = await runtime.discovery.admitRun(owner, input.agentId);
+            const owner = await currentOwner(ctx, dynamicOwner, channel);
+            const activeRuntime = getAgentBuilderRuntime();
+            const admission = await activeRuntime.discovery.admitRun(owner, input.agentId);
             if (admission.status !== "ready") return admission;
-            const issued = await runtime.bootstrap.issue({
+            const issued = await activeRuntime.bootstrap.issue({
               owner,
               role: "active_runner",
               target: {
@@ -198,9 +209,10 @@ export default defineDynamic({
             "Issue a one-use bootstrap for a host-declared PM, implementor, QA, or test-runner child bound to the exact current draft revision.",
           inputSchema: prepareRoleSchema,
           execute: async (input, ctx) => {
-            const owner = await currentOwner(ctx);
-            const family = await runtime.config.store.getFamily({ owner, agentId: input.agentId });
-            const workflow = await runtime.config.store.getBuildWorkflow({
+            const owner = await currentOwner(ctx, dynamicOwner, channel);
+            const roleRuntime = getAgentBuilderRuntime();
+            const family = await roleRuntime.config.store.getFamily({ owner, agentId: input.agentId });
+            const workflow = await roleRuntime.config.store.getBuildWorkflow({
               owner,
               agentId: input.agentId,
             });
@@ -216,7 +228,7 @@ export default defineDynamic({
             if (family?.draft === undefined || family.lifecycle === "archived" || family.lifecycle === "deleted") {
               return { ok: false as const, error: { code: "TARGET_CHANGED", message: "Exact draft is unavailable" } };
             }
-            const issued = await runtime.bootstrap.issue({
+            const issued = await roleRuntime.bootstrap.issue({
               owner,
               role: input.role,
               target: {
@@ -244,8 +256,8 @@ export default defineDynamic({
             "Atomically invalidate exact QA/test evidence for a publish-ready draft and return it to PM work before a requested edit.",
           inputSchema: byIdSchema,
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.workflow.reopen(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().workflow.reopen(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -259,28 +271,42 @@ export default defineDynamic({
           description:
             "Atomically publish only the current QA-approved exact draft and advance the durable workflow. Requires this exact tool call's real user approval.",
           inputSchema: byIdSchema,
-          ...(runtime.config.verifiedPublishApprovalPolicy === undefined
-            ? { approval: ownerApproval }
-            : {}),
+          approval: {
+            request: () =>
+              usesVerifiedPublishApproval ? "not-applicable" : "user-approval",
+            response: async (ctx) => {
+              const resolved = await getAgentBuilderRuntime().service.resolveOwner({
+                current: ctx.responder,
+                initiator: ctx.session.initiator,
+                channel,
+              });
+              return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
+                ? { status: "allowed" }
+                : { status: "rejected", reason: "OWNER_MISMATCH" };
+            },
+          },
           execute: async (input, ctx) => {
-            const owner = await currentOwner(ctx);
-            if (runtime.config.verifiedPublishApprovalPolicy !== undefined) {
+            const owner = await currentOwner(ctx, dynamicOwner, channel);
+            const publishRuntime = getAgentBuilderRuntime();
+            if (usesVerifiedPublishApproval) {
+              const policy = publishRuntime.config.verifiedPublishApprovalPolicy;
+              if (policy === undefined) throw new Error("INPUT_UNAVAILABLE");
               let decision;
               try {
-                decision = await runtime.config.verifiedPublishApprovalPolicy.authorize({
+                decision = await policy.authorize({
                   owner,
                   agentId: input.agentId,
                   sessionId: ctx.session.id,
                   turnId: ctx.session.turn.id,
                   callId: ctx.callId,
-                  userInput: latestUserMessage(dynamicCtx.messages),
+                  userInput: publishUserInput,
                 });
               } catch {
                 throw new Error("INPUT_UNAVAILABLE");
               }
               if (decision.status !== "allowed") throw new Error(decision.code);
             }
-            return runtime.workflow.publish(
+            return publishRuntime.workflow.publish(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -293,10 +319,22 @@ export default defineDynamic({
         agent_builder__activate: defineTool({
           description: "Atomically select an immutable published version as the active version.",
           inputSchema: activateSchema,
-          approval: ownerApproval,
+          approval: {
+            request: () => "user-approval",
+            response: async (ctx) => {
+              const resolved = await getAgentBuilderRuntime().service.resolveOwner({
+                current: ctx.responder,
+                initiator: ctx.session.initiator,
+                channel,
+              });
+              return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
+                ? { status: "allowed" }
+                : { status: "rejected", reason: "OWNER_MISMATCH" };
+            },
+          },
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.service.activateVersion(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().service.activateVersion(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -308,10 +346,22 @@ export default defineDynamic({
         agent_builder__archive: defineTool({
           description: "Archive an owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: ownerApproval,
+          approval: {
+            request: () => "user-approval",
+            response: async (ctx) => {
+              const resolved = await getAgentBuilderRuntime().service.resolveOwner({
+                current: ctx.responder,
+                initiator: ctx.session.initiator,
+                channel,
+              });
+              return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
+                ? { status: "allowed" }
+                : { status: "rejected", reason: "OWNER_MISMATCH" };
+            },
+          },
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.service.archiveFamily(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().service.archiveFamily(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -323,10 +373,22 @@ export default defineDynamic({
         agent_builder__restore: defineTool({
           description: "Restore an archived owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: ownerApproval,
+          approval: {
+            request: () => "user-approval",
+            response: async (ctx) => {
+              const resolved = await getAgentBuilderRuntime().service.resolveOwner({
+                current: ctx.responder,
+                initiator: ctx.session.initiator,
+                channel,
+              });
+              return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
+                ? { status: "allowed" }
+                : { status: "rejected", reason: "OWNER_MISMATCH" };
+            },
+          },
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.service.restoreFamily(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().service.restoreFamily(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),
@@ -338,10 +400,22 @@ export default defineDynamic({
         agent_builder__delete: defineTool({
           description: "Irreversibly tombstone an owner-scoped saved-agent family.",
           inputSchema: lifecycleSchema,
-          approval: ownerApproval,
+          approval: {
+            request: () => "user-approval",
+            response: async (ctx) => {
+              const resolved = await getAgentBuilderRuntime().service.resolveOwner({
+                current: ctx.responder,
+                initiator: ctx.session.initiator,
+                channel,
+              });
+              return resolved.ok && ownersEqual(resolved.owner, dynamicOwner)
+                ? { status: "allowed" }
+                : { status: "rejected", reason: "OWNER_MISMATCH" };
+            },
+          },
           execute: async (input, ctx) => {
-            await currentOwner(ctx);
-            return runtime.service.deleteFamily(
+            await currentOwner(ctx, dynamicOwner, channel);
+            return getAgentBuilderRuntime().service.deleteFamily(
               {
                 ownerResolution: ownerInputFromSession(ctx, channel),
                 operationId: await scopedToolOperationId(ctx),

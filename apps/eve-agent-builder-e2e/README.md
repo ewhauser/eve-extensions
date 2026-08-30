@@ -1,4 +1,4 @@
-# eve-agent-builder Eve 0.38 fixture
+# eve-agent-builder Eve 0.45 fixture
 
 This private workspace app is the PR 03 and PR 04 built-host proof. It declares PM,
 implementor, QA, test-runner, and active-runner subagents explicitly; mounts
@@ -22,14 +22,14 @@ fresh children whose model call IDs intentionally recur, refuses unverified
 publication, publishes on host-verified authenticated input, and proves
 current-turn get/direct-run plus next-turn roster visibility.
 
-The workspace installs `eve@0.38.0` with the repository's tracked Eve patch,
+The workspace installs `eve@0.45.0` with the repository's tracked Eve patch,
 so these built-host evals are evidence for that exact workspace runtime. PRs 03 and 04
 separately audit every load-bearing lifecycle and public-type claim against
 the unmodified tag commit
 `692c5c62b86e9a968c65c593fcf5b4f32d780788`; the fixture does not represent
 an unpatched binary run when invoked from this workspace. Validation also
 packs `eve-agent-builder`, copies this fixture into a clean temporary consumer,
-installs registry `eve@0.38.0` without the workspace patch, and requires the
+installs registry `eve@0.45.0` without the workspace patch, and requires the
 same applicable evals and compiled-isolation verifier to pass.
 
 Bootstrap credentials necessarily cross Eve's model-mediated tool/message
@@ -38,7 +38,7 @@ command completion, but cannot guarantee that an interrupted process or other
 host instrumentation never observed the credential. Production hosts must
 treat those transcripts as secret-bearing.
 
-Eve 0.38 `ask_question` answers are ordinary tool results and cannot authorize
+Eve 0.45 `ask_question` answers are ordinary tool results and cannot authorize
 a later capability call. Consequential authorization is instead composed onto
 the real lowered tool approval and backed by exact scoped, single-use store
 state. The local Workflow runtime accepted but did not settle the attempted
