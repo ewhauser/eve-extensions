@@ -213,7 +213,14 @@ export function createSlackProgressPublisher(
       if (!isRootSlack && !isChildWithInheritedMetadata) return;
       const channelId = metadataString(context.channel.metadata, "channelId");
       const threadTs = metadataString(context.channel.metadata, "threadTs");
-      if (channelId === undefined || threadTs === undefined) return;
+      if (channelId === undefined || threadTs === undefined) {
+        if (isRootSlack) {
+          throw new Error(
+            "Slack progress binding requires channelId and threadTs metadata.",
+          );
+        }
+        return;
+      }
       const teamId = metadataString(context.channel.metadata, "teamId");
       const binding: ProgressRootBinding = {
         rootSessionId: context.rootSessionId,
