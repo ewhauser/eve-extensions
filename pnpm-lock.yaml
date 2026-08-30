@@ -181,7 +181,7 @@ importers:
         specifier: 'catalog:'
         version: 7.0.83(zod@4.4.3)
       eve:
-        specifier: 0.45.0
+        specifier: 'catalog:'
         version: 0.45.0(patch_hash=6cfb2320857bc0313a1e7b7648aae303fbaa25bf41bebda23b74ade97915c43a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12))
       typescript:
         specifier: 'catalog:'
@@ -260,7 +260,7 @@ importers:
         specifier: 'catalog:'
         version: 26.2.0
       eve:
-        specifier: 0.45.0
+        specifier: 'catalog:'
         version: 0.45.0(patch_hash=6cfb2320857bc0313a1e7b7648aae303fbaa25bf41bebda23b74ade97915c43a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12))
       typescript:
         specifier: 'catalog:'

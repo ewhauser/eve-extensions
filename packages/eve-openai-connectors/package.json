@@ -49,12 +49,12 @@
     "@ai-sdk/openai": "catalog:",
     "@types/node": "catalog:",
     "ai": "catalog:",
-    "eve": "0.45.0",
+    "eve": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "eve": "^0.45.0"
+    "eve": "catalog:"
   },
   "engines": {
     "node": ">=24"
