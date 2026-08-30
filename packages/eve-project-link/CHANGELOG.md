@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.5.0...eve-project-link-v0.5.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **project-link:** make dynamic tools durable ([#104](https://github.com/ewhauser/eve-extensions/issues/104)) ([01f5c7b](https://github.com/ewhauser/eve-extensions/commit/01f5c7bf238c1912b00250d1d54bf5d678306e1a))
+
 ## [0.5.0](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.4.0...eve-project-link-v0.5.0) (2026-08-14)
 
 

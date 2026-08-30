@@ -1,5 +1,5 @@
 {
-  "packages/eve-project-link": "0.5.0",
+  "packages/eve-project-link": "0.5.1",
   "packages/eve-progress": "0.3.2",
   "packages/eve-slack-participation": "0.1.0",
   "packages/eve-aws-lambda-microvms": "0.6.0",
