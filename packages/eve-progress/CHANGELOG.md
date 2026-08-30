@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.2...eve-progress-v0.3.3) (2026-08-30)
+
+
+### Bug Fixes
+
+* **progress:** support Slack updates on Eve 0.45 ([#108](https://github.com/ewhauser/eve-extensions/issues/108)) ([bdf1d11](https://github.com/ewhauser/eve-extensions/commit/bdf1d113900bc5bbb90438dca2a99e331b50d0a5))
+
 ## [0.3.2](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.1...eve-progress-v0.3.2) (2026-08-29)
 
 
