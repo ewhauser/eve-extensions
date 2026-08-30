@@ -11,27 +11,27 @@ it does not know about Slack message IDs, blocks, or transport retries.
 ## Install
 
 ```sh
-pnpm add eve@0.38.0 eve-progress
+pnpm add eve@0.45.0 eve-progress
 ```
 
-Eve 0.38 does not expose channel metadata to authored hooks. Until that hook
-field lands upstream, copy the included compatibility patch into the
-application repository and configure pnpm to use that checked-in copy:
+Eve 0.45 exposes channel identity to authored hooks, but not the read-only
+adapter metadata used to route progress updates. Copy the included
+compatibility patch into the application repository and configure pnpm to use
+that checked-in copy:
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-progress/patches/eve@0.38.0.patch \
-  patches/eve-progress-eve@0.38.0.patch
+cp node_modules/eve-progress/patches/eve@0.45.0.patch \
+  patches/eve-progress-eve@0.45.0.patch
 ```
 
 ```yaml
 patchedDependencies:
-  eve@0.38.0: patches/eve-progress-eve@0.38.0.patch
+  eve@0.45.0: patches/eve-progress-eve@0.45.0.patch
 ```
 
-If the application already patches Eve, merge the two small hook-metadata
-hunks into its existing patch instead; pnpm accepts only one patch per package
-version.
+If the application already patches Eve, merge the two hook-metadata hunks into
+its existing patch instead; pnpm accepts only one patch per package version.
 
 Create `agent/extensions/progress.ts`:
 

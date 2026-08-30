@@ -6,4 +6,4 @@ This product includes software derived from eve, developed at Vercel, Inc.
 authored by Andrew Barba.
 
 The extracted package changes module boundaries, dependency loading, stable
-key handling, and lifecycle integration for Eve 0.38.0.
+key handling, and lifecycle integration for Eve 0.45.0.

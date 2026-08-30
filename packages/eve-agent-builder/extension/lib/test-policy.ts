@@ -4,7 +4,7 @@ import type {
   ApprovalResponseContext,
   ApprovalResponseDecision,
   ApprovalStatus,
-} from "eve/tools";
+} from "eve/tools/approval";
 import { z } from "zod";
 
 import {

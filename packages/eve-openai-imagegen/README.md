@@ -15,7 +15,7 @@ does not use ChatGPT or Codex included usage.
 
 ## Compatibility
 
-The package targets Node.js 24 or newer and `eve@0.38.0`. It calls the official
+The package targets Node.js 24 or newer and `eve@0.45.0`. It calls the official
 `/v1/images/generations` and `/v1/images/edits` endpoints with
 `model: "gpt-image-2"`.
 

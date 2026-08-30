@@ -1,7 +1,7 @@
 # eve-agent-builder
 
 `eve-agent-builder` is an unreleased, experimental control plane for private,
-owner-scoped saved agents in Eve 0.38. PR 04 adds a durable PM → implementor →
+owner-scoped saved agents in Eve 0.45. PR 04 adds a durable PM → implementor →
 QA workflow, isolated test evidence, fail-closed consequential test policy,
 and explicit atomic publication on top of PR 03's declared runners,
 single-use leases, capability registry, discovery, and immutable direct runs.
@@ -31,7 +31,7 @@ transactions. `createMemoryAgentBuilderStore` from
 `eve-agent-builder/stores/memory` is for tests and local development only.
 
 `verifiedTestInputPolicy` supplies request-input availability and any
-additional response validation Eve 0.38 does not expose to dynamic approval
+additional response validation Eve 0.45 does not expose to dynamic approval
 callbacks. `ask_question` output is never accepted as authorization.
 Consequential test tools retain their host schema, credential closure, and
 approval while Builder adds an exact-call, single-use check.
@@ -75,7 +75,7 @@ saved text beneath the static security policy and exposes only the selected
 registry adapters.
 Completion, failure, cancellation, or expiry closes the single-run lease.
 Each later authenticated workflow turn issues a fresh grant/child. A parked
-child is reused only inside that parent turn; Eve 0.38 does not refresh
+child is reused only inside that parent turn; Eve 0.45 does not refresh
 `auth.current` on a later persistent-child resume.
 
 ## Build workflow and publication
@@ -106,7 +106,7 @@ apply secret-bearing transcript retention/redaction controls; on normal command
 completion, the built fixture redacts retained eval artifacts. That fixture
 hygiene does not make Eve's in-flight transcript a secret-free transport.
 
-An unknown Eve `agentId` starts a fresh child in Eve 0.38. That child has no
+An unknown Eve `agentId` starts a fresh child in Eve 0.45. That child has no
 lease, so the package's dynamic model guard fails before a model call with a
 message containing `BOOTSTRAP_REQUIRED`. Eve projects that public guard
 failure through its framework model/subagent error codes.
@@ -151,7 +151,7 @@ Explicit host helpers are under `/mounts/*` and `/runtime/*`.
 This PR proves durable build orchestration, side-effect-free isolated testing,
 fail-closed consequential policy, explicit publication, and immediate
 observation with deterministic models. It does not claim live-model obedience.
-Eve 0.38 has no public binding from an `ask_question` answer to a later call,
+Eve 0.45 has no public binding from an `ask_question` answer to a later call,
 and its local Workflow/eval runtime did not settle the tested nested approval
 continuation. Unavailable consequential test capabilities are blocked and
 recorded; reusable conformance proves exact grant consumption and
@@ -161,7 +161,7 @@ Saved-skill materialization remains PR 05. External
 invocation envelopes, schedules/events, provisioning, production audit, and
 release readiness remain later work.
 
-The package targets `eve@0.38.0`, Node.js 24 or newer, strict TypeScript, Zod
+The package targets `eve@0.45.0`, Node.js 24 or newer, strict TypeScript, Zod
 validation, injected clocks/IDs, and typed result errors. See
 [RFC 0001](https://github.com/ewhauser/eve-extensions/blob/main/docs/rfcs/0001-eve-agent-builder.md)
 for the full boundary.

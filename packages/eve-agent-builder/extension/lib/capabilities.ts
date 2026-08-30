@@ -1,10 +1,10 @@
 import type {
-  Approval,
   DynamicToolEntry,
   DynamicToolSet,
   ToolContext,
   ToolDefinition,
 } from "eve/tools";
+import type { Approval } from "eve/tools/approval";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 

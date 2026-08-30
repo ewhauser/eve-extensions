@@ -1,14 +1,22 @@
 import {
   defineDynamic,
   defineTool,
-  type ApprovalContext,
-  type ApprovalResponseContext,
+  type DynamicToolEntry,
+  type DynamicToolSet,
   type ToolContext,
+  type ToolDefinition,
 } from "eve/tools";
+import type {
+  Approval,
+  ApprovalContext,
+  ApprovalResponseContext,
+  ApprovalStatus,
+} from "eve/tools/approval";
 import { z } from "zod";
 
 import {
-  lowerResolvedCapabilities,
+  type ResolvedRunnerCapability,
+  type RunnerCapabilityDescriptor,
   type RunnerCapabilityMode,
 } from "../capabilities.js";
 import {
@@ -18,7 +26,6 @@ import {
   type ExecutionRole,
 } from "../bootstrap.js";
 import {
-  composeConsequentialTestApproval,
   fingerprintTestStep,
   type TestCapabilityStepScope,
   type TestPolicyResult,
@@ -146,13 +153,12 @@ function roleControlTools(
   lease: ExecutionLeaseRecord,
   runtimeChannel: Parameters<typeof ownerInputFromSession>[1],
 ) {
-  const runtime = getAgentBuilderRuntime();
   const draftGet = defineTool({
     description: "Read the exact owner-scoped draft bound to this lease.",
     inputSchema: emptySchema,
     execute: async (_input, ctx) => {
       await executeOwner(ctx, lease, runtimeChannel);
-      return runtime.roles.readDraft(
+      return getAgentBuilderRuntime().roles.readDraft(
         role as "pm" | "implementor" | "qa" | "test_runner",
         ownerInputFromSession(ctx, runtimeChannel),
         lease,
@@ -168,7 +174,7 @@ function roleControlTools(
         inputSchema: pmBuildSubmissionInputSchema,
         execute: async (submission, ctx) => {
           await executeOwner(ctx, lease, runtimeChannel);
-          return runtime.workflow.submitPm(
+          return getAgentBuilderRuntime().workflow.submitPm(
             {
               ownerResolution: ownerInputFromSession(ctx, runtimeChannel),
               operationId: await scopedToolOperationId(ctx),
@@ -187,8 +193,13 @@ function roleControlTools(
       agent_builder__capability_list: defineTool({
         description: "List read-only metadata for capabilities eligible for the current owner.",
         inputSchema: emptySchema,
-        execute: async (_input, ctx) =>
-          runtime.roles.listCapabilityMetadata(ownerInputFromSession(ctx, runtimeChannel), lease),
+        execute: async (_input, ctx) => {
+          await executeOwner(ctx, lease, runtimeChannel);
+          return getAgentBuilderRuntime().roles.listCapabilityMetadata(
+            ownerInputFromSession(ctx, runtimeChannel),
+            lease,
+          );
+        },
       }),
       agent_builder__implementor_submit: defineTool({
         description:
@@ -196,7 +207,7 @@ function roleControlTools(
         inputSchema: implementorToolSubmissionSchema,
         execute: async (submission, ctx) => {
           await executeOwner(ctx, lease, runtimeChannel);
-          return runtime.workflow.submitImplementor(
+          return getAgentBuilderRuntime().workflow.submitImplementor(
             {
               ownerResolution: ownerInputFromSession(ctx, runtimeChannel),
               operationId: await scopedToolOperationId(ctx),
@@ -218,7 +229,7 @@ function roleControlTools(
         inputSchema: qaBuildSubmissionInputSchema,
         execute: async (submission, ctx) => {
           await executeOwner(ctx, lease, runtimeChannel);
-          return runtime.workflow.submitQa(
+          return getAgentBuilderRuntime().workflow.submitQa(
             {
               ownerResolution: ownerInputFromSession(ctx, runtimeChannel),
               operationId: await scopedToolOperationId(ctx),
@@ -240,7 +251,7 @@ function roleControlTools(
           inputSchema: recordBuildTestInputSchema,
           execute: async (result, ctx) => {
             await executeOwner(ctx, lease, runtimeChannel);
-            return runtime.workflow.recordTestResult(
+            return getAgentBuilderRuntime().workflow.recordTestResult(
               {
                 ownerResolution: ownerInputFromSession(ctx, runtimeChannel),
                 operationId: await scopedToolOperationId(ctx),
@@ -257,7 +268,7 @@ function roleControlTools(
 
 async function testStep(input: {
   readonly lease: ExecutionLeaseRecord;
-  readonly capability: Parameters<typeof lowerResolvedCapabilities>[0][number];
+  readonly capability: Pick<ResolvedRunnerCapability, "descriptor" | "modelToolName">;
   readonly owner: ExecutionLeaseRecord["owner"];
   readonly callId: string;
   readonly toolName: string;
@@ -330,6 +341,372 @@ async function testStep(input: {
   };
 }
 
+interface DurableCapabilityReference {
+  readonly descriptor: RunnerCapabilityDescriptor;
+  readonly modelToolName: string;
+  readonly mode: RunnerCapabilityMode;
+  readonly consequential: boolean;
+}
+
+async function resolveDurableCapability(
+  owner: ExecutionLeaseRecord["owner"],
+  reference: DurableCapabilityReference,
+): Promise<ResolvedRunnerCapability> {
+  const prepared = await getAgentBuilderRuntime().capabilities.prepare({
+    owner,
+    requirements: [
+      {
+        capabilityId: reference.descriptor.capabilityId,
+        level: "required",
+        displayNameSnapshot: reference.descriptor.displayName,
+        schemaFingerprint: reference.descriptor.schemaFingerprint,
+        consequential: reference.consequential,
+      },
+    ],
+    mode: reference.mode,
+  });
+  if (!prepared.ok) throw new Error(prepared.error.code);
+  const capability = prepared.value.resolved[0];
+  const selected = prepared.value.plan.selected[0];
+  if (
+    capability === undefined ||
+    selected === undefined ||
+    prepared.value.resolved.length !== 1 ||
+    prepared.value.plan.selected.length !== 1 ||
+    capability.descriptor.capabilityId !== reference.descriptor.capabilityId ||
+    capability.descriptor.schemaFingerprint !== reference.descriptor.schemaFingerprint ||
+    capability.modelToolName !== reference.modelToolName ||
+    selected.modelToolName !== reference.modelToolName ||
+    selected.schemaFingerprint !== reference.descriptor.schemaFingerprint
+  ) {
+    throw new Error("CAPABILITY_SCHEMA_CHANGED");
+  }
+  return capability;
+}
+
+function approvalDenied(status: ApprovalStatus | undefined): boolean {
+  return (
+    status === false ||
+    status === "denied" ||
+    (typeof status === "object" && status !== null && status.type === "denied")
+  );
+}
+
+function approvalRequestPolicy(approval: Approval<unknown> | undefined) {
+  if (approval === undefined) return undefined;
+  return typeof approval === "function" ? approval : approval.request;
+}
+
+function approvalResponsePolicy(approval: Approval<unknown> | undefined) {
+  return typeof approval === "object" && approval !== null
+    ? approval.response
+    : undefined;
+}
+
+async function approvalOwner(
+  ctx: ApprovalContext<unknown>,
+  lease: ExecutionLeaseRecord,
+  runtimeChannel: Parameters<typeof ownerInputFromSession>[1],
+) {
+  const resolved = await getAgentBuilderRuntime().service.resolveOwner(
+    ownerInputFromSession(ctx, runtimeChannel),
+  );
+  return resolved.ok && ownersEqual(resolved.owner, lease.owner)
+    ? resolved.owner
+    : null;
+}
+
+async function requestDurableCapabilityApproval(input: {
+  readonly reference: DurableCapabilityReference;
+  readonly lease: ExecutionLeaseRecord;
+  readonly role: ExecutionRole;
+  readonly runtimeChannel: Parameters<typeof ownerInputFromSession>[1];
+  readonly ctx: ApprovalContext<unknown>;
+}): Promise<ApprovalStatus> {
+  const owner = await approvalOwner(input.ctx, input.lease, input.runtimeChannel);
+  if (owner === null) return { type: "denied", reason: "OWNER_MISMATCH" };
+  const capability = await resolveDurableCapability(owner, input.reference);
+  const hostApproval = capability.tool.approval as Approval<unknown> | undefined;
+  const original = await approvalRequestPolicy(hostApproval)?.(input.ctx);
+  if (approvalDenied(original)) return original!;
+  if (input.role !== "test_runner" || !input.reference.consequential) {
+    return original ?? "not-applicable";
+  }
+  const step = await testStep({
+    lease: input.lease,
+    capability: input.reference,
+    owner,
+    callId: input.ctx.callId,
+    toolName: input.ctx.toolName,
+    toolInput: input.ctx.toolInput,
+    childSessionId: input.ctx.session.id,
+    executionTurnId: input.ctx.session.turn.id,
+  });
+  if (!step.ok) return { type: "denied", reason: step.error.code };
+  const inputPolicy = getAgentBuilderRuntime().config.verifiedTestInputPolicy;
+  if (inputPolicy === undefined) return { type: "denied", reason: "INPUT_UNAVAILABLE" };
+  try {
+    const availability = await inputPolicy.availability(step.value);
+    return availability.status === "available"
+      ? "user-approval"
+      : { type: "denied", reason: availability.code };
+  } catch {
+    return { type: "denied", reason: "INPUT_UNAVAILABLE" };
+  }
+}
+
+async function respondDurableCapabilityApproval(input: {
+  readonly reference: DurableCapabilityReference;
+  readonly lease: ExecutionLeaseRecord;
+  readonly role: ExecutionRole;
+  readonly runtimeChannel: Parameters<typeof ownerInputFromSession>[1];
+  readonly ctx: ApprovalResponseContext<unknown>;
+}) {
+  const runtime = getAgentBuilderRuntime();
+  const resolved = await runtime.service.resolveOwner({
+    current: input.ctx.responder,
+    initiator: input.ctx.session.initiator,
+    channel: input.runtimeChannel,
+  });
+  if (!resolved.ok || !ownersEqual(resolved.owner, input.lease.owner)) {
+    return { status: "rejected" as const, reason: "OWNER_MISMATCH" };
+  }
+  const capability = await resolveDurableCapability(resolved.owner, input.reference);
+  const hostApproval = capability.tool.approval as Approval<unknown> | undefined;
+  const hostResponse = approvalResponsePolicy(hostApproval);
+  if (hostResponse !== undefined) {
+    const original = await hostResponse(input.ctx);
+    if (original.status === "rejected") return original;
+  }
+  if (input.role !== "test_runner" || !input.reference.consequential) {
+    return { status: "allowed" as const };
+  }
+  const step = await testStep({
+    lease: input.lease,
+    capability: input.reference,
+    owner: resolved.owner,
+    callId: input.ctx.request.callId,
+    toolName: input.ctx.request.toolName,
+    toolInput: input.ctx.request.toolInput,
+    childSessionId: input.ctx.session.id,
+    executionTurnId: input.ctx.session.turn.id,
+  });
+  if (!step.ok) return { status: "rejected" as const, reason: step.error.code };
+  const inputPolicy = runtime.config.verifiedTestInputPolicy;
+  if (inputPolicy?.authorizeResponse !== undefined) {
+    const decision = await inputPolicy.authorizeResponse({
+      step: step.value,
+      response: input.ctx,
+    });
+    if (decision.status === "rejected") return decision;
+  }
+  const authorized = await runtime.config.store.authorizeTestInput({
+    step: step.value,
+    requestId: input.ctx.request.requestId,
+    responder: {
+      principalId: input.ctx.responder.principalId,
+      principalType: input.ctx.responder.principalType,
+    },
+    occurredAt: runtimeTimestamp(runtime),
+  });
+  return authorized.ok
+    ? { status: "allowed" as const }
+    : { status: "rejected" as const, reason: authorized.error.code };
+}
+
+async function executeDurableCapability(input: {
+  readonly reference: DurableCapabilityReference;
+  readonly lease: ExecutionLeaseRecord;
+  readonly role: ExecutionRole;
+  readonly runtimeChannel: Parameters<typeof ownerInputFromSession>[1];
+  readonly toolInput: unknown;
+  readonly ctx: ToolContext;
+}) {
+  const currentOwner = await executeOwner(input.ctx, input.lease, input.runtimeChannel);
+  const runtime = getAgentBuilderRuntime();
+  const authoritative = await runtime.config.store.getExecutionLease({
+    owner: currentOwner,
+    childSessionId: input.ctx.session.id,
+  });
+  if (
+    authoritative === null ||
+    authoritative.leaseId !== input.lease.leaseId ||
+    authoritative.status !== "running" ||
+    authoritative.executionTurnId !== input.ctx.session.turn.id ||
+    !bootstrapTargetsEqual(authoritative.target, input.lease.target) ||
+    !authoritative.capabilityPlan?.selected.some(
+      (entry) =>
+        entry.capabilityId === input.reference.descriptor.capabilityId &&
+        entry.modelToolName === input.reference.modelToolName &&
+        entry.schemaFingerprint === input.reference.descriptor.schemaFingerprint,
+    )
+  ) {
+    throw new Error("LEASE_CLOSED");
+  }
+  const occurredAt = runtimeTimestamp(runtime);
+  if (Date.parse(occurredAt) >= Date.parse(authoritative.expiresAt)) {
+    await runtime.bootstrap.closeExecution({
+      owner: currentOwner,
+      childSessionId: input.ctx.session.id,
+      executionTurnId: input.ctx.session.turn.id,
+      status: "failed",
+      occurredAt,
+      terminalCode: "LEASE_EXPIRED",
+    });
+    throw new Error("LEASE_EXPIRED");
+  }
+  let step: TestCapabilityStepScope | undefined;
+  if (input.role === "test_runner") {
+    const scoped = await testStep({
+      lease: authoritative,
+      capability: input.reference,
+      owner: currentOwner,
+      callId: input.ctx.callId,
+      toolName: input.reference.modelToolName,
+      toolInput: input.toolInput,
+      childSessionId: input.ctx.session.id,
+      executionTurnId: input.ctx.session.turn.id,
+    });
+    if (!scoped.ok) throw new Error(scoped.error.code);
+    step = scoped.value;
+    const selected = authoritative.capabilityPlan?.selected.find(
+      (entry) => entry.capabilityId === input.reference.descriptor.capabilityId,
+    );
+    const started = await runtime.config.store.beginTestCapabilityExecution({
+      step,
+      consequential: selected?.consequential ?? true,
+      occurredAt,
+    });
+    if (!started.ok) throw new Error(started.error.code);
+  }
+  const capability = await resolveDurableCapability(currentOwner, input.reference);
+  try {
+    const result = await capability.tool.execute.call(
+      capability.tool,
+      input.toolInput,
+      input.ctx,
+    );
+    if (step !== undefined) {
+      const completed = await runtime.config.store.completeTestCapabilityExecution({
+        owner: currentOwner,
+        workflowId: step.workflowId,
+        testRunId: step.testRunId,
+        leaseId: step.leaseId,
+        childSessionId: step.childSessionId,
+        executionTurnId: step.executionTurnId,
+        callId: step.callId,
+        status: "succeeded",
+        occurredAt: runtimeTimestamp(runtime),
+      });
+      if (!completed.ok) throw new Error(completed.error.code);
+    }
+    return result;
+  } catch (error) {
+    if (step !== undefined) {
+      const completed = await runtime.config.store.completeTestCapabilityExecution({
+        owner: currentOwner,
+        workflowId: step.workflowId,
+        testRunId: step.testRunId,
+        leaseId: step.leaseId,
+        childSessionId: step.childSessionId,
+        executionTurnId: step.executionTurnId,
+        callId: step.callId,
+        status: "failed",
+        occurredAt: runtimeTimestamp(runtime),
+        errorCode:
+          error instanceof Error && error.name.length > 0
+            ? error.name
+            : "CAPABILITY_EXECUTION_FAILED",
+      });
+      if (!completed.ok) throw new Error(completed.error.code);
+    }
+    throw error;
+  }
+}
+
+async function projectDurableCapabilityOutput(
+  reference: DurableCapabilityReference,
+  owner: ExecutionLeaseRecord["owner"],
+  output: unknown,
+) {
+  const capability = await resolveDurableCapability(owner, reference);
+  const project = capability.tool.toModelOutput;
+  return typeof project === "function"
+    ? project.call(capability.tool, output)
+    : { type: "json" as const, value: output === undefined ? null : output };
+}
+
+function lowerDurableCapabilities(input: {
+  readonly capabilities: readonly ResolvedRunnerCapability[];
+  readonly lease: ExecutionLeaseRecord;
+  readonly role: ExecutionRole;
+  readonly mode: RunnerCapabilityMode;
+  readonly runtimeChannel: Parameters<typeof ownerInputFromSession>[1];
+}): DynamicToolSet {
+  const lease = input.lease;
+  const role = input.role;
+  const mode = input.mode;
+  const runtimeChannel = input.runtimeChannel;
+  const selectedById = new Map(
+    lease.capabilityPlan?.selected.map((entry) => [entry.capabilityId, entry]) ?? [],
+  );
+  const lowered: Record<string, DynamicToolEntry<any, any>> = {};
+  for (const capability of input.capabilities) {
+    const selected = selectedById.get(capability.descriptor.capabilityId);
+    if (
+      selected === undefined ||
+      selected.modelToolName !== capability.modelToolName ||
+      selected.schemaFingerprint !== capability.descriptor.schemaFingerprint
+    ) {
+      throw new Error("CAPABILITY_NOT_SELECTED");
+    }
+    const reference: DurableCapabilityReference = {
+      descriptor: capability.descriptor,
+      modelToolName: capability.modelToolName,
+      mode,
+      consequential: selected.consequential,
+    };
+    const tool = capability.tool;
+    lowered[reference.modelToolName] = defineTool({
+      description: tool.description,
+      inputSchema: tool.inputSchema as ToolDefinition<any, any>["inputSchema"],
+      ...(tool.outputSchema === undefined
+        ? {}
+        : { outputSchema: tool.outputSchema as ToolDefinition<any, any>["outputSchema"] }),
+      approval: {
+        request: async (ctx) =>
+          requestDurableCapabilityApproval({
+            reference,
+            lease,
+            role,
+            runtimeChannel,
+            ctx,
+          }),
+        response: async (ctx) =>
+          respondDurableCapabilityApproval({
+            reference,
+            lease,
+            role,
+            runtimeChannel,
+            ctx,
+          }),
+      },
+      toModelOutput: async (output) =>
+        projectDurableCapabilityOutput(reference, lease.owner, output),
+      execute: async (toolInput, ctx) =>
+        executeDurableCapability({
+          reference,
+          lease,
+          role,
+          runtimeChannel,
+          toolInput,
+          ctx,
+        }),
+    } as ToolDefinition<any, any>) as DynamicToolEntry<any, any>;
+  }
+  return Object.freeze(lowered);
+}
+
 export function createAgentBuilderRunnerTools(input: {
   readonly role: ExecutionRole;
   readonly mode: RunnerCapabilityMode;
@@ -353,12 +730,13 @@ export function createAgentBuilderRunnerTools(input: {
               inputSchema: emptySchema,
               execute: async (_empty, toolCtx) => {
                 if (toolCtx.session.parent === undefined) throw new Error("BOOTSTRAP_BINDING_MISMATCH");
-                const resolved = await runtime.service.resolveOwner(
+                const redeemRuntime = getAgentBuilderRuntime();
+                const resolved = await redeemRuntime.service.resolveOwner(
                   ownerInputFromSession(toolCtx, runtimeChannel),
                 );
                 if (!resolved.ok) throw new Error(resolved.error.code);
                 if (!ownersEqual(resolved.owner, owner)) throw new Error("OWNER_MISMATCH");
-                return runtime.bootstrap.redeem({
+                return redeemRuntime.bootstrap.redeem({
                   token: bootstrap.token,
                   owner: resolved.owner,
                   role: input.role,
@@ -378,175 +756,31 @@ export function createAgentBuilderRunnerTools(input: {
         }
         const prepared = await cachedRunnerTurn({ ...input, event, ctx: dynamicCtx });
         if (!prepared.ok) return null;
+        const runnerLease = prepared.value.lease;
+        const capabilityOmissions = prepared.value.capabilities.plan.optionalOmissions;
         const contextTool = defineTool({
           description: "Return the immutable, non-secret identity of this single leased run.",
           inputSchema: emptySchema,
           execute: async (_empty, ctx) => {
-            await executeOwner(ctx, prepared.value.lease);
+            await executeOwner(ctx, runnerLease, runtimeChannel);
             return {
-              leaseId: prepared.value.lease.leaseId,
-              role: prepared.value.lease.role,
-              target: prepared.value.lease.target,
-              capabilityOmissions: prepared.value.capabilities.plan.optionalOmissions,
+              leaseId: runnerLease.leaseId,
+              role: runnerLease.role,
+              target: runnerLease.target,
+              capabilityOmissions,
             };
           },
         });
         return {
-          ...roleControlTools(input.role, prepared.value.lease, runtimeChannel),
+          ...roleControlTools(input.role, runnerLease, runtimeChannel),
           ...(input.role === "test_runner" || input.role === "active_runner"
-            ? lowerResolvedCapabilities(
-                prepared.value.capabilities.resolved,
-                async (capability, ctx, toolInput) => {
-                  const currentOwner = await executeOwner(
-                    ctx,
-                    prepared.value.lease,
-                    runtimeChannel,
-                  );
-                  const authoritative = await runtime.config.store.getExecutionLease({
-                    owner: currentOwner,
-                    childSessionId: ctx.session.id,
-                  });
-                  if (
-                    authoritative === null ||
-                    authoritative.leaseId !== prepared.value.lease.leaseId ||
-                    authoritative.status !== "running" ||
-                    authoritative.executionTurnId !== ctx.session.turn.id ||
-                    !bootstrapTargetsEqual(authoritative.target, prepared.value.lease.target) ||
-                    !authoritative.capabilityPlan?.selected.some(
-                      (entry) =>
-                        entry.capabilityId === capability.descriptor.capabilityId &&
-                        entry.modelToolName === capability.modelToolName &&
-                        entry.schemaFingerprint === capability.descriptor.schemaFingerprint,
-                    )
-                  ) {
-                    throw new Error("LEASE_CLOSED");
-                  }
-                  const occurredAt = runtimeTimestamp(runtime);
-                  if (Date.parse(occurredAt) >= Date.parse(authoritative.expiresAt)) {
-                    await runtime.bootstrap.closeExecution({
-                      owner: currentOwner,
-                      childSessionId: ctx.session.id,
-                      executionTurnId: ctx.session.turn.id,
-                      status: "failed",
-                      occurredAt,
-                      terminalCode: "LEASE_EXPIRED",
-                    });
-                    throw new Error("LEASE_EXPIRED");
-                  }
-                  if (input.role !== "test_runner") return;
-                  const scoped = await testStep({
-                    lease: authoritative,
-                    capability,
-                    owner: currentOwner,
-                    callId: ctx.callId,
-                    toolName: capability.modelToolName,
-                    toolInput,
-                    childSessionId: ctx.session.id,
-                    executionTurnId: ctx.session.turn.id,
-                  });
-                  if (!scoped.ok) throw new Error(scoped.error.code);
-                  const selected = authoritative.capabilityPlan?.selected.find(
-                    (entry) => entry.capabilityId === capability.descriptor.capabilityId,
-                  );
-                  const started = await runtime.config.store.beginTestCapabilityExecution({
-                    step: scoped.value,
-                    consequential: selected?.consequential ?? true,
-                    occurredAt,
-                  });
-                  if (!started.ok) throw new Error(started.error.code);
-                  return {
-                    complete: async (status: "succeeded" | "failed", errorCode?: string) => {
-                      const completed = await runtime.config.store.completeTestCapabilityExecution({
-                        owner: currentOwner,
-                        workflowId: scoped.value.workflowId,
-                        testRunId: scoped.value.testRunId,
-                        leaseId: scoped.value.leaseId,
-                        childSessionId: scoped.value.childSessionId,
-                        executionTurnId: scoped.value.executionTurnId,
-                        callId: scoped.value.callId,
-                        status,
-                        occurredAt: runtimeTimestamp(runtime),
-                        ...(errorCode === undefined ? {} : { errorCode }),
-                      });
-                      if (!completed.ok) throw new Error(completed.error.code);
-                    },
-                  };
-                },
-                input.role !== "test_runner"
-                  ? undefined
-                  : (capability, hostApproval) => {
-                      const selected = prepared.value.lease.capabilityPlan?.selected.find(
-                        (entry) => entry.capabilityId === capability.descriptor.capabilityId,
-                      );
-                      if (selected?.consequential !== true) return hostApproval;
-                      const resolveRequestOwner = async (ctx: ApprovalContext<unknown>) => {
-                        const resolved = await runtime.service.resolveOwner(
-                          ownerInputFromSession(ctx, runtimeChannel),
-                        );
-                        return resolved.ok && ownersEqual(resolved.owner, prepared.value.owner)
-                          ? resolved.owner
-                          : null;
-                      };
-                      const requestStep = async (ctx: ApprovalContext<unknown>) => {
-                        const approvedOwner = await resolveRequestOwner(ctx);
-                        return approvedOwner === null
-                          ? ({
-                              ok: false,
-                              error: { code: "OWNER_MISMATCH", message: "Approval owner changed" },
-                            } as const)
-                          : testStep({
-                              lease: prepared.value.lease,
-                              capability,
-                              owner: approvedOwner,
-                              callId: ctx.callId,
-                              toolName: ctx.toolName,
-                              toolInput: ctx.toolInput,
-                              childSessionId: ctx.session.id,
-                              executionTurnId: ctx.session.turn.id,
-                            });
-                      };
-                      const responseStep = async (ctx: ApprovalResponseContext<unknown>) => {
-                        const resolved = await runtime.service.resolveOwner({
-                          current: ctx.responder,
-                          initiator: ctx.session.initiator,
-                          channel: runtimeChannel,
-                        });
-                        return !resolved.ok || !ownersEqual(resolved.owner, prepared.value.owner)
-                          ? ({
-                              ok: false,
-                              error: { code: "OWNER_MISMATCH", message: "Responder owner changed" },
-                            } as const)
-                          : testStep({
-                              lease: prepared.value.lease,
-                              capability,
-                              owner: resolved.owner,
-                              callId: ctx.request.callId,
-                              toolName: ctx.request.toolName,
-                              toolInput: ctx.request.toolInput,
-                              childSessionId: ctx.session.id,
-                              executionTurnId: ctx.session.turn.id,
-                            });
-                      };
-                      return composeConsequentialTestApproval({
-                        ...(hostApproval === undefined ? {} : { hostApproval }),
-                        getStep: requestStep,
-                        getResponseStep: responseStep,
-                        ...(runtime.config.verifiedTestInputPolicy === undefined
-                          ? {}
-                          : { inputPolicy: runtime.config.verifiedTestInputPolicy }),
-                        authorize: async (step, ctx) =>
-                          runtime.config.store.authorizeTestInput({
-                            step,
-                            requestId: ctx.request.requestId,
-                            responder: {
-                              principalId: ctx.responder.principalId,
-                              principalType: ctx.responder.principalType,
-                            },
-                            occurredAt: runtimeTimestamp(runtime),
-                          }),
-                      });
-                    },
-              )
+            ? lowerDurableCapabilities({
+                capabilities: prepared.value.capabilities.resolved,
+                lease: runnerLease,
+                role: input.role,
+                mode: input.mode,
+                runtimeChannel,
+              })
             : {}),
           agent_builder__run_context: contextTool,
         };

@@ -1,9 +1,6 @@
 import type { SessionAuthContext } from "eve/context";
-import {
-  defineTool,
-  type ApprovalContext,
-  type ApprovalResponseContext,
-} from "eve/tools";
+import { defineTool } from "eve/tools";
+import type { ApprovalContext, ApprovalResponseContext } from "eve/tools/approval";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

@@ -665,7 +665,7 @@ function stabilizeSessionKey(
 }
 
 /**
- * Eve 0.38.0 scopes keys to the application path. Replace only that generated
+ * Eve 0.45.0 scopes keys to the application path. Replace only that generated
  * scope segment so resources remain stable across build and deployment roots.
  */
 function stabilizeEveScope(

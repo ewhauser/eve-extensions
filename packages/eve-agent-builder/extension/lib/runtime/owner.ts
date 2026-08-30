@@ -1,9 +1,6 @@
 import type { SessionContext } from "eve/context";
-import type {
-  ApprovalConfiguration,
-  ApprovalResponseContext,
-  DynamicResolveContext,
-} from "eve/tools";
+import type { DynamicResolveContext } from "eve/tools";
+import type { ApprovalConfiguration, ApprovalResponseContext } from "eve/tools/approval";
 
 import type {
   OwnerResolutionInput,
