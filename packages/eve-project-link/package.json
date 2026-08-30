@@ -62,12 +62,12 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "eve": "catalog:",
+    "eve": "0.45.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "eve": "catalog:"
+    "eve": "^0.45.0"
   },
   "engines": {
     "node": ">=24"
