@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.6.1...eve-openai-connectors-v0.6.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* **openai-connectors:** make client tool search durable ([#101](https://github.com/ewhauser/eve-extensions/issues/101)) ([3b5bcfb](https://github.com/ewhauser/eve-extensions/commit/3b5bcfbfc9d2f286da137d24e53cb8dcd390606c))
+
 ## [0.6.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.6.0...eve-openai-connectors-v0.6.1) (2026-08-29)
 
 
