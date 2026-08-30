@@ -4,12 +4,28 @@ import {
   initialProgressProjectionState,
   type ProgressProjectionState,
 } from "./projection.js";
-import type { ProgressRootBinding, ProgressSurface } from "./types.js";
+import type {
+  ProgressPublicationContext,
+  ProgressRootBinding,
+  ProgressSurface,
+} from "./types.js";
 
 /** Durable, extension-scoped projection for exactly one Eve session. */
 export const progressProjectionState = defineState<ProgressProjectionState>(
   "projection",
   initialProgressProjectionState,
+);
+
+export type ProgressPublicationChannel = ProgressPublicationContext["channel"];
+
+function initialProgressPublicationChannel(): ProgressPublicationChannel {
+  return {};
+}
+
+/** Channel metadata captured at a dynamic-resolver boundary for Eve 0.45 hooks. */
+export const progressPublicationChannelState = defineState<ProgressPublicationChannel>(
+  "channel",
+  initialProgressPublicationChannel,
 );
 
 export interface SlackProgressSessionState {

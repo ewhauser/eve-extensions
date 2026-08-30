@@ -1,4 +1,5 @@
 import type { HookContext, HookEvent } from "eve/hooks";
+import type { DynamicResolveContext } from "eve/tools";
 
 import { getEveProgressConfig } from "../extension.js";
 import {
@@ -8,7 +9,10 @@ import {
   toProgressSnapshot,
   type ProgressProjectionResult,
 } from "./projection.js";
-import { progressProjectionState } from "./state.js";
+import {
+  progressProjectionState,
+  progressPublicationChannelState,
+} from "./state.js";
 import type {
   AgentProgressSnapshot,
   ProgressLifecycleStatus,
@@ -18,6 +22,7 @@ import type {
 
 export function publicationContext(ctx: HookContext): ProgressPublicationContext {
   const parent = ctx.session.parent;
+  const capturedChannel = progressPublicationChannelState.get();
   return {
     sessionId: ctx.session.id,
     rootSessionId: parent?.rootSessionId ?? ctx.session.id,
@@ -36,10 +41,34 @@ export function publicationContext(ctx: HookContext): ProgressPublicationContext
           },
         }),
     channel: {
-      ...(ctx.channel.kind === undefined ? {} : { kind: ctx.channel.kind }),
-      ...(ctx.channel.metadata === undefined ? {} : { metadata: ctx.channel.metadata }),
+      ...(ctx.channel.kind === undefined && capturedChannel.kind === undefined
+        ? {}
+        : { kind: ctx.channel.kind ?? capturedChannel.kind }),
+      ...(ctx.channel.continuationToken === undefined &&
+      capturedChannel.continuationToken === undefined
+        ? {}
+        : {
+            continuationToken:
+              ctx.channel.continuationToken ?? capturedChannel.continuationToken,
+          }),
+      ...(capturedChannel.metadata === undefined
+        ? {}
+        : { metadata: capturedChannel.metadata }),
     },
   };
+}
+
+/** Capture metadata from Eve's resolver context before hook dispatch drops it. */
+export function capturePublicationChannel(ctx: DynamicResolveContext): void {
+  progressPublicationChannelState.update(() => ({
+    ...(ctx.channel.kind === undefined ? {} : { kind: ctx.channel.kind }),
+    ...(ctx.channel.continuationToken === undefined
+      ? {}
+      : { continuationToken: ctx.channel.continuationToken }),
+    ...(ctx.channel.metadata === undefined
+      ? {}
+      : { metadata: ctx.channel.metadata }),
+  }));
 }
 
 async function reportFailure(failure: ProgressPublishFailure): Promise<void> {
@@ -99,6 +128,7 @@ export async function handleLifecycle(
   ctx: HookContext,
 ): Promise<void> {
   const context = publicationContext(ctx);
+  await bind(context);
   await applyAndPublish(projectLifecycle(progressProjectionState.get(), lifecycle), context);
 }
 
@@ -115,9 +145,17 @@ export async function handleActionResult(
     return;
   }
   const output = parseTodoOutput(result.output);
-  if (output === null) return;
-
   const context = publicationContext(ctx);
+  if (output === null) {
+    await reportFailure({
+      error: new Error("Completed todo result did not match Eve's todo output schema."),
+      phase: "parse",
+      context,
+    });
+    return;
+  }
+
+  await bind(context);
   await applyAndPublish(
     projectTodoSnapshot(progressProjectionState.get(), {
       sessionId: ctx.session.id,

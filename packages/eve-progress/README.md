@@ -14,24 +14,10 @@ it does not know about Slack message IDs, blocks, or transport retries.
 pnpm add eve@0.45.0 eve-progress
 ```
 
-Eve 0.45 exposes channel identity to authored hooks, but not the read-only
-adapter metadata used to route progress updates. Copy the included
-compatibility patch into the application repository and configure pnpm to use
-that checked-in copy:
-
-```sh
-mkdir -p patches
-cp node_modules/eve-progress/patches/eve@0.45.0.patch \
-  patches/eve-progress-eve@0.45.0.patch
-```
-
-```yaml
-patchedDependencies:
-  eve@0.45.0: patches/eve-progress-eve@0.45.0.patch
-```
-
-If the application already patches Eve, merge the two hook-metadata hunks into
-its existing patch instead; pnpm accepts only one patch per package version.
+This package requires Eve 0.45. At each session and turn boundary, the extension
+captures Eve's public dynamic-resolver channel metadata into session state before
+hook dispatch. This supports Eve 0.45's intentionally smaller hook context
+without an application patch.
 
 Create `agent/extensions/progress.ts`:
 
@@ -66,6 +52,7 @@ application database tables.
 The Slack publisher keeps these values in Eve's session-scoped extension state:
 
 - the inherited Slack channel, thread, and optional team binding;
+- the most recent resolver-projected channel context used to establish that binding;
 - that session's Slack message `ts`, applied revision, and render fingerprint.
 
 This state is serialized with the rest of the Eve session, including across

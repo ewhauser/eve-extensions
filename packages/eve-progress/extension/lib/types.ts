@@ -43,6 +43,7 @@ export interface ProgressPublicationContext {
   readonly parent?: ProgressParentIdentity;
   readonly channel: {
     readonly kind?: string;
+    readonly continuationToken?: string;
     readonly metadata?: Readonly<Record<string, unknown>>;
   };
 }
@@ -69,7 +70,7 @@ export interface ProgressPublisher {
   ): void | Promise<void>;
 }
 
-export type ProgressFailurePhase = "bind" | "publish";
+export type ProgressFailurePhase = "bind" | "parse" | "publish";
 
 export interface ProgressPublishFailure {
   readonly error: unknown;
