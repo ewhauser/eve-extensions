@@ -177,6 +177,60 @@ async function authorizeMaterializedConnectorApproval(
   return response(ctx);
 }
 
+function clientSearchOptionsFromClosure(closure: JsonObject): {
+  readonly maxMaterializedTools: number;
+  readonly namespace: string;
+} {
+  const { maxMaterializedTools, namespace } = closure;
+  if (
+    typeof maxMaterializedTools !== "number" ||
+    !Number.isInteger(maxMaterializedTools) ||
+    maxMaterializedTools <= 0 ||
+    typeof namespace !== "string"
+  ) {
+    throw new Error("Connector client-search callback metadata is invalid.");
+  }
+  return { maxMaterializedTools, namespace };
+}
+
+async function executeClientToolSearch(
+  closure: JsonObject,
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<unknown> {
+  const { maxMaterializedTools, namespace } = clientSearchOptionsFromClosure(closure);
+  const result = await getConnectors().clientSearch(ctx, input, namespace);
+  connectorWorkingSet.update((current) =>
+    mergeConnectorWorkingSet(current, {
+      authority: result.authority,
+      catalogFingerprint: result.catalogFingerprint,
+      items: result.items,
+      source: "client",
+      max: maxMaterializedTools,
+    }),
+  );
+  return result.output;
+}
+
+function defineClientToolSearch(maxMaterializedTools: number): DynamicToolEntry {
+  const closure = {
+    maxMaterializedTools,
+    namespace: "",
+  } satisfies JsonObject;
+  const tool = defineTool({
+    description: CLIENT_TOOL_SEARCH_DESCRIPTION,
+    inputSchema: CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
+    providerOptions: CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
+    execute: (input, ctx) => executeClientToolSearch(closure, input, ctx),
+  });
+  return stampDurableCallbacks(tool, {
+    execute: {
+      callback: executeClientToolSearch as DurableCallback,
+      closure,
+    },
+  });
+}
+
 function defineMaterializedConnectorTool(
   item: ConnectorToolItem,
   description: string,
@@ -263,28 +317,9 @@ export default defineDynamic({
       }
 
       if (session.clientSearchEnabled) {
-        tools[CLIENT_TOOL_SEARCH_MARKER_NAME] = defineTool({
-          description: CLIENT_TOOL_SEARCH_DESCRIPTION,
-          inputSchema: CLIENT_TOOL_SEARCH_MARKER_INPUT_SCHEMA,
-          providerOptions: CLIENT_TOOL_SEARCH_PROVIDER_OPTIONS,
-          execute: async (input, toolCtx) => {
-            const result = await connectors.clientSearch(
-              toolCtx,
-              input,
-              "",
-            );
-            connectorWorkingSet.update((current) =>
-              mergeConnectorWorkingSet(current, {
-                authority: result.authority,
-                catalogFingerprint: result.catalogFingerprint,
-                items: result.items,
-                source: "client",
-                max: session.maxMaterializedTools,
-              }),
-            );
-            return result.output;
-          },
-        });
+        tools[CLIENT_TOOL_SEARCH_MARKER_NAME] = defineClientToolSearch(
+          session.maxMaterializedTools,
+        );
       }
 
       if (!session.clientSearchEnabled) {

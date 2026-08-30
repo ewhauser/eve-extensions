@@ -270,4 +270,129 @@ describe("extension durable discovery lifecycle", () => {
       ]);
     });
   });
+
+  test("replays client tool search and a returned read-only tool across an Eve 0.45 restart", async () => {
+    server = await startFakeMcpServer({ tools: CATALOG });
+
+    const [{ default: extension }, { default: dynamic }] = await Promise.all([
+      import("../extension/extension.js"),
+      import("../extension/tools/connectors.js"),
+    ]);
+    extension({
+      getToken: () => "token-a",
+      discovery: "client",
+      baseUrl: server.url,
+      includeStatus: false,
+    });
+
+    const container = new ContextContainer();
+    await contextStorage.run(container, async () => {
+      const ctx = resolveContext("principal-a");
+      container.set(SessionKey, {
+        sessionId: ctx.session.id,
+        auth: ctx.session.auth,
+        turn: { id: "client-durable-turn", sequence: 0 },
+      });
+
+      const first = (await dynamic.events["step.started"]?.({}, ctx as never)) as Record<
+        string,
+        DynamicToolEntry
+      >;
+      const marker = first.client_tool_search!;
+      const persistedSearch = [
+        {
+          callbacks: validateDurableDynamicToolCallbacks(
+            "openai__client_tool_search",
+            marker,
+          ),
+          description: marker.description,
+          entryKey: "client_tool_search",
+          inputSchema: marker.inputSchema,
+          name: "openai__client_tool_search",
+          providerOptions: marker.providerOptions,
+          resolverSlug: "connectors",
+        },
+      ];
+      const searchCheckpoint = JSON.parse(JSON.stringify(persistedSearch));
+      expect(JSON.stringify(searchCheckpoint)).not.toContain("token-a");
+      expect(searchCheckpoint[0].callbacks).toEqual({
+        execute: {
+          closure: { maxMaterializedTools: 30, namespace: "" },
+        },
+      });
+
+      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      const reboundSearch = (await dynamic.events["step.started"]?.(
+        {},
+        ctx as never,
+      )) as Record<string, DynamicToolEntry>;
+      validateDurableDynamicToolCallbacks(
+        "openai__client_tool_search",
+        reboundSearch.client_tool_search!,
+      );
+
+      const [replayedSearch] = replayDynamicTools(searchCheckpoint as never);
+      await expect(
+        replayedSearch!.execute!(
+          {
+            arguments: { keywords: "search issues", service: "github" },
+            call_id: "provider-search-call",
+          },
+          { toolCallId: "search-call" } as never,
+        ),
+      ).resolves.toMatchObject({
+        tools: [{ name: "github__search_issues", type: "function" }],
+      });
+
+      const materialized = (await dynamic.events["step.started"]?.({}, ctx as never)) as Record<
+        string,
+        DynamicToolEntry
+      >;
+      const read = materialized["eve:absolute:github__search_issues"]!;
+      const persistedRead = [
+        {
+          callbacks: validateDurableDynamicToolCallbacks("github__search_issues", read),
+          description: read.description,
+          entryKey: "eve:absolute:github__search_issues",
+          inputSchema: read.inputSchema,
+          name: "github__search_issues",
+          resolverSlug: "connectors",
+        },
+      ];
+      const readCheckpoint = JSON.parse(JSON.stringify(persistedRead));
+
+      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      const reboundRead = (await dynamic.events["step.started"]?.({}, ctx as never)) as Record<
+        string,
+        DynamicToolEntry
+      >;
+      validateDurableDynamicToolCallbacks(
+        "github__search_issues",
+        reboundRead["eve:absolute:github__search_issues"]!,
+      );
+
+      const [replayedRead] = replayDynamicTools(readCheckpoint as never);
+      const readApproval =
+        typeof replayedRead!.approval === "function"
+          ? replayedRead!.approval
+          : replayedRead!.approval!.request;
+      expect(await readApproval({ toolName: replayedRead!.name } as never)).toBe(
+        "not-applicable",
+      );
+      await expect(
+        replayedRead!.execute!(
+          { query: "durability" },
+          { toolCallId: "read-call" } as never,
+        ),
+      ).resolves.toEqual([
+        {
+          type: "text",
+          text: JSON.stringify({
+            name: "github.search_issues",
+            args: { query: "durability" },
+          }),
+        },
+      ]);
+    });
+  });
 });
