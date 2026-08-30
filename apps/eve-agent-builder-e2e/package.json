@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "microsandbox": "^0.6.9",
+    "microsandbox": "^0.6.15",
     "typescript": "catalog:"
   }
 }
