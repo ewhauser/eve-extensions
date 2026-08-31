@@ -45,7 +45,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.45.0(patch_hash=6cfb2320857bc0313a1e7b7648aae303fbaa25bf41bebda23b74ade97915c43a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12))
+        version: 0.45.0(patch_hash=6cfb2320857bc0313a1e7b7648aae303fbaa25bf41bebda23b74ade97915c43a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.6.14)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12))
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -57,8 +57,8 @@ importers:
         specifier: 'catalog:'
         version: 26.2.0
       microsandbox:
-        specifier: ^0.5.0
-        version: 0.5.10
+        specifier: ^0.6.14
+        version: 0.6.14
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -846,8 +846,21 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.14':
+    resolution: {integrity: sha512-ztsTsPkGBEmm8rkuUhI+OQp6Fx4pycBCuliM3ZRIbt2BRGdqgtuTKS5d+BWBM+JbBrCPfrkpnEgHDW3NTZUwGg==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [darwin]
+
   '@superradcompany/microsandbox-linux-arm64-gnu@0.5.10':
     resolution: {integrity: sha512-4FYoAURc1qbNxIbBFK9shMQ9MxklgPRGEsY7tQog8beqvc3U91W34aZyOu90OTRJm0TNsdoLIg3lxKP4LKIJYQ==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.14':
+    resolution: {integrity: sha512-Bd2Qwmb5pxT2PVidg0RYCJi4qcatOunuuWQNHABRTNBARCXWuO3/IAeIvNCVIrRHThS+HJF/ROi/x92hO9QOkg==}
     engines: {node: '>= 22'}
     cpu: [arm64]
     os: [linux]
@@ -859,6 +872,25 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.14':
+    resolution: {integrity: sha512-+quFumrZVSYlm3oESivKJR3gDKh16ZXAEHrFFvTD+vlXTgF7xnuacGgDxoMKduWtRyvmwdn+v/oqb9PJg59l9w==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.14':
+    resolution: {integrity: sha512-vA/9MbS4PJVuJ0JJDEcD2P5JU2ZtTLsx04Up/vhr8u5TP1VCRBrLqu7QjjvmVta9xsc5A+Qz32IORgsFjrIEHQ==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.14':
+    resolution: {integrity: sha512-NRv7wfqLhrAZTNqQwiwL8aJSbP6RCHTfv2OXDGMLFIm5u0McZRxlWi5GaMsVJUUfmAsgFGtxIlO/ZVu6RozKNw==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [win32]
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1185,6 +1217,11 @@ packages:
 
   microsandbox@0.5.10:
     resolution: {integrity: sha512-0NVFu8DohPq/hrG76CJ5x2x8wckNQq8KSN/VXxyVLns8WfDyBzfSSYXHUSV2evjdRB3dkA9FUJjnGujb2XRD1Q==}
+    engines: {node: '>= 22'}
+    hasBin: true
+
+  microsandbox@0.6.14:
+    resolution: {integrity: sha512-HEYwC7Ej0IK+KRVXIDuJUBadCIXnIKEcq0J3KTTCj0+CCm2cvzWyGjpxNZEM/8UB9lo1AOsoK4ILz39F3zzj3A==}
     engines: {node: '>= 22'}
     hasBin: true
 
@@ -1990,10 +2027,25 @@ snapshots:
   '@superradcompany/microsandbox-darwin-arm64@0.5.10':
     optional: true
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.14':
+    optional: true
+
   '@superradcompany/microsandbox-linux-arm64-gnu@0.5.10':
     optional: true
 
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.14':
+    optional: true
+
   '@superradcompany/microsandbox-linux-x64-gnu@0.5.10':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.14':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.14':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.14':
     optional: true
 
   '@types/chai@5.2.3':
@@ -2230,6 +2282,53 @@ snapshots:
       - xml2js
       - zephyr-agent
 
+  eve@0.45.0(patch_hash=6cfb2320857bc0313a1e7b7648aae303fbaa25bf41bebda23b74ade97915c43a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.6.14)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12)):
+    dependencies:
+      ai: 7.0.83(zod@4.4.3)
+      nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.12))
+      undici: 8.9.0
+    optionalDependencies:
+      microsandbox: 0.6.14
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@netlify/runtime'
+      - '@planetscale/database'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - '@vercel/queue'
+      - aws4fetch
+      - better-sqlite3
+      - chokidar
+      - dotenv
+      - drizzle-orm
+      - giget
+      - idb-keyval
+      - ioredis
+      - jiti
+      - lru-cache
+      - miniflare
+      - mongodb
+      - mysql2
+      - rollup
+      - sqlite3
+      - uploadthing
+      - vite
+      - wrangler
+      - xml2js
+      - zephyr-agent
+
   eventsource-parser@3.1.1: {}
 
   expect-type@1.4.0: {}
@@ -2265,6 +2364,15 @@ snapshots:
       '@superradcompany/microsandbox-darwin-arm64': 0.5.10
       '@superradcompany/microsandbox-linux-arm64-gnu': 0.5.10
       '@superradcompany/microsandbox-linux-x64-gnu': 0.5.10
+    optional: true
+
+  microsandbox@0.6.14:
+    optionalDependencies:
+      '@superradcompany/microsandbox-darwin-arm64': 0.6.14
+      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.14
+      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.14
+      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.14
+      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.14
 
   nanoid@3.3.18: {}
 
