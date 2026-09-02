@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Breaking Changes
+
+* Replace the extension-owned MCP/search/materialization runtime with one native Eve dynamic MCP connection.
+* Remove provider-native discovery modes, private naming markers, legacy integration hooks, and the `tools`/`connectors` subpath exports.
+* Carry only the Eve 0.49 tool-name mapping and approval-annotation patches until those general primitives ship upstream.
+
 ## [0.6.2](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.6.1...eve-openai-connectors-v0.6.2) (2026-08-30)
 
 

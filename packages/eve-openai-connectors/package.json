@@ -1,7 +1,7 @@
 {
   "name": "eve-openai-connectors",
   "version": "0.6.2",
-  "description": "An Eve extension that exposes a ChatGPT Enterprise user's authorized connectors as dynamically discovered tools.",
+  "description": "An Eve dynamic MCP connection for a ChatGPT user's authorized connectors.",
   "license": "MIT",
   "type": "module",
   "eve": {
@@ -13,7 +13,6 @@
   "files": [
     "dist",
     "patches",
-    "scripts/probe.mjs",
     "README.md",
     "DESIGN.md",
     "LICENSE"
@@ -26,10 +25,6 @@
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "default": "./dist/tools/index.mjs"
-    },
-    "./connectors": {
-      "types": "./dist/extension/lib/connectors.d.ts",
-      "default": "./dist/extension/lib/connectors.mjs"
     }
   },
   "scripts": {
@@ -37,18 +32,13 @@
     "prepare": "eve extension build",
     "typecheck": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "probe": "node scripts/probe.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^4.0.46",
-    "@ai-sdk/openai": "catalog:",
     "@types/node": "catalog:",
-    "ai": "catalog:",
     "eve": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

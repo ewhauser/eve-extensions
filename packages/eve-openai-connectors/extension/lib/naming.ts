@@ -73,32 +73,33 @@ export function mapUpstreamServiceName(upstream: string, maxLength = 64): string
 }
 
 /**
- * Build the injective upstream → mapped map for a catalog. Collisions are
- * resolved deterministically: upstream names are sorted, the first claimant
- * of a mapped name wins, later ones are dropped with a warning.
+ * Build the injective upstream → mapped map for a catalog. Any collision
+ * rejects the catalog deterministically; silently dropping an authorized tool
+ * would make model-facing identity dependent on list order.
  */
 export function buildNameMap(
   upstreamNames: readonly string[],
   prefix: string,
-  warn?: (message: string) => void,
+  _warn?: (message: string) => void,
   maxLength = 64,
   format: "flat" | "service-qualified" = "flat",
 ): Map<string, string> {
   const sorted = [...upstreamNames].sort();
   const byUpstream = new Map<string, string>();
-  const used = new Set<string>();
+  const ownerByMapped = new Map<string, string>();
   for (const upstream of sorted) {
     const mapped =
       format === "service-qualified"
         ? mapUpstreamServiceName(upstream, maxLength)
         : mapUpstreamName(upstream, prefix, maxLength);
-    if (used.has(mapped)) {
-      warn?.(
-        `eve-openai-connectors: tool name collision — dropping ${JSON.stringify(upstream)} because ${JSON.stringify(mapped)} is already taken.`,
+    const owner = ownerByMapped.get(mapped);
+    if (owner === upstream) continue;
+    if (owner !== undefined) {
+      throw new Error(
+        `eve-openai-connectors: tool name collision for ${JSON.stringify(mapped)} while mapping ${JSON.stringify(owner)} and ${JSON.stringify(upstream)}.`,
       );
-      continue;
     }
-    used.add(mapped);
+    ownerByMapped.set(mapped, upstream);
     byUpstream.set(upstream, mapped);
   }
   return byUpstream;

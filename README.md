@@ -34,8 +34,8 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
   built-in prose-summary compaction with OpenAI's remote encrypted checkpoint
   strategy, using Codex's retained-user-message window. It is remote-only,
   targets `eve@0.49.0`, and is licensed under MIT.
-- [`eve-openai-connectors`](packages/eve-openai-connectors) — exposes a user's
-  authorized ChatGPT connectors through provider-native deferred tool search.
+- [`eve-openai-connectors`](packages/eve-openai-connectors) — contributes a user's
+  authorized ChatGPT connectors as a dynamic Eve MCP connection.
   It requires ChatGPT Enterprise or Business with Codex access and is licensed
   under MIT. The extension depends on an undocumented OpenAI endpoint and
   should be treated as experimental.

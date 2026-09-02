@@ -170,8 +170,8 @@ export const packages = new Map([
       requiredFiles: [
         "dist/index.d.ts",
         "dist/index.mjs",
-        "dist/tools/index.d.ts",
-        "dist/tools/index.mjs",
+        "dist/extension/connections/connectors.d.ts",
+        "dist/extension/connections/connectors.mjs",
         "patches/eve@0.49.0.patch",
         "LICENSE",
         "README.md",
