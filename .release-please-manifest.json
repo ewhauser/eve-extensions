@@ -4,7 +4,7 @@
   "packages/eve-slack-participation": "0.1.0",
   "packages/eve-aws-lambda-microvms": "0.6.0",
   "packages/eve-openai-compaction": "0.2.0",
-  "packages/eve-openai-connectors": "0.6.2",
+  "packages/eve-openai-connectors": "0.7.0",
   "packages/eve-openai-plugins": "0.3.1",
   "packages/eve-openai-imagegen": "0.2.0"
 }
