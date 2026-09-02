@@ -179,6 +179,42 @@ describe("AWS Lambda MicroVM backend", () => {
     await restored.shutdown();
   });
 
+  it("permanently deletes session state without deleting shared template state", async () => {
+    const fixture = createServicesFixture();
+    const backend = createAwsLambdaMicrovmSandbox({ options: OPTIONS, services: fixture.services });
+
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-delete",
+    });
+    const handle = await backend.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-delete",
+      templateKey: "template-delete",
+    });
+    await handle.session.writeTextFile({ content: "delete me", path: "/tmp/session.txt" });
+    await handle.captureState();
+
+    const sessionKeys = [...fixture.storage.json.keys(), ...fixture.storage.objects.keys()].filter(
+      (key) => key.includes("/sessions/"),
+    );
+    const templateKeys = [...fixture.storage.json.keys(), ...fixture.storage.objects.keys()].filter(
+      (key) => key.includes("/templates/"),
+    );
+    expect(sessionKeys).not.toHaveLength(0);
+    expect(templateKeys).not.toHaveLength(0);
+
+    await handle.delete();
+
+    for (const key of sessionKeys) {
+      expect(fixture.storage.json.has(key) || fixture.storage.objects.has(key)).toBe(false);
+    }
+    for (const key of templateKeys) {
+      expect(fixture.storage.json.has(key) || fixture.storage.objects.has(key)).toBe(true);
+    }
+  });
+
   it("rejects runtime network-policy mutation", async () => {
     const fixture = createServicesFixture();
     const backend = createAwsLambdaMicrovmSandbox({ options: OPTIONS, services: fixture.services });
@@ -551,7 +587,8 @@ class FakeStorage implements AwsLambdaMicrovmStorage {
   }
   async deleteObject(key: string, condition: { readonly etag?: string } = {}): Promise<void> {
     const current = this.json.get(key);
-    if (condition.etag !== undefined && current?.etag !== condition.etag) {
+    const currentEtag = current?.etag ?? this.objects.get(key)?.etag;
+    if (condition.etag !== undefined && currentEtag !== condition.etag) {
       throw new Error("precondition failed");
     }
     this.bytes.delete(key);

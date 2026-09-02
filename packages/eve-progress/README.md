@@ -11,12 +11,12 @@ it does not know about Slack message IDs, blocks, or transport retries.
 ## Install
 
 ```sh
-pnpm add eve@0.45.0 eve-progress
+pnpm add eve@0.49.0 eve-progress
 ```
 
-This package requires Eve 0.45. At each session and turn boundary, the extension
+This package requires Eve 0.49. At each session and turn boundary, the extension
 captures Eve's public dynamic-resolver channel metadata into session state before
-hook dispatch. This supports Eve 0.45's intentionally smaller hook context
+hook dispatch. This supports Eve 0.49's intentionally smaller hook context
 without an application patch.
 
 Create `agent/extensions/progress.ts`:

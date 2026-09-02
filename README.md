@@ -33,7 +33,7 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
 - [`eve-openai-compaction`](packages/eve-openai-compaction) — replaces Eve's
   built-in prose-summary compaction with OpenAI's remote encrypted checkpoint
   strategy, using Codex's retained-user-message window. It is remote-only,
-  targets `eve@0.45.0`, and is licensed under MIT.
+  targets `eve@0.49.0`, and is licensed under MIT.
 - [`eve-openai-connectors`](packages/eve-openai-connectors) — exposes a user's
   authorized ChatGPT connectors through provider-native deferred tool search.
   It requires ChatGPT Enterprise or Business with Codex access and is licensed
