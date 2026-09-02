@@ -333,9 +333,36 @@ function validatePackedManifest(packagePath, sourceManifest, tarball) {
     }
   }
 
+  const packedPaths = new Set(
+    execFileSync("tar", ["-tf", tarball], { encoding: "utf8" })
+      .split("\n")
+      .filter((path) => path.startsWith("package/") && !path.endsWith("/"))
+      .map((path) => path.slice("package/".length)),
+  );
+  for (const target of collectRelativeExportTargets(packedManifest.exports)) {
+    if (!packedPaths.has(target)) {
+      failures.push(`exports target is missing from the package: ./${target}`);
+    }
+  }
+
   if (failures.length > 0) {
     throw new Error(`${packagePath} has an invalid packed manifest:\n- ${failures.join("\n- ")}`);
   }
+}
+
+function collectRelativeExportTargets(value, targets = []) {
+  if (typeof value === "string") {
+    if (value.startsWith("./") && !value.includes("*")) targets.push(value.slice(2));
+    return targets;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) collectRelativeExportTargets(entry, targets);
+    return targets;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const entry of Object.values(value)) collectRelativeExportTargets(entry, targets);
+  }
+  return targets;
 }
 
 function normalizePackResult(packResult, tarball) {
