@@ -35,13 +35,13 @@
     "@aws-sdk/s3-request-presigner": "3.1116.0"
   },
   "devDependencies": {
-    "@aws-sdk/client-cloudformation": "3.1116.0",
-    "@aws-sdk/client-cloudwatch-logs": "3.1116.0",
-    "@aws-sdk/client-sts": "3.1116.0",
+    "@aws-sdk/client-cloudformation": "3.1118.0",
+    "@aws-sdk/client-cloudwatch-logs": "3.1118.0",
+    "@aws-sdk/client-sts": "3.1118.0",
     "@types/node": "catalog:",
     "ai": "catalog:",
     "eve": "catalog:",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
