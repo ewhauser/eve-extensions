@@ -129,7 +129,7 @@ describe("extension durable discovery lifecycle", () => {
     });
   });
 
-  test("rebinds materialized execute and approval callbacks from JSON-only Eve 0.45 metadata", async () => {
+  test("rebinds materialized execute and approval callbacks from JSON-only Eve 0.49 metadata", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
 
     const [{ default: extension }, { default: dynamic }] = await Promise.all([
@@ -271,7 +271,7 @@ describe("extension durable discovery lifecycle", () => {
     });
   });
 
-  test("replays client tool search and a returned read-only tool across an Eve 0.45 restart", async () => {
+  test("replays client tool search and a returned read-only tool across an Eve 0.49 restart", async () => {
     server = await startFakeMcpServer({ tools: CATALOG });
 
     const [{ default: extension }, { default: dynamic }] = await Promise.all([

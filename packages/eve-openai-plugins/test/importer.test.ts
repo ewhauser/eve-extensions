@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomFillSync } from "node:crypto";
 import { access, mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -271,7 +272,7 @@ export default openaiConnectors({ getToken: () => null });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.45.0", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.49.0", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });
@@ -359,7 +360,10 @@ describe("parsers", () => {
         files: [".codex-plugin", "oversized.bin"],
       }),
     );
-    await put(plugin, "oversized.bin", Buffer.alloc(34 * 1024 * 1024));
+    const oversized = Buffer.alloc(34 * 1024 * 1024);
+    // Stay below npm's decompression-ratio guard so this reaches our expansion limit.
+    randomFillSync(oversized.subarray(0, 64 * 1024));
+    await put(plugin, "oversized.bin", oversized);
     await expect(resolvePluginSource({ kind: "npm", spec: `file:${plugin}` })).rejects.toThrow(
       /archive expands beyond the safe size limit/,
     );

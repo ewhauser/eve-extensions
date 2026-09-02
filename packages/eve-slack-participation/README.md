@@ -11,7 +11,7 @@ composed directly into Eve's `slackChannel({ onMessage })` hook.
 ## Install
 
 ```sh
-pnpm add ai eve@0.45.0 eve-slack-participation
+pnpm add ai eve@0.49.0 eve-slack-participation
 ```
 
 Create an authored extension, for example

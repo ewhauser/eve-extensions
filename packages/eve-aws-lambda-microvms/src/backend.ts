@@ -374,6 +374,10 @@ async function createLeasedSessionHandle(input: {
   let controllerPaused = false;
   let shutDown = false;
 
+  const sessionCheckpointPrefix = `${input.options.artifactPrefix}/sessions/${hashKey(
+    stabilizeSessionKey(input.options, input.createInput.sessionKey),
+  )}/checkpoints/`;
+
   async function ensureLease(): Promise<AwsLambdaMicrovmLease> {
     lease ??= await acquireAwsLambdaMicrovmLease({
       key: sessionLeaseKey(input.options, input.createInput.sessionKey),
@@ -496,6 +500,43 @@ async function createLeasedSessionHandle(input: {
     shutDown = true;
   }
 
+  async function deleteSandbox(options?: { readonly abortSignal?: AbortSignal }): Promise<void> {
+    if (shutDown && metadata === undefined) return;
+    options?.abortSignal?.throwIfAborted();
+    const activeLease = await ensureLease();
+    const checkpoint =
+      metadata?.checkpoint?.key.startsWith(sessionCheckpointPrefix) === true
+        ? metadata.checkpoint
+        : undefined;
+    try {
+      if (!controllerPaused) {
+        controller.pauseHeartbeats();
+        if (activeMicrovm.activationId !== undefined) {
+          await input.services.activationProvider!.revokeTrustedBinding({
+            activationId: activeMicrovm.activationId,
+            placeholderGeneration: activeMicrovm.placeholderGeneration!,
+            trustedBindingGeneration: activeMicrovm.trustedBindingGeneration!,
+          });
+        }
+        await input.services.api.terminateMicrovm(activeMicrovm.microvmId);
+        controllerPaused = true;
+      }
+      options?.abortSignal?.throwIfAborted();
+      if (metadata !== undefined) {
+        await input.services.storage.deleteObject(manifestKey, { etag: metadata.manifestEtag });
+      }
+      if (checkpoint !== undefined) {
+        await input.services.storage.deleteObject(checkpoint.key, { etag: checkpoint.etag });
+      }
+      metadata = undefined;
+      captured = false;
+      shutDown = true;
+    } finally {
+      await activeLease.release();
+      lease = undefined;
+    }
+  }
+
   return {
     async captureState() {
       return {
@@ -504,6 +545,7 @@ async function createLeasedSessionHandle(input: {
         sessionKey: input.createInput.sessionKey,
       };
     },
+    delete: deleteSandbox,
     shutdown: stop,
     session,
     stop,
@@ -665,7 +707,7 @@ function stabilizeSessionKey(
 }
 
 /**
- * Eve 0.45.0 scopes keys to the application path. Replace only that generated
+ * Eve 0.49.0 scopes keys to the application path. Replace only that generated
  * scope segment so resources remain stable across build and deployment roots.
  */
 function stabilizeEveScope(

@@ -4,7 +4,7 @@ This document specifies the design of `eve-openai-connectors`, a package that ex
 
 It is written for someone implementing or reviewing the package. [README.md](README.md) is the user-facing guide.
 
-The core protocol claims were validated 2026-08-06 against the live ChatGPT plugin service. The mounted-extension build was validated 2026-08-29 against `eve` 0.45.0. Claims marked *(validated)* were executed against the real endpoint.
+The core protocol claims were validated 2026-08-06 against the live ChatGPT plugin service. The mounted-extension build was revalidated 2026-09-01 against `eve` 0.49.0. Claims marked *(validated)* were executed against the real endpoint.
 
 ---
 
@@ -131,11 +131,11 @@ Every successful search also writes a small Eve `defineState` manifest containin
 
 The connector mapper turns the upstream service boundary into the public namespace (`zoom.search_meetings` becomes `zoom__search_meetings`). The Eve patch recognizes only the extension's explicit absolute-name marker, strips it, and leaves every ordinary dynamic extension tool under its mount namespace.
 
-### 4.1 Eve 0.45 patch for provider-native discovery
+### 4.1 Eve 0.49 patch for provider-native discovery
 
-Eve 0.45.0 does not preserve per-tool `providerOptions` through every durable dynamic-tool hop, automatically add a provider search tool when deferred tools are advertised, or let a dynamic extension publish an explicitly qualified tool name. This monorepo carries an additive pnpm patch at `packages/eve-openai-connectors/patches/eve@0.45.0.patch`. It forwards those options through serialized dynamic metadata and replay, recognizes the extension's private absolute-name marker, recognizes and removes the internal client-search marker, and mounts `openai.tools.toolSearch({ execution: "client" })` with the marker's execute closure. It still injects hosted Anthropic or OpenAI search for explicit deferred mode. The deferred scan examines every tool so an unrelated deferred tool cannot mask a later client marker.
+Eve 0.49.0 does not preserve per-tool `providerOptions` through every durable dynamic-tool hop, automatically add a provider search tool when deferred tools are advertised, or let a dynamic extension publish an explicitly qualified tool name. This monorepo carries an additive pnpm patch at `packages/eve-openai-connectors/patches/eve@0.49.0.patch`. It forwards those options through serialized dynamic metadata and replay, recognizes the extension's private absolute-name marker, recognizes and removes the internal client-search marker, and mounts `openai.tools.toolSearch({ execution: "client" })` with the marker's execute closure. It still injects hosted Anthropic or OpenAI search for explicit deferred mode. The deferred scan examines every tool so an unrelated deferred tool cannot mask a later client marker.
 
-The published package includes that patch, but a dependency cannot modify its consumer's Eve installation. Consumers must copy it into their repository, register it under top-level `patchedDependencies`, and keep Eve pinned to 0.45.0. The patch corresponds to [vercel/eve#1741](https://github.com/vercel/eve/pull/1741) and must be revalidated for every Eve upgrade.
+The published package includes that patch, but a dependency cannot modify its consumer's Eve installation. Consumers must copy it into their repository, register it under top-level `patchedDependencies`, and keep Eve pinned to 0.49.0. The patch corresponds to [vercel/eve#1741](https://github.com/vercel/eve/pull/1741) and must be revalidated for every Eve upgrade.
 
 ### 4.2 Rejected alternatives
 
@@ -293,7 +293,7 @@ Mitigations: the feature is opt-in; failures degrade to "connectors unavailable"
 
 Ordered so failures surface as early and cheaply as possible.
 
-> **Status (2026-08-29):** steps 1–5 are implemented in the offline unit suite; step 6 is `scripts/probe.mjs`, previously executed live against the real endpoint with 189 tools and a read-only call; step 7 includes a successful `eve extension build` and durable callback replay test against Eve 0.45.0. A model-backed mounted-agent fixture remains future work.
+> **Status (2026-09-01):** steps 1–5 are implemented in the offline unit suite; step 6 is `scripts/probe.mjs`, previously executed live against the real endpoint with 189 tools and a read-only call; step 7 includes a successful `eve extension build` and durable callback replay test against Eve 0.49.0. A model-backed mounted-agent fixture remains future work.
 
 1. **Name mapping (offline, no network).** Run a recorded catalog snapshot through the mapper: assert every output matches `^[a-zA-Z0-9_-]{1,64}$`, the mapping is injective, round-tripping through the stored `upstream` recovers the original exactly, and a synthetic 70-character name yields a stable hashed form. **Write this test first** — it is the one that catches the §3 failure class, which every static check misses.
 2. **Policy tiering.** Read-only auto-allows; write requires approval; destructive escalates; **absent annotations are treated as destructive**.

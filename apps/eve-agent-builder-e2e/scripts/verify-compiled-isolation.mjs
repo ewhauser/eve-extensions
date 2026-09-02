@@ -83,4 +83,4 @@ for (const name of expectedChildren) {
 if (failures.length > 0) {
   throw new Error(`Built host isolation verification failed:\n- ${failures.join("\n- ")}`);
 }
-console.log(`Verified Eve 0.45 compiled isolation for ${expectedChildren.join(", ")}.`);
+console.log(`Verified Eve 0.49 compiled isolation for ${expectedChildren.join(", ")}.`);

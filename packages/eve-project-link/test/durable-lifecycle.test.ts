@@ -64,7 +64,7 @@ afterEach(() => {
 });
 
 describe("durable project-link tools", () => {
-  it("serializes, rebinds, and replays every mounted callback on Eve 0.45", async () => {
+  it("serializes, rebinds, and replays every mounted callback on Eve 0.49", async () => {
     const [{ default: projectLink }, { default: projectLinkTools }] =
       await Promise.all([
         import("../extension/extension.js"),
