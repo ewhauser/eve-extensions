@@ -1,65 +1,22 @@
-import type { ApprovalPolicy } from "eve/tools/approval";
-import type {
-  ApprovalAction,
-  ApprovalsConfig,
-  ConnectorToolItem,
-} from "./types.js";
+import type { ApprovalPolicy, ApprovalStatus } from "eve/tools/approval";
 
-/**
- * Derive fail-closed read/destructive flags from MCP annotations.
- *
- * | Condition | Result |
- * |---|---|
- * | `destructiveHint === true` | destructive write |
- * | `readOnlyHint === true` | read-only |
- * | `readOnlyHint === false && destructiveHint === false` | plain write |
- * | anything else (missing/unparseable) | **destructive write** |
- */
+import type { ApprovalAction, ApprovalsConfig } from "./types.js";
+
 export function flagsFromAnnotations(annotations: unknown): {
-  readOnly: boolean;
-  destructive: boolean;
+  readonly destructive: boolean;
+  readonly readOnly: boolean;
 } {
   if (typeof annotations === "object" && annotations !== null) {
-    const a = annotations as Record<string, unknown>;
-    if (a.destructiveHint === true) return { readOnly: false, destructive: true };
-    if (a.readOnlyHint === true) return { readOnly: true, destructive: false };
-    if (a.readOnlyHint === false && a.destructiveHint === false) {
-      return { readOnly: false, destructive: false };
+    const value = annotations as Record<string, unknown>;
+    if (value.destructiveHint === true) return { destructive: true, readOnly: false };
+    if (value.readOnlyHint === true) return { destructive: false, readOnly: true };
+    if (value.readOnlyHint === false && value.destructiveHint === false) {
+      return { destructive: false, readOnly: false };
     }
   }
-  return { readOnly: false, destructive: true };
+  return { destructive: true, readOnly: false };
 }
 
-/**
- * The simple (default) policy: read-only auto-allows, every write requires
- * human approval. Eve's approval channel carries no severity flag, so the
- * destructive tier is surfaced through the tool description instead (see
- * `catalog.ts`), not through a different approval status.
- */
-export function defaultApprovalFor(item: Pick<ConnectorToolItem, "readOnly">): ApprovalPolicy {
-  if (item.readOnly) return () => "not-applicable";
-  return () => "user-approval";
-}
-
-function approvalForAction(action: ApprovalAction, upstream: string): ApprovalPolicy {
-  switch (action) {
-    case "allow":
-      return () => "not-applicable";
-    case "approve":
-      return () => "user-approval";
-    case "deny":
-      return () => ({
-        type: "denied",
-        reason: `${upstream} is blocked by this agent's connector approval policy.`,
-      });
-  }
-}
-
-/**
- * Compile a glob pattern over upstream dotted names into a RegExp.
- * `*` matches any run of characters (including dots); everything else is
- * literal. Matching is case-insensitive.
- */
 export function compileMatchPattern(pattern: string): RegExp {
   const escaped = pattern
     .split("*")
@@ -68,39 +25,31 @@ export function compileMatchPattern(pattern: string): RegExp {
   return new RegExp(`^${escaped}$`, "i");
 }
 
-interface CompiledRule {
-  patterns: RegExp[];
-  action: ApprovalAction;
+function statusForAction(action: ApprovalAction, upstream: string): ApprovalStatus {
+  if (action === "allow") return "not-applicable";
+  if (action === "approve") return "user-approval";
+  return {
+    type: "denied",
+    reason: `${upstream} is blocked by this agent's connector approval policy.`,
+  };
 }
 
-/**
- * Build the `approvalFor` policy from declarative config.
- *
- * - simple mode (default): {@link defaultApprovalFor}.
- * - detailed mode: rules evaluated in order against the upstream dotted name,
- *   first match wins; unmatched tools use `fallback` when given, otherwise
- *   the simple policy.
- */
-export function buildApprovalPolicy(
-  config: ApprovalsConfig | undefined,
-): (item: ConnectorToolItem) => ApprovalPolicy {
-  if (!config || (config.mode ?? "simple") === "simple") {
-    return defaultApprovalFor;
-  }
-  const rules: CompiledRule[] = (config.rules ?? []).map((rule) => ({
-    patterns: (typeof rule.match === "string" ? [rule.match] : [...rule.match]).map(
-      compileMatchPattern,
-    ),
+export function buildApprovalPolicy(config: ApprovalsConfig | undefined): ApprovalPolicy {
+  const rules = (config?.mode === "detailed" ? (config.rules ?? []) : []).map((rule) => ({
     action: rule.action,
+    patterns: (typeof rule.match === "string" ? [rule.match] : rule.match).map(compileMatchPattern),
   }));
-  const fallback = config.fallback;
-  return (item) => {
+
+  return (ctx) => {
+    const upstream = ctx.upstreamToolName ?? ctx.toolName;
     for (const rule of rules) {
-      if (rule.patterns.some((p) => p.test(item.upstream))) {
-        return approvalForAction(rule.action, item.upstream);
+      if (rule.patterns.some((pattern) => pattern.test(upstream))) {
+        return statusForAction(rule.action, upstream);
       }
     }
-    if (fallback !== undefined) return approvalForAction(fallback, item.upstream);
-    return defaultApprovalFor(item);
+    if (config?.mode === "detailed" && config.fallback !== undefined) {
+      return statusForAction(config.fallback, upstream);
+    }
+    return flagsFromAnnotations(ctx.toolAnnotations).readOnly ? "not-applicable" : "user-approval";
   };
 }

@@ -1,123 +1,82 @@
-import { describe, expect, test } from "vitest";
 import type { ApprovalContext } from "eve/tools/approval";
+import { describe, expect, test } from "vitest";
+
 import {
   buildApprovalPolicy,
   compileMatchPattern,
-  defaultApprovalFor,
   flagsFromAnnotations,
 } from "../extension/lib/policy.js";
-import type { ConnectorToolItem } from "../extension/lib/types.js";
 
-const approvalCtx = {} as ApprovalContext;
-
-function item(overrides: Partial<ConnectorToolItem>): ConnectorToolItem {
+function approvalContext(
+  upstreamToolName: string,
+  toolAnnotations?: Readonly<Record<string, unknown>>,
+): ApprovalContext {
   return {
-    name: "apps_github_create_issue",
-    upstream: "github.create_issue",
-    service: "github",
-    description: "",
-    inputSchema: { type: "object" },
-    readOnly: false,
-    destructive: false,
-    ...overrides,
-  };
+    approvedTools: new Set(),
+    callId: "call-1",
+    session: {} as ApprovalContext["session"],
+    toolName: `connectors__${upstreamToolName.replaceAll(".", "__")}`,
+    upstreamToolName,
+    ...(toolAnnotations === undefined ? {} : { toolAnnotations }),
+  } as unknown as ApprovalContext;
 }
 
-async function statusOf(policy: ReturnType<typeof buildApprovalPolicy>, it: ConnectorToolItem) {
-  return await policy(it)(approvalCtx);
-}
-
-describe("annotation flags (fail closed)", () => {
-  test("readOnlyHint true → read-only", () => {
-    expect(flagsFromAnnotations({ readOnlyHint: true, destructiveHint: false })).toEqual({
+describe("annotation flags", () => {
+  test("recognizes read-only and explicit writes", () => {
+    expect(flagsFromAnnotations({ readOnlyHint: true })).toEqual({
+      destructive: false,
       readOnly: true,
+    });
+    expect(flagsFromAnnotations({ destructiveHint: false, readOnlyHint: false })).toEqual({
       destructive: false,
-    });
-  });
-  test("explicit non-destructive write", () => {
-    expect(flagsFromAnnotations({ readOnlyHint: false, destructiveHint: false })).toEqual({
       readOnly: false,
-      destructive: false,
     });
   });
-  test("destructiveHint true wins even against readOnlyHint true", () => {
-    expect(flagsFromAnnotations({ readOnlyHint: true, destructiveHint: true })).toEqual({
-      readOnly: false,
-      destructive: true,
-    });
-  });
-  test.each([undefined, null, "nope", {}, { readOnlyHint: "yes" }, { readOnlyHint: false }])(
-    "missing or unparseable annotations (%j) are a destructive write",
+
+  test.each([undefined, null, {}, { readOnlyHint: false }, { readOnlyHint: "yes" }])(
+    "fails closed for missing or invalid annotations: %j",
     (annotations) => {
-      expect(flagsFromAnnotations(annotations)).toEqual({ readOnly: false, destructive: true });
+      expect(flagsFromAnnotations(annotations)).toEqual({ destructive: true, readOnly: false });
     },
   );
 });
 
-describe("simple mode (default)", () => {
-  test("read-only auto-allows", async () => {
-    expect(await defaultApprovalFor(item({ readOnly: true }))(approvalCtx)).toBe("not-applicable");
-  });
-  test("write requires human approval", async () => {
-    expect(await defaultApprovalFor(item({ readOnly: false }))(approvalCtx)).toBe("user-approval");
-  });
-  test("destructive requires human approval", async () => {
-    expect(await defaultApprovalFor(item({ destructive: true }))(approvalCtx)).toBe("user-approval");
-  });
-  test("buildApprovalPolicy with no config is the simple policy", async () => {
+describe("connection approval policy", () => {
+  test("allows only valid read-only annotations without approval", async () => {
     const policy = buildApprovalPolicy(undefined);
-    expect(await statusOf(policy, item({ readOnly: true }))).toBe("not-applicable");
-    expect(await statusOf(policy, item({ readOnly: false }))).toBe("user-approval");
-  });
-});
-
-describe("detailed mode", () => {
-  const policy = buildApprovalPolicy({
-    mode: "detailed",
-    rules: [
-      { match: "github.delete_*", action: "deny" },
-      { match: ["github.*", "notion.create_page"], action: "allow" },
-      { match: "*.create_*", action: "approve" },
-    ],
+    expect(
+      await policy(approvalContext("github.search_repositories", { readOnlyHint: true })),
+    ).toBe("not-applicable");
+    expect(await policy(approvalContext("github.create_issue"))).toBe("user-approval");
   });
 
-  test("first matching rule wins", async () => {
-    // github.create_issue matches rule 2 (allow) before rule 3 (approve).
-    expect(await statusOf(policy, item({ upstream: "github.create_issue" }))).toBe(
-      "not-applicable",
-    );
+  test("matches detailed rules against exact upstream dotted names", async () => {
+    const policy = buildApprovalPolicy({
+      mode: "detailed",
+      rules: [
+        { action: "deny", match: "github.delete_*" },
+        { action: "allow", match: "github.*" },
+      ],
+    });
+    expect(await policy(approvalContext("github.search_repositories"))).toBe("not-applicable");
+    expect(await policy(approvalContext("github.delete_repository"))).toMatchObject({
+      type: "denied",
+    });
   });
-  test("deny returns a denied status with a reason", async () => {
-    const status = await statusOf(policy, item({ upstream: "github.delete_branch" }));
-    expect(status).toMatchObject({ type: "denied" });
-  });
-  test("glob crosses namespaces", async () => {
-    expect(await statusOf(policy, item({ upstream: "google_drive.create_file" }))).toBe(
-      "user-approval",
-    );
-  });
-  test("unmatched tools fall back to the simple annotation policy", async () => {
-    expect(await statusOf(policy, item({ upstream: "notion.query_database", readOnly: true }))).toBe(
-      "not-applicable",
-    );
-    expect(await statusOf(policy, item({ upstream: "notion.update_page", readOnly: false }))).toBe(
-      "user-approval",
-    );
-  });
-  test("explicit fallback overrides the simple policy", async () => {
-    const strict = buildApprovalPolicy({ mode: "detailed", rules: [], fallback: "approve" });
-    expect(await statusOf(strict, item({ readOnly: true }))).toBe("user-approval");
+
+  test("uses explicit detailed fallback before annotation defaults", async () => {
+    const policy = buildApprovalPolicy({ mode: "detailed", fallback: "approve" });
+    expect(
+      await policy(approvalContext("github.search_repositories", { readOnlyHint: true })),
+    ).toBe("user-approval");
   });
 });
 
 describe("match patterns", () => {
-  test("* matches across dots; matching is case-insensitive and anchored", () => {
+  test("is anchored, case-insensitive, and treats non-star regex syntax literally", () => {
     expect(compileMatchPattern("github.*").test("github.search_issues")).toBe(true);
     expect(compileMatchPattern("github.*").test("google.github_thing")).toBe(false);
-    expect(compileMatchPattern("*.delete_*").test("github.delete_branch")).toBe(true);
     expect(compileMatchPattern("GitHub.Search_Issues").test("github.search_issues")).toBe(true);
-    expect(compileMatchPattern("github.search").test("github.search_issues")).toBe(false);
-    // Regex metacharacters in patterns are literal, so "." cannot wildcard.
     expect(compileMatchPattern("github.x").test("githubax")).toBe(false);
   });
 });

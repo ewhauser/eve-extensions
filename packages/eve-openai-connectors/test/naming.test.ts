@@ -8,7 +8,10 @@ import {
   TOOL_NAME_PATTERN,
   validateToolPrefix,
 } from "../extension/lib/naming.js";
-import type { UpstreamTool } from "../extension/lib/types.js";
+
+interface UpstreamTool {
+  readonly name: string;
+}
 
 const FIXTURES = join(__dirname, "fixtures");
 
@@ -53,11 +56,10 @@ describe("name mapping (the §3 failure class — every static check misses this
 
   test("service-qualified names preserve the service as the tool namespace", () => {
     expect(mapUpstreamServiceName("zoom.search_meetings")).toBe("zoom__search_meetings");
-    expect(mapUpstreamServiceName("google_drive.search_files")).toBe(
-      "google_drive__search_files",
+    expect(mapUpstreamServiceName("google_drive.search_files")).toBe("google_drive__search_files");
+    expect(buildNameMap(["github.search_issues"], "", undefined, 64, "service-qualified")).toEqual(
+      new Map([["github.search_issues", "github__search_issues"]]),
     );
-    expect(buildNameMap(["github.search_issues"], "", undefined, 64, "service-qualified"))
-      .toEqual(new Map([["github.search_issues", "github__search_issues"]]));
   });
 
   test("service-qualified names retain a stable hash when truncated", () => {
@@ -94,14 +96,10 @@ describe("name mapping (the §3 failure class — every static check misses this
     );
   });
 
-  test("collisions resolve deterministically: sorted order, first wins, dropped name warned", () => {
-    const warnings: string[] = [];
-    // Both map to apps_a_b.
-    const map = buildNameMap(["a_b", "a.b"], "apps_", (m) => warnings.push(m));
-    expect(map.get("a.b")).toBe("apps_a_b"); // "a.b" sorts before "a_b"
-    expect(map.has("a_b")).toBe(false);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("a_b");
+  test("collisions fail deterministically", () => {
+    expect(() => buildNameMap(["a_b", "a.b"], "apps_")).toThrow(
+      'tool name collision for "apps_a_b" while mapping "a.b" and "a_b"',
+    );
   });
 
   test("prefix validation rejects illegal prefixes", () => {
