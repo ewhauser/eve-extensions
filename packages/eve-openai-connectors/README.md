@@ -75,6 +75,8 @@ export default connectors({
 
 ## Breaking migration from 0.6
 
+Treat this as a breaking pre-1.0 minor upgrade: update the extension mount and install the carried Eve patch before deploying the new connector runtime.
+
 Remove `discovery`, `protocolClientLifetime`, inventory/search/materialization limits, `includeStatus`, `approvalFor`, `transformCallInput`, `onAuthError`, `onResolution`, and `logger`. Use Eve connection behavior directly; replace `onAuthError` with `evictToken`, and replace `approvalFor(item)` with `approval(ctx)` or declarative `approvals`.
 
 The `eve-openai-connectors/tools` and `eve-openai-connectors/connectors` subpaths are removed. Mount the extension package and use Eve's `connection_search` plus the returned qualified names.
