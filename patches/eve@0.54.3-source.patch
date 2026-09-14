@@ -1,0 +1,1224 @@
+diff --git a/packages/eve/src/approval/definition.ts b/packages/eve/src/approval/definition.ts
+index ad551bf..bed4017 100644
+--- a/packages/eve/src/approval/definition.ts
++++ b/packages/eve/src/approval/definition.ts
+@@ -17,6 +17,8 @@ export interface ApprovalContext<TInput = Record<string, unknown>> extends Sessi
+   readonly callId: string;
+   readonly toolInput?: ApprovalToolInput<TInput>;
+   readonly toolName: string;
++  readonly toolAnnotations?: Readonly<Record<string, unknown>>;
++  readonly upstreamToolName?: string;
+ }
+ 
+ /** Request-time approval decision returned by an {@link ApprovalPolicy}. */
+@@ -43,6 +45,8 @@ export interface ApprovalRequest<TInput = Record<string, unknown>> {
+   readonly requestId: string;
+   readonly toolInput?: ApprovalToolInput<TInput>;
+   readonly toolName: string;
++  readonly toolAnnotations?: Readonly<Record<string, unknown>>;
++  readonly upstreamToolName?: string;
+ }
+ 
+ /** Read-only session identity and lineage available to a response authorizer. */
+diff --git a/packages/eve/src/compiler/manifest.ts b/packages/eve/src/compiler/manifest.ts
+index 2831ef2..3aa6e17 100644
+--- a/packages/eve/src/compiler/manifest.ts
++++ b/packages/eve/src/compiler/manifest.ts
+@@ -579,6 +579,7 @@ const compiledAgentWorkflowDefinitionSchema = z
+ const compiledAgentCompactionDefinitionSchema: z.ZodType<CompiledAgentCompactionDefinition> = z
+   .object({
+     model: compiledRuntimeModelReferenceSchema.optional(),
++    strategy: moduleSourceRefSchema.optional(),
+     thresholdPercent: z.number().finite().min(0).max(1).optional(),
+   })
+   .strict();
+@@ -1204,6 +1205,8 @@ function cloneCompiledAgentDefinition(config: CompiledAgentDefinition): Compiled
+         config.compaction?.model === undefined
+           ? undefined
+           : cloneCompiledRuntimeModelReference(config.compaction.model),
++      strategy:
++        config.compaction?.strategy === undefined ? undefined : { ...config.compaction.strategy },
+       thresholdPercent: config.compaction?.thresholdPercent,
+     },
+     defaultTools: config.defaultTools,
+diff --git a/packages/eve/src/compiler/normalize-agent-config.ts b/packages/eve/src/compiler/normalize-agent-config.ts
+index 19a83b4..fc22182 100644
+--- a/packages/eve/src/compiler/normalize-agent-config.ts
++++ b/packages/eve/src/compiler/normalize-agent-config.ts
+@@ -73,6 +73,7 @@ export async function compileAgentConfig(
+       : undefined;
+   const compaction: {
+     model?: CompiledRuntimeModelReference;
++    strategy?: ModuleSourceRef;
+     thresholdPercent?: number;
+   } = {};
+ 
+@@ -80,6 +81,7 @@ export async function compileAgentConfig(
+     build?: CompiledAgentDefinition["build"];
+     compaction: {
+       model?: CompiledRuntimeModelReference;
++      strategy?: ModuleSourceRef;
+       thresholdPercent?: number;
+     };
+     defaultTools?: boolean;
+@@ -158,6 +160,18 @@ export async function compileAgentConfig(
+     });
+   }
+ 
++  if (definition.compaction?.strategy !== undefined) {
++    if (configModule === undefined) {
++      throw new Error("Expected custom compaction strategies to be authored in agent.ts.");
++    }
++    compaction.strategy = {
++      exportName: configModule.exportName,
++      sourceKind: "module",
++      logicalPath: configModule.logicalPath,
++      sourceId: configModule.sourceId,
++    };
++  }
++
+   if (definition.compaction?.thresholdPercent !== undefined) {
+     compaction.thresholdPercent = definition.compaction.thresholdPercent;
+   }
+diff --git a/packages/eve/src/compiler/normalize-manifest.test.ts b/packages/eve/src/compiler/normalize-manifest.test.ts
+index f369e9c..eb9433e 100644
+--- a/packages/eve/src/compiler/normalize-manifest.test.ts
++++ b/packages/eve/src/compiler/normalize-manifest.test.ts
+@@ -318,6 +318,31 @@ describe("compileAgentManifest source graph", () => {
+     });
+   });
+ 
++  it("preserves an authored compaction strategy as a module source reference", async () => {
++    const sourceRegistry = registry([
++      {
++        logicalPath: "agent.ts",
++        loadNamespace: async () => ({
++          default: defineAgent({
++            compaction: { strategy: () => [] },
++            model: "openai/gpt-5.4",
++          }),
++        }),
++      },
++    ]);
++
++    const compiled = await compileAgentManifest(manifest(), {
++      sourceRegistries: [sourceRegistry],
++    });
++
++    expect(compiled.config.compaction?.strategy).toEqual({
++      exportName: undefined,
++      logicalPath: "agent.ts",
++      sourceId: "test:application:agent.ts",
++      sourceKind: "module",
++    });
++  });
++
+   it("loads the selected config before any non-config definition", async () => {
+     const order: string[] = [];
+     const sourceRegistry = registry([
+diff --git a/packages/eve/src/context/container.ts b/packages/eve/src/context/container.ts
+index b2d5096..85c0e24 100644
+--- a/packages/eve/src/context/container.ts
++++ b/packages/eve/src/context/container.ts
+@@ -17,7 +17,7 @@ const EVE_CONTEXT_STORAGE_KEY = Symbol.for("eve.context-storage");
+  */
+ export interface AlsContext extends ContextAccessor {
+   /** Verified local development provenance, inherited across durable execution contexts. */
+-  readonly localDevRequest?: LocalDevRequestProvenance;
++  readonly localDevRequest?: LocalDevRequestProvenance | undefined;
+   /** Removes a durable or step-local value from the context. */
+   delete<T>(key: ContextKey<T>): boolean;
+   /**
+diff --git a/packages/eve/src/execution/node-step.ts b/packages/eve/src/execution/node-step.ts
+index 766e8ca..8085768 100644
+--- a/packages/eve/src/execution/node-step.ts
++++ b/packages/eve/src/execution/node-step.ts
+@@ -14,6 +14,7 @@ import type { RuntimeIdentity } from "#protocol/message.js";
+ import { UNSPECIFIED_INPUT_SCHEMA } from "#tools/schema.js";
+ import type { RunMode } from "#shared/run-mode.js";
+ import {
++  loadRuntimeCompactionStrategy,
+   resolveRuntimeModelReference,
+   type RuntimeModelResolutionScope,
+ } from "#runtime/agent/resolve-model.js";
+@@ -101,11 +102,22 @@ export function createExecutionNodeStep(input: CreateExecutionNodeStepInput): St
+   const tools = createNodeHarnessTools({ node: input.node });
+   const instrumentation = input.instrumentation;
+   const sessionInstrumentation = instrumentation?.prepareExecution();
++  const compactionStrategy = input.node.turnAgent.compactionStrategy;
+   const step = createToolLoopHarness({
+     abortSignal: input.abortSignal,
+     capabilities: input.capabilities,
+     clearOnly: input.clearOnly,
+     compactOnly: input.compactOnly,
++    compactionStrategy:
++      compactionStrategy === undefined
++        ? undefined
++        : async (strategyInput) =>
++            (
++              await loadRuntimeCompactionStrategy({
++                scope: input.modelResolutionScope,
++                strategy: compactionStrategy,
++              })
++            )(strategyInput),
+     workflow: input.node.agent.workflowTool !== undefined,
+     workflowMaxSubagents: input.workflowMaxSubagents,
+     handleEvent: input.handleEvent,
+diff --git a/packages/eve/src/execution/tools/connection-search.ts b/packages/eve/src/execution/tools/connection-search.ts
+index eca9a73..88ed61b 100644
+--- a/packages/eve/src/execution/tools/connection-search.ts
++++ b/packages/eve/src/execution/tools/connection-search.ts
+@@ -1,3 +1,4 @@
++import { projectConnectionToolNames } from "#runtime/connections/mcp-client.js";
+ import { z } from "#compiled/zod/index.js";
+ 
+ import { loadContext } from "#context/container.js";
+@@ -19,7 +20,7 @@ import {
+   type ApprovalContext,
+   type ApprovalResponseContext,
+ } from "#approval/definition.js";
+-import type { JsonObject } from "#shared/json.js";
++import { parseJsonObject, type JsonObject } from "#shared/json.js";
+ import { stampDurableDynamicToolCallbacks } from "#tools/durable-callbacks.js";
+ import { resolveConnectionAuthorization } from "#runtime/connections/resolve-authorization.js";
+ import {
+@@ -71,7 +72,7 @@ const CONNECTION_SEARCH_OUTPUT_SCHEMA = z.array(CONNECTION_SEARCH_RESULT_ITEM_SC
+  * `executeConnectionSearch` so the resolver can find discovered tools without
+  * relying on model-facing tool result history.
+  */
+-const ConnectionSearchResultsKey = new ContextKey<readonly ConnectionSearchResultItem[]>(
++const ConnectionSearchResultsKey = new ContextKey<readonly StoredConnectionSearchResult[]>(
+   "eve.connectionSearchResults",
+ );
+ 
+@@ -99,6 +100,12 @@ interface ConnectionSearchResultItem {
+   readonly qualifiedName?: string;
+ }
+ 
++interface StoredConnectionSearchResult extends ConnectionSearchResultItem {
++  readonly connectionInstanceId?: string;
++  readonly toolAnnotations?: JsonObject;
++  readonly upstreamToolName: string;
++}
++
+ function tokenize(text: string): string[] {
+   return text
+     .toLowerCase()
+@@ -170,7 +177,11 @@ async function executeConnectionSearch(
+ 
+   const limit = input.limit ?? 10;
+   const queryTokens = tokenize(input.keywords);
+-  const results: Array<{ item: ConnectionSearchResultItem; score: number }> = [];
++  const results: Array<{
++    item: ConnectionSearchResultItem;
++    stored: StoredConnectionSearchResult;
++    score: number;
++  }> = [];
+   const failedConnections: ConnectionSearchResultItem[] = [];
+ 
+   const targetConnections =
+@@ -256,16 +267,32 @@ async function executeConnectionSearch(
+     for (const tool of tools) {
+       const score = scoreMatch(queryTokens, tool);
+       if (score > 0) {
++        const modelName = tool.modelName ?? tool.name;
++        const item: ConnectionSearchResultItem = {
++          connection: conn.connectionName,
++          description: tool.description,
++          inputSchema: tool.inputSchema,
++          outputSchema: tool.outputSchema,
++          qualifiedName: qualifiedConnectionToolName(conn.connectionName, modelName),
++          tool: modelName,
++        };
++        let annotations: JsonObject | undefined;
++        if (tool.annotations !== undefined) {
++          try {
++            annotations = parseJsonObject(tool.annotations);
++          } catch {
++            /* Ignore non-JSON annotations. */
++          }
++        }
+         results.push({
+-          item: {
+-            connection: conn.connectionName,
+-            description: tool.description,
+-            inputSchema: tool.inputSchema,
+-            outputSchema: tool.outputSchema,
+-            qualifiedName: qualifiedConnectionToolName(conn.connectionName, tool.name),
+-            tool: tool.name,
+-          },
++          item,
+           score,
++          stored: {
++            ...item,
++            ...(conn.instanceId === undefined ? {} : { connectionInstanceId: conn.instanceId }),
++            ...(annotations === undefined ? {} : { toolAnnotations: annotations }),
++            upstreamToolName: tool.name,
++          },
+         });
+       }
+     }
+@@ -284,14 +311,15 @@ async function executeConnectionSearch(
+   }
+ 
+   results.sort((a, b) => b.score - a.score);
+-  const matched = results.slice(0, limit).map((r) => r.item);
++  const selected = results.slice(0, limit);
++  const matched = selected.map((r) => r.item);
+ 
+   if (matched.length > 0) {
+     const allResults = [...matched, ...failedConnections];
+     const existing = ctx.get(ConnectionSearchResultsKey) ?? [];
+     const merged = new Map(existing.map((r) => [r.qualifiedName, r]));
+-    for (const r of matched) {
+-      if (r.qualifiedName) merged.set(r.qualifiedName, r);
++    for (const { stored } of selected) {
++      if (stored.qualifiedName) merged.set(stored.qualifiedName, stored);
+     }
+     ctx.set(ConnectionSearchResultsKey, [...merged.values()]);
+     return allResults;
+@@ -311,14 +339,53 @@ async function executeConnectionSearch(
+ 
+ function readDiscoveredToolClosure(closure: JsonObject): {
+   readonly connectionName: string;
++  readonly expectedMetadata: JsonObject & ConnectionToolMetadata;
++  readonly toolAnnotations?: JsonObject;
+   readonly toolName: string;
+ } {
+   const connectionName = closure.connectionName;
+   const toolName = closure.toolName;
+-  if (typeof connectionName !== "string" || typeof toolName !== "string") {
++  let metadata: JsonObject;
++  try {
++    metadata = parseJsonObject(closure.expectedMetadata);
++  } catch {
+     throw new Error("Discovered connection tool callback metadata is invalid.");
+   }
+-  return { connectionName, toolName };
++  if (
++    typeof connectionName !== "string" ||
++    typeof toolName !== "string" ||
++    typeof metadata.name !== "string" ||
++    typeof metadata.modelName !== "string" ||
++    typeof metadata.description !== "string" ||
++    typeof metadata.inputSchema !== "object" ||
++    metadata.inputSchema === null ||
++    Array.isArray(metadata.inputSchema)
++  ) {
++    throw new Error("Discovered connection tool callback metadata is invalid.");
++  }
++  const annotations = closure.toolAnnotations;
++  if (
++    annotations !== undefined &&
++    (typeof annotations !== "object" || annotations === null || Array.isArray(annotations))
++  )
++    throw new Error("Discovered connection tool callback metadata is invalid.");
++  return {
++    connectionName,
++    expectedMetadata: metadata as JsonObject & ConnectionToolMetadata,
++    ...(annotations === undefined ? {} : { toolAnnotations: annotations as JsonObject }),
++    toolName,
++  };
++}
++
++function storedExpectedMetadata(result: StoredConnectionSearchResult): JsonObject {
++  return parseJsonObject({
++    ...(result.toolAnnotations === undefined ? {} : { annotations: result.toolAnnotations }),
++    description: result.description,
++    inputSchema: result.inputSchema ?? { type: "object" },
++    modelName: result.tool,
++    name: result.upstreamToolName,
++    ...(result.outputSchema === undefined ? {} : { outputSchema: result.outputSchema }),
++  });
+ }
+ 
+ async function executeDiscoveredConnectionTool(
+@@ -326,7 +393,7 @@ async function executeDiscoveredConnectionTool(
+   input: Record<string, unknown>,
+   executeCtx: ToolContext,
+ ): Promise<unknown> {
+-  const { connectionName, toolName } = readDiscoveredToolClosure(closure);
++  const { connectionName, expectedMetadata, toolName } = readDiscoveredToolClosure(closure);
+   const registry = loadContext().get(ConnectionRegistryKey);
+   if (registry === undefined) {
+     throw new Error("Connection registry is unavailable while replaying a discovered tool.");
+@@ -340,6 +407,7 @@ async function executeDiscoveredConnectionTool(
+     return await client.executeTool(toolName, input, {
+       abortSignal: executeCtx.abortSignal,
+       callId: executeCtx.callId,
++      expectedMetadata,
+     });
+   } catch (error) {
+     return await auth.handleError(error, scoped);
+@@ -363,22 +431,35 @@ async function requestDiscoveredConnectionToolApproval(
+   closure: JsonObject,
+   context: ApprovalContext,
+ ) {
+-  const { connectionName } = readDiscoveredToolClosure(closure);
++  const { connectionName, toolAnnotations, toolName } = readDiscoveredToolClosure(closure);
+   const approval = loadContext().get(ConnectionRegistryKey)?.getConnectionApproval(connectionName);
+-  return approval === undefined ? "not-applicable" : await resolveApprovalPolicy(approval)(context);
++  return approval === undefined
++    ? "not-applicable"
++    : await resolveApprovalPolicy(approval)({
++        ...context,
++        ...(toolAnnotations === undefined ? {} : { toolAnnotations }),
++        upstreamToolName: toolName,
++      });
+ }
+ 
+ async function authorizeDiscoveredConnectionToolApproval(
+   closure: JsonObject,
+   context: ApprovalResponseContext,
+ ) {
+-  const { connectionName } = readDiscoveredToolClosure(closure);
++  const { connectionName, toolAnnotations, toolName } = readDiscoveredToolClosure(closure);
+   const approval = loadContext().get(ConnectionRegistryKey)?.getConnectionApproval(connectionName);
+   const response =
+     approval === undefined || typeof approval === "function" ? undefined : approval.response;
+   return response === undefined
+     ? { reason: "Approval response authorization is unavailable.", status: "rejected" as const }
+-    : await response(context);
++    : await response({
++        ...context,
++        request: {
++          ...context.request,
++          ...(toolAnnotations === undefined ? {} : { toolAnnotations }),
++          upstreamToolName: toolName,
++        },
++      });
+ }
+ 
+ export async function resolveConnectionSearchDynamicTools() {
+@@ -387,10 +468,30 @@ export async function resolveConnectionSearchDynamicTools() {
+ 
+   const connections = registry.getConnections();
+   const connectionNames = connections.map((c) => c.connectionName);
+-  const activeConnectionNames = new Set(connectionNames);
+-  const discovered = (loadContext().get(ConnectionSearchResultsKey) ?? []).filter((result) =>
+-    activeConnectionNames.has(result.connection),
++  const activeConnections = new Map(
++    connections.map((connection) => [connection.connectionName, connection]),
+   );
++  const discovered = (loadContext().get(ConnectionSearchResultsKey) ?? []).filter((result) => {
++    const connection = activeConnections.get(result.connection);
++    if (
++      connection === undefined ||
++      (result.connectionInstanceId !== undefined &&
++        result.connectionInstanceId !== connection.instanceId)
++    )
++      return false;
++    try {
++      const modelName = projectConnectionToolNames(connection, [result.upstreamToolName]).get(
++        result.upstreamToolName,
++      );
++      return (
++        modelName !== undefined &&
++        modelName === result.tool &&
++        result.qualifiedName === qualifiedConnectionToolName(result.connection, modelName)
++      );
++    } catch {
++      return false;
++    }
++  });
+ 
+   const tools: Record<string, object> = {};
+ 
+@@ -416,10 +517,15 @@ export async function resolveConnectionSearchDynamicTools() {
+ 
+   for (const result of discovered) {
+     const connectionName = result.connection;
+-    const toolName = result.tool!;
++    const toolName = result.upstreamToolName;
+     const approval = registry.getConnectionApproval(connectionName);
+ 
+-    const closure = { connectionName, toolName };
++    const closure = {
++      connectionName,
++      expectedMetadata: storedExpectedMetadata(result),
++      ...(result.toolAnnotations === undefined ? {} : { toolAnnotations: result.toolAnnotations }),
++      toolName,
++    };
+     const discoveredTool = defineTool({
+       description: result.description,
+       inputSchema: (result.inputSchema ?? {
+@@ -452,7 +558,7 @@ export async function resolveConnectionSearchDynamicTools() {
+             },
+           }),
+     });
+-    tools[qualifiedConnectionToolName(connectionName, toolName)] = discoveredTool;
++    tools[result.qualifiedName!] = discoveredTool;
+   }
+ 
+   return tools;
+diff --git a/packages/eve/src/harness/tool-loop.test.ts b/packages/eve/src/harness/tool-loop.test.ts
+index 0e1337a..5f42a71 100644
+--- a/packages/eve/src/harness/tool-loop.test.ts
++++ b/packages/eve/src/harness/tool-loop.test.ts
+@@ -9886,6 +9886,63 @@ describe("createToolLoopHarness", () => {
+     ]);
+   });
+ 
++  it("uses a custom compaction strategy and preserves framework-owned state", async () => {
++    const customHistory: ModelMessage[] = [
++      createUserMessage("user", "retained user intent"),
++      { content: "opaque checkpoint", role: "assistant" },
++    ];
++    const compactionStrategy = vi.fn().mockResolvedValue(customHistory);
++    const onCompaction = vi.fn((): ModelMessage[] => [
++      createUserMessage("context.state", "framework state"),
++    ]);
++    const resolvedModel = { modelId: "gpt-5.5", provider: "openai" } as LanguageModel;
++    const runStep = createToolLoopHarness(
++      createTestConfig("conversation", undefined, {
++        compactOnly: true,
++        compactionStrategy,
++        onCompaction,
++        resolveModel: vi.fn().mockResolvedValue(resolvedModel),
++      }),
++    );
++    const history: ModelMessage[] = [
++      createUserMessage("user", "old message"),
++      { content: "old reply", role: "assistant" },
++    ];
++    const session = createTestSession({
++      agent: {
++        modelReference: {
++          id: "openai/gpt-5.5",
++          providerOptions: { openai: { store: false } },
++        },
++        system: "Current instructions.",
++        tools: [],
++      },
++      history,
++    });
++
++    const result = await runStep(session);
++
++    expect(compactMessages).not.toHaveBeenCalled();
++    expect(compactionStrategy).toHaveBeenCalledOnce();
++    expect(compactionStrategy).toHaveBeenCalledWith({
++      abortSignal: undefined,
++      continuationProviderOptions: { openai: { store: false } },
++      force: true,
++      headers: undefined,
++      messages: history,
++      model: resolvedModel,
++      providerOptions: { openai: { store: false } },
++      system: "Current instructions.",
++      telemetry: undefined,
++      thresholdTokens: 100_000,
++    });
++    expect(onCompaction).toHaveBeenCalledOnce();
++    expect(result.session.history).toEqual([
++      ...customHistory,
++      createUserMessage("context.state", "framework state"),
++    ]);
++  });
++
+   it("returns an empty session to its waiting boundary after manual compaction", async () => {
+     const { emit, events } = createEventCollector();
+     const runStep = createToolLoopHarness(
+diff --git a/packages/eve/src/harness/tool-loop.ts b/packages/eve/src/harness/tool-loop.ts
+index ae20716..ecfa8a5 100644
+--- a/packages/eve/src/harness/tool-loop.ts
++++ b/packages/eve/src/harness/tool-loop.ts
+@@ -49,6 +49,7 @@ import {
+ import { buildDynamicSubagentTools } from "#context/dynamic-subagent-lifecycle.js";
+ import { PendingSkillAnnouncementKey } from "#context/dynamic-skill-lifecycle.js";
+ import { toErrorMessage } from "#shared/errors.js";
++import type { AgentCompactionStrategyInput } from "#shared/agent-definition.js";
+ import {
+   createActionResultEvent,
+   createApprovalCandidateEvent,
+@@ -625,6 +626,7 @@ export function createToolLoopHarness(config: ToolLoopHarnessConfig): StepFn {
+               turnId: activeTurnId(emissionState),
+             },
+             force: true,
++            compactionStrategy: config.compactionStrategy,
+             historyProjector: config.historyProjector,
+             messages: [...session.history],
+             model: resolvedModel.model,
+@@ -1198,6 +1200,7 @@ export function createToolLoopHarness(config: ToolLoopHarnessConfig): StepFn {
+       historyProjector: config.historyProjector,
+       messages: [...messages],
+       model,
++      compactionStrategy: config.compactionStrategy,
+       onCompaction: config.onCompaction,
+       promptMessages: createModelMessages(messages),
+       resolveModel: config.resolveModel,
+@@ -3201,6 +3204,7 @@ async function maybeCompact(input: {
+   readonly emit?: ToolLoopHarnessConfig["handleEvent"];
+   readonly emissionState: ReturnType<typeof getHarnessEmissionState>;
+   readonly force?: boolean;
++  readonly compactionStrategy?: ToolLoopHarnessConfig["compactionStrategy"];
+   readonly historyProjector?: HistoryViewProjector;
+   readonly messages: HarnessModelMessage[];
+   readonly model: LanguageModel;
+@@ -3267,18 +3271,35 @@ async function maybeCompact(input: {
+     input.historyProjector?.({ messages: canonical.ordinary, state: session.state }) ??
+       canonical.ordinary,
+   );
+-  const compactedOrdinary = needsSummary
+-    ? await compactMessages(
+-        [...ordinary],
+-        compaction.model,
+-        session.compaction,
+-        providerOptions,
+-        input.telemetry,
+-        buildGatewayAttributionHeaders(compaction.model, input.runtimeIdentity),
+-        input.abortSignal,
+-        input.force === true,
+-      )
+-    : [...ordinary];
++  const headers = buildGatewayAttributionHeaders(compaction.model, input.runtimeIdentity);
++  const compactedOrdinary = !needsSummary
++    ? [...ordinary]
++    : input.compactionStrategy === undefined
++      ? await compactMessages(
++          [...ordinary],
++          compaction.model,
++          session.compaction,
++          providerOptions,
++          input.telemetry,
++          headers,
++          input.abortSignal,
++          input.force === true,
++        )
++      : [
++          ...(await input.compactionStrategy({
++            abortSignal: input.abortSignal,
++            continuationProviderOptions: requireSessionModelReference(session)
++              .providerOptions as AgentCompactionStrategyInput["continuationProviderOptions"],
++            force: input.force === true,
++            headers,
++            messages: [...ordinary],
++            model: compaction.model,
++            providerOptions,
++            system: session.agent.system,
++            telemetry: input.telemetry,
++            thresholdTokens: session.compaction.threshold,
++          })),
++        ];
+   messages = validateHarnessModelMessages([...canonical.memory, ...compactedOrdinary]);
+ 
+   if (input.onCompaction) {
+diff --git a/packages/eve/src/harness/types.ts b/packages/eve/src/harness/types.ts
+index 5987fc3..64fe210 100644
+--- a/packages/eve/src/harness/types.ts
++++ b/packages/eve/src/harness/types.ts
+@@ -15,7 +15,10 @@ import type { SandboxState } from "#sandbox/state.js";
+ import type { JsonObject } from "#shared/json.js";
+ import type { TokenUsage } from "#shared/token-usage.js";
+ import type { InternalToolDefinition } from "#tools/definition.js";
+-import type { AgentReasoningDefinition } from "#shared/agent-definition.js";
++import type {
++  AgentCompactionStrategy,
++  AgentReasoningDefinition,
++} from "#shared/agent-definition.js";
+ import type { HarnessToolDefinition } from "#harness/execute-tool.js";
+ import type { HarnessModelMessage } from "#harness/messages.js";
+ import type { SessionInstrumentation } from "#instrumentation/runtime.js";
+@@ -291,6 +294,8 @@ export interface ToolLoopHarnessConfig {
+   readonly clearOnly?: boolean;
+   /** Forces one context-compaction pass without running a model turn. */
+   readonly compactOnly?: boolean;
++  /** Optional authored replacement for eve's built-in compaction strategy. */
++  readonly compactionStrategy?: AgentCompactionStrategy;
+   /**
+    * Exposes the `Workflow` orchestration tool — an isolated JavaScript sandbox
+    * whose only callable operations are this agent's subagents and remote
+diff --git a/packages/eve/src/internal/authored-definition/connection.ts b/packages/eve/src/internal/authored-definition/connection.ts
+index dbe54cd..403e667 100644
+--- a/packages/eve/src/internal/authored-definition/connection.ts
++++ b/packages/eve/src/internal/authored-definition/connection.ts
+@@ -1,3 +1,4 @@
++import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
+ import { normalizeApproval } from "#internal/authored-definition/approval.js";
+ import type { McpClientConnectionDefinition } from "#public/definitions/connections/mcp.js";
+ import type { OpenAPIConnectionDefinition } from "#public/definitions/connections/openapi.js";
+@@ -21,6 +22,7 @@ const KNOWN_TOP_LEVEL_KEYS = [
+   "headers",
+   "instanceKey",
+   "toolCall",
++  "toolName",
+   "tools",
+   "url",
+ ] as const;
+@@ -75,6 +77,7 @@ export function normalizeMcpClientConnectionDefinition(
+   const authorization = normalizeAuthorization(record, message);
+   const headers = normalizeHeaders(record, message);
+   const toolCall = normalizeConnectionToolCall(record, message);
++  const toolName = normalizeConnectionToolName(record, message);
+   const tools = normalizeToolFilter(record, message);
+ 
+   if (authorization !== undefined && headers !== undefined && typeof headers !== "function") {
+@@ -106,6 +109,7 @@ export function normalizeMcpClientConnectionDefinition(
+   if (toolCall !== undefined) {
+     result.toolCall = toolCall;
+   }
++  if (toolName !== undefined) result.toolName = toolName;
+   if (tools !== undefined) {
+     result.tools = tools;
+   }
+@@ -376,36 +380,43 @@ function normalizeFilterField(
+   message: string,
+ ): ToolFilterDefinition | undefined {
+   const value = record[fieldName];
+-  if (value === undefined) {
+-    return undefined;
+-  }
+-
+-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+-    throw new Error(`${message} The "${fieldName}" field must specify either "allow" or "block".`);
+-  }
+-
+-  const filterRecord = value as Record<string, unknown>;
+-
+-  const hasAllow = "allow" in filterRecord;
+-  const hasBlock = "block" in filterRecord;
+-
+-  if (hasAllow && hasBlock) {
++  if (value === undefined) return;
++  const filter = expectObjectRecord(
++    value,
++    `${message} The "${fieldName}" field must specify "allow", "block", or "filter".`,
++  );
++  expectOnlyKnownKeys(filter, ["allow", "block", "filter"], `${message} The "${fieldName}" field`);
++  if (["allow", "block", "filter"].filter((key) => key in filter).length !== 1) {
+     throw new Error(
+-      `${message} The "${fieldName}" field must specify either "allow" or "block", not both.`,
++      `${message} The "${fieldName}" field must specify exactly one of "allow", "block", or "filter".`,
+     );
+   }
+-
+-  if (!hasAllow && !hasBlock) {
+-    throw new Error(`${message} The "${fieldName}" field must specify either "allow" or "block".`);
++  if ("allow" in filter) {
++    validateStringArray(filter.allow, `${message} The "${fieldName}.allow"`);
++    return { allow: filter.allow as readonly string[] };
+   }
+-
+-  if (hasAllow) {
+-    validateStringArray(filterRecord.allow, `${message} The "${fieldName}.allow"`);
+-    return { allow: filterRecord.allow as readonly string[] };
++  if ("block" in filter) {
++    validateStringArray(filter.block, `${message} The "${fieldName}.block"`);
++    return { block: filter.block as readonly string[] };
+   }
++  if (typeof filter.filter !== "function")
++    throw new Error(`${message} The "${fieldName}.filter" field must be a function.`);
++  return { filter: filter.filter as (name: string) => boolean };
++}
+ 
+-  validateStringArray(filterRecord.block, `${message} The "${fieldName}.block"`);
+-  return { block: filterRecord.block as readonly string[] };
++function normalizeConnectionToolName(
++  record: Record<string, unknown>,
++  message: string,
++): ConnectionToolNameDefinition | undefined {
++  if (record.toolName === undefined) return;
++  const value = expectObjectRecord(
++    record.toolName,
++    `${message} The "toolName" field must be a plain object.`,
++  );
++  expectOnlyKnownKeys(value, ["toModelName"], `${message} The "toolName" field`);
++  if (typeof value.toModelName !== "function")
++    throw new Error(`${message} The "toolName.toModelName" field must be a function.`);
++  return { toModelName: value.toModelName as (name: string) => string };
+ }
+ 
+ function validateStringArray(value: unknown, label: string): void {
+diff --git a/packages/eve/src/internal/authored-definition/core.test.ts b/packages/eve/src/internal/authored-definition/core.test.ts
+index af5dc64..f21b502 100644
+--- a/packages/eve/src/internal/authored-definition/core.test.ts
++++ b/packages/eve/src/internal/authored-definition/core.test.ts
+@@ -90,6 +90,31 @@ describe("normalizeAgentDefinition", () => {
+     ).toThrow('"compaction.model" does not support defineDynamic');
+   });
+ 
++  it("accepts an authored compaction strategy", () => {
++    const strategy = () => [];
++    const definition = normalizeAgentDefinition(
++      {
++        compaction: { strategy },
++        model: "openai/gpt-5.5",
++      },
++      FAILURE_MESSAGE,
++    );
++
++    expect(definition.compaction?.strategy).toBe(strategy);
++  });
++
++  it("rejects a non-function compaction strategy", () => {
++    expect(() =>
++      normalizeAgentDefinition(
++        {
++          compaction: { strategy: "remote" },
++          model: "openai/gpt-5.5",
++        },
++        FAILURE_MESSAGE,
++      ),
++    ).toThrow('Expected "compaction.strategy" to be a function.');
++  });
++
+   it("rejects unsupported reasoning effort", () => {
+     expect(() =>
+       normalizeAgentDefinition(
+diff --git a/packages/eve/src/internal/authored-definition/core.ts b/packages/eve/src/internal/authored-definition/core.ts
+index afecf94..80d040e 100644
+--- a/packages/eve/src/internal/authored-definition/core.ts
++++ b/packages/eve/src/internal/authored-definition/core.ts
+@@ -356,7 +356,11 @@ function normalizeAgentCompactionDefinition(
+   message: string,
+ ): NonNullable<NormalizedAgentDefinition["compaction"]> {
+   const record = expectObjectRecord(value, message);
+-  expectOnlyKnownKeys(record, ["model", "modelContextWindowTokens", "thresholdPercent"], message);
++  expectOnlyKnownKeys(
++    record,
++    ["model", "modelContextWindowTokens", "strategy", "thresholdPercent"],
++    message,
++  );
+   const normalizedDefinition: Mutable<NonNullable<NormalizedAgentDefinition["compaction"]>> = {};
+ 
+   if (record.model !== undefined) {
+@@ -375,6 +379,13 @@ function normalizeAgentCompactionDefinition(
+     );
+   }
+ 
++  if (record.strategy !== undefined) {
++    normalizedDefinition.strategy = expectFunction(
++      record.strategy,
++      `${message} Expected "compaction.strategy" to be a function.`,
++    );
++  }
++
+   if (record.thresholdPercent !== undefined) {
+     const thresholdPercent = record.thresholdPercent;
+ 
+diff --git a/packages/eve/src/public/connections/index.ts b/packages/eve/src/public/connections/index.ts
+index 7fcaed1..78e270c 100644
+--- a/packages/eve/src/public/connections/index.ts
++++ b/packages/eve/src/public/connections/index.ts
+@@ -50,3 +50,5 @@ export {
+   isConnectionAuthorizationFailedError,
+   isConnectionAuthorizationRequiredError,
+ } from "#public/connections/errors.js";
++
++export type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
+diff --git a/packages/eve/src/public/definitions/agent.ts b/packages/eve/src/public/definitions/agent.ts
+index ecc1a24..a6cb8fb 100644
+--- a/packages/eve/src/public/definitions/agent.ts
++++ b/packages/eve/src/public/definitions/agent.ts
+@@ -16,6 +16,8 @@ export type {
+   AgentModelResolver,
+   AgentReasoningDefinition,
+   AgentBuildDefinition,
++  AgentCompactionStrategy,
++  AgentCompactionStrategyInput,
+   PublicAgentDynamicModelDefinition as AgentDynamicModelDefinition,
+   PublicAgentDynamicModelResult as AgentDynamicModelResult,
+   AgentExperimentalDefinition,
+diff --git a/packages/eve/src/public/definitions/connections/mcp.ts b/packages/eve/src/public/definitions/connections/mcp.ts
+index 59f8198..9824ddd 100644
+--- a/packages/eve/src/public/definitions/connections/mcp.ts
++++ b/packages/eve/src/public/definitions/connections/mcp.ts
+@@ -1,3 +1,4 @@
++import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
+ import type {
+   ConnectionAuthDefinition,
+   HeadersDefinition,
+@@ -89,6 +90,7 @@ export interface McpClientConnectionDefinition {
+    * input schema and adds their resolved values immediately before execution.
+    */
+   toolCall?: ConnectionToolCallDefinition;
++  toolName?: ConnectionToolNameDefinition;
+   /**
+    * Client-side tool filter. When set, the model sees only tools
+    * whose names pass the filter; `connection_search` drops all
+diff --git a/packages/eve/src/public/index.ts b/packages/eve/src/public/index.ts
+index 7eaefc2..fb75632 100644
+--- a/packages/eve/src/public/index.ts
++++ b/packages/eve/src/public/index.ts
+@@ -4,6 +4,8 @@
+ 
+ export {
+   type AgentCompactionDefinition,
++  type AgentCompactionStrategy,
++  type AgentCompactionStrategyInput,
+   type AgentDefinition,
+   type AgentExperimentalDefinition,
+   type AgentLimitsDefinition,
+diff --git a/packages/eve/src/runtime/agent/bootstrap.ts b/packages/eve/src/runtime/agent/bootstrap.ts
+index 0617543..d7515ac 100644
+--- a/packages/eve/src/runtime/agent/bootstrap.ts
++++ b/packages/eve/src/runtime/agent/bootstrap.ts
+@@ -30,6 +30,9 @@ export type RuntimeDynamicModelReference = Readonly<
+   }
+ >;
+ 
++/** Runtime-owned source reference for a compaction strategy authored in `agent.ts`. */
++export type RuntimeCompactionStrategyReference = Readonly<ModuleSourceRef>;
++
+ /**
+  * Minimal runtime-owned agent shape prepared for one harness turn.
+  */
+@@ -44,6 +47,7 @@ interface RuntimeTurnAgentBase {
+    * When omitted, the harness uses the active turn model for compaction.
+    */
+   readonly compactionModel?: RuntimeModelReference;
++  readonly compactionStrategy?: RuntimeCompactionStrategyReference;
+   readonly nodeId?: string;
+   readonly outputSchema?: ResolvedAgentDefinition["outputSchema"];
+   readonly reasoning?: ResolvedAgentDefinition["reasoning"];
+@@ -121,6 +125,7 @@ export function createResolvedRuntimeTurnAgent(input: {
+       workspaceSpec: agent.workspaceSpec,
+     }),
+     compactionModel: config?.compaction?.model,
++    compactionStrategy: config?.compaction?.strategy,
+     nodeId: input.nodeId,
+     outputSchema: config?.outputSchema,
+     reasoning: config?.reasoning,
+diff --git a/packages/eve/src/runtime/agent/resolve-model.ts b/packages/eve/src/runtime/agent/resolve-model.ts
+index 8cfbd57..fbd2dbd 100644
+--- a/packages/eve/src/runtime/agent/resolve-model.ts
++++ b/packages/eve/src/runtime/agent/resolve-model.ts
+@@ -5,6 +5,7 @@ import { RuntimeModelMetadataCacheKey, type CachedModelMetadata } from "#context
+ import { normalizeAgentDefinition } from "#internal/authored-definition/core.js";
+ import { formatLanguageModelGatewayId } from "#internal/runtime-model.js";
+ import type {
++  RuntimeCompactionStrategyReference,
+   RuntimeDynamicModelReference,
+   RuntimeModelReference,
+ } from "#runtime/agent/bootstrap.js";
+@@ -17,6 +18,7 @@ import { loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+ import {
+   isDynamicModelDefinition,
+   type AgentModelOptionsDefinition,
++  type AgentCompactionStrategy,
+   type PublicAgentDynamicModelDefinition,
+   type PublicAgentDynamicModelResult,
+   type PublicAgentModelSelectionDefinition,
+@@ -141,6 +143,30 @@ export async function loadDynamicRuntimeModelDefinition(input: {
+   return authoredModel;
+ }
+ 
++/** Loads the authored compaction strategy from an agent config module. */
++export async function loadRuntimeCompactionStrategy(input: {
++  readonly scope: RuntimeModelResolutionScope;
++  readonly strategy: RuntimeCompactionStrategyReference;
++}): Promise<AgentCompactionStrategy> {
++  const definition = await loadResolvedModuleExport({
++    definition: input.strategy,
++    kindLabel: "runtime compaction strategy",
++    moduleMap: input.scope.moduleMap,
++    nodeId: input.scope.nodeId,
++  });
++  const normalizedDefinition = normalizeAgentDefinition(
++    definition,
++    `Expected the authored agent config export "${input.strategy.exportName ?? "default"}" from "${input.strategy.logicalPath}" to match the public eve shape.`,
++  );
++  const strategy = normalizedDefinition.compaction?.strategy;
++  if (strategy === undefined) {
++    throw new Error(
++      `Expected the authored agent config export "${input.strategy.exportName ?? "default"}" from "${input.strategy.logicalPath}" to provide a compaction strategy.`,
++    );
++  }
++  return strategy;
++}
++
+ export async function resolveRuntimeModelSelection(input: {
+   readonly catalog?: RuntimeModelCatalog;
+   readonly durability: "durable" | "live";
+diff --git a/packages/eve/src/runtime/connections/mcp-client.ts b/packages/eve/src/runtime/connections/mcp-client.ts
+index 474e9a1..ded6235 100644
+--- a/packages/eve/src/runtime/connections/mcp-client.ts
++++ b/packages/eve/src/runtime/connections/mcp-client.ts
+@@ -1,3 +1,4 @@
++import { jsonValuesEqual } from "#shared/json.js";
+ import { createMCPClient, type MCPClient } from "#compiled/@ai-sdk/mcp/index.js";
+ import type { ToolSet } from "ai";
+ 
+@@ -127,7 +128,17 @@ export class McpConnectionClient implements ConnectionClient {
+     options: ConnectionToolExecuteOptions,
+   ): Promise<unknown> {
+     try {
+-      const { tools } = await this.#ensureTools();
++      const { metadata, tools } = await this.#fetchTools();
++      if (options.expectedMetadata !== undefined) {
++        const current = metadata.find((tool) => tool.name === toolName);
++        if (current === undefined || !sameToolMetadata(current, options.expectedMetadata)) {
++          throw new Error(
++            `Tool "${toolName}" in connection "${this.#connection.connectionName}" changed or was removed after discovery. Search the connection again.`,
++          );
++        }
++      }
++      this.#tools = { metadata, tools };
++      this.#toolsPromise = Promise.resolve(this.#tools);
+ 
+       const sdkTool = tools[toolName];
+       if (sdkTool?.execute === undefined) {
+@@ -190,6 +201,10 @@ export class McpConnectionClient implements ConnectionClient {
+     // elements are `Tool<unknown, CallToolResult>`. The AI SDK's
+     // `ToolSet` constraint only admits `Tool<any | never, any | never>`,
+     // so a single-hop cast is required — the runtime shape is identical.
++    const modelNames = projectConnectionToolNames(
++      this.#connection,
++      filteredTools.map((tool) => tool.name),
++    );
+     const providedArgumentNames = Object.keys(this.#connection.toolCall?.providedArguments ?? {});
+     const projectedTools = filteredTools.map((tool) => ({
+       ...tool,
+@@ -202,6 +217,7 @@ export class McpConnectionClient implements ConnectionClient {
+       annotations: t.annotations as Record<string, unknown> | undefined,
+       description: t.description ?? "",
+       inputSchema: (t.inputSchema ?? {}) as Record<string, unknown>,
++      modelName: modelNames.get(t.name),
+       name: t.name,
+       outputSchema:
+         "outputSchema" in t && t.outputSchema !== undefined
+@@ -362,7 +378,7 @@ export function passesToolFilter(
+   if ("allow" in filter) {
+     return filter.allow.includes(toolName);
+   }
+-  return !filter.block.includes(toolName);
++  return "block" in filter ? !filter.block.includes(toolName) : filter.filter(toolName);
+ }
+ 
+ /**
+@@ -452,3 +468,50 @@ async function resolveHeaderValue(
+   }
+   return await value;
+ }
++
++export function projectConnectionToolNames(
++  connection: ResolvedConnectionDefinition,
++  names: readonly string[],
++): Map<string, string> {
++  const pattern = /^[a-zA-Z0-9_-]{1,64}$/;
++  const mapped = names
++    .map((upstreamName) => {
++      const modelName = connection.toolName?.toModelName(upstreamName) ?? upstreamName;
++      if (typeof modelName !== "string" || modelName.length === 0)
++        throw new Error(
++          `Connection "${connection.connectionName}" mapped upstream tool ${JSON.stringify(upstreamName)} to an invalid empty model name.`,
++        );
++      const qualified = `${connection.connectionName}__${modelName}`;
++      if (!pattern.test(qualified))
++        throw new Error(
++          `Connection "${connection.connectionName}" mapped upstream tool ${JSON.stringify(upstreamName)} to ${JSON.stringify(qualified)}, which must match ${String(pattern)}.`,
++        );
++      return { modelName, upstreamName };
++    })
++    .sort((a, b) => a.upstreamName.localeCompare(b.upstreamName));
++  const groups = new Map<string, string[]>();
++  for (const { modelName, upstreamName } of mapped) {
++    const group = groups.get(modelName) ?? [];
++    group.push(upstreamName);
++    groups.set(modelName, group);
++  }
++  const collisions = [...groups]
++    .filter(([, group]) => group.length > 1)
++    .sort(([a], [b]) => a.localeCompare(b));
++  if (collisions.length)
++    throw new Error(
++      `Connection "${connection.connectionName}" tool-name mapping collision: ${collisions.map(([name, group]) => `${JSON.stringify(name)} <= ${group.map((name) => JSON.stringify(name)).join(", ")}`).join("; ")}.`,
++    );
++  return new Map(mapped.map(({ modelName, upstreamName }) => [upstreamName, modelName]));
++}
++
++function sameToolMetadata(a: ConnectionToolMetadata, b: ConnectionToolMetadata): boolean {
++  return (
++    a.name === b.name &&
++    a.modelName === b.modelName &&
++    a.description === b.description &&
++    jsonValuesEqual(a.inputSchema, b.inputSchema) &&
++    jsonValuesEqual(a.outputSchema, b.outputSchema) &&
++    jsonValuesEqual(a.annotations, b.annotations)
++  );
++}
+diff --git a/packages/eve/src/runtime/resolve-agent.ts b/packages/eve/src/runtime/resolve-agent.ts
+index 5ab92b6..d3a844e 100644
+--- a/packages/eve/src/runtime/resolve-agent.ts
++++ b/packages/eve/src/runtime/resolve-agent.ts
+@@ -206,6 +206,7 @@ function createResolvedAgentConfig(
+   if (manifest.config.compaction !== undefined) {
+     const compaction: {
+       model?: NonNullable<NonNullable<ResolvedAgent["config"]>["compaction"]>["model"];
++      strategy?: NonNullable<NonNullable<ResolvedAgent["config"]>["compaction"]>["strategy"];
+       thresholdPercent?: number;
+     } = {};
+ 
+@@ -236,6 +237,10 @@ function createResolvedAgentConfig(
+       compaction.thresholdPercent = manifest.config.compaction.thresholdPercent;
+     }
+ 
++    if (manifest.config.compaction.strategy !== undefined) {
++      compaction.strategy = createResolvedModuleSourceRef(manifest.config.compaction.strategy);
++    }
++
+     config.compaction = compaction;
+   }
+ 
+diff --git a/packages/eve/src/runtime/resolve-connection.ts b/packages/eve/src/runtime/resolve-connection.ts
+index 6760326..ab5b31e 100644
+--- a/packages/eve/src/runtime/resolve-connection.ts
++++ b/packages/eve/src/runtime/resolve-connection.ts
+@@ -1,3 +1,4 @@
++import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
+ import type { CompiledConnectionDefinition } from "#compiler/manifest.js";
+ import type { CompiledModuleMap } from "#compiler/module-map.js";
+ import { expectObjectRecord } from "#internal/authored-module.js";
+@@ -87,6 +88,7 @@ export async function resolveConnectionDefinition(
+       sourceKind: "module";
+       spec?: ResolvedConnectionDefinition["spec"];
+       toolCall?: Readonly<ConnectionToolCallDefinition>;
++      toolName?: Readonly<ConnectionToolNameDefinition>;
+       tools?: Readonly<ToolFilterDefinition>;
+       url: string;
+     } = {
+@@ -130,6 +132,9 @@ export async function resolveConnectionDefinition(
+       result.headers = resolvedRecord.headers as Readonly<HeadersDefinition>;
+     }
+ 
++    if (definition.protocol === "mcp" && resolvedRecord.toolName !== undefined) {
++      result.toolName = resolvedRecord.toolName as Readonly<ConnectionToolNameDefinition>;
++    }
+     if (resolvedRecord.toolCall !== undefined) {
+       result.toolCall = resolvedRecord.toolCall as Readonly<ConnectionToolCallDefinition>;
+     }
+@@ -232,6 +237,7 @@ export function resolveDynamicConnectionValue(
+     sourceId: source.sourceId,
+     sourceKind: "module" as const,
+     toolCall: normalized.toolCall,
++    toolName: normalized.toolName,
+     tools: normalized.tools,
+     url: normalized.url,
+   });
+diff --git a/packages/eve/src/runtime/subagents/dynamic-agent-config.ts b/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
+index e4a951b..0dcc7bd 100644
+--- a/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
++++ b/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
+@@ -49,6 +49,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
+   if (isDynamicModelDefinition(definition.model)) {
+     throw new Error(`${message} The returned "model" must be static.`);
+   }
++  if (definition.compaction?.strategy !== undefined) {
++    throw new Error(`${message} A custom compaction strategy cannot be selected at runtime.`);
++  }
+ 
+   const config: {
+     compaction?: DynamicSubagentAgentConfig["compaction"];
+diff --git a/packages/eve/src/runtime/types.ts b/packages/eve/src/runtime/types.ts
+index a0b45d6..31256b1 100644
+--- a/packages/eve/src/runtime/types.ts
++++ b/packages/eve/src/runtime/types.ts
+@@ -1,3 +1,4 @@
++import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
+ import type { ChannelAdapter } from "#channel/adapter.js";
+ import type { CompiledChannel } from "#channel/compiled-channel.js";
+ import type { NormalizedChannelCorsOptions } from "#channel/cors.js";
+@@ -109,6 +110,7 @@ export interface ResolvedConnectionDefinition extends ResolvedModuleSourceRef {
+   /** Opaque identity used to pin authorization and credential state to this resolved instance. */
+   readonly instanceId?: string;
+   readonly toolCall?: Readonly<ConnectionToolCallDefinition>;
++  readonly toolName?: Readonly<ConnectionToolNameDefinition>;
+   /**
+    * Wire protocol. Selects the runtime client implementation. `tools`
+    * carries the connection's operation/tool filter regardless of
+diff --git a/packages/eve/src/shared/agent-definition.ts b/packages/eve/src/shared/agent-definition.ts
+index 4acb31d..5270449 100644
+--- a/packages/eve/src/shared/agent-definition.ts
++++ b/packages/eve/src/shared/agent-definition.ts
+@@ -1,4 +1,4 @@
+-import type { CallSettings, LanguageModel } from "ai";
++import type { CallSettings, generateText, LanguageModel, ModelMessage, TelemetryOptions } from "ai";
+ import type { StandardJSONSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
+ import type { JsonObject } from "#shared/json.js";
+ import type { ModuleSourceRef } from "#shared/source-ref.js";
+@@ -96,6 +96,33 @@ export type PublicAgentModelDefinition =
+   | PublicAgentStaticModelDefinition
+   | PublicAgentDynamicModelDefinition;
+ 
++/** Input passed to an authored conversation-compaction strategy. */
++export interface AgentCompactionStrategyInput {
++  readonly abortSignal?: AbortSignal;
++  /** Provider options that the active turn model will use after compaction. */
++  readonly continuationProviderOptions?: Parameters<typeof generateText>[0]["providerOptions"];
++  /** True for an explicit compaction request, even when the threshold has not been reached. */
++  readonly force: boolean;
++  readonly headers?: Record<string, string>;
++  readonly messages: readonly ModelMessage[];
++  readonly model: LanguageModel;
++  readonly providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
++  /** Current canonical agent instructions, supplied separately from message history. */
++  readonly system: string;
++  readonly telemetry?: TelemetryOptions;
++  readonly thresholdTokens: number;
++}
++
++/**
++ * Replaces the model-message history when conversation compaction runs.
++ *
++ * The function is loaded from `agent.ts` at runtime and is never persisted in
++ * durable session state.
++ */
++export type AgentCompactionStrategy = (
++  input: AgentCompactionStrategyInput,
++) => readonly ModelMessage[] | PromiseLike<readonly ModelMessage[]>;
++
+ export interface InternalAgentCompactionDefinition {
+   /**
+    * Optional model used only for generating compaction summaries.
+@@ -103,6 +130,8 @@ export interface InternalAgentCompactionDefinition {
+    * When omitted, eve uses the active turn model for the summary call.
+    */
+   model?: InternalAgentModelDefinition;
++  /** Authored strategy location retained for runtime loading. */
++  strategy?: ModuleSourceRef;
+   /**
+    * Fraction of the primary model context window that triggers compaction.
+    *
+@@ -132,6 +161,8 @@ export interface PublicAgentCompactionDefinition {
+    * When omitted, eve uses the active turn model for the summary call.
+    */
+   readonly model?: PublicAgentStaticModelDefinition;
++  /** Optional replacement for eve's built-in conversation compaction strategy. */
++  readonly strategy?: AgentCompactionStrategy;
+   /**
+    * Fraction of the primary model context window that triggers compaction.
+    *
+diff --git a/packages/eve/src/shared/connection-types.ts b/packages/eve/src/shared/connection-types.ts
+index ba729e2..6a70e3a 100644
+--- a/packages/eve/src/shared/connection-types.ts
++++ b/packages/eve/src/shared/connection-types.ts
+@@ -73,7 +73,12 @@ export type HeadersDefinition =
+  */
+ export type ToolFilterDefinition =
+   | { readonly allow: readonly string[] }
+-  | { readonly block: readonly string[] };
++  | { readonly block: readonly string[] }
++  | { readonly filter: (upstreamName: string) => boolean };
++
++export interface ConnectionToolNameDefinition {
++  readonly toModelName: (upstreamName: string) => string;
++}
+ 
+ /**
+  * Framework-resolved identity on whose behalf a connection is
+@@ -427,6 +432,7 @@ export function supportsInteractiveAuthorization(
+ 
+ /** Metadata for a single tool exposed by a connection. */
+ export interface ConnectionToolMetadata {
++  readonly modelName?: string;
+   readonly annotations?: Record<string, unknown>;
+   readonly description: string;
+   readonly inputSchema: Record<string, unknown>;
+@@ -436,6 +442,7 @@ export interface ConnectionToolMetadata {
+ 
+ /** Per-call options for {@link ConnectionClient.executeTool}. */
+ export interface ConnectionToolExecuteOptions {
++  readonly expectedMetadata?: Readonly<ConnectionToolMetadata>;
+   /** Signal forwarded into the underlying transport. */
+   readonly abortSignal?: AbortSignal;
+   /** Replay-stable id of the authored tool call. */

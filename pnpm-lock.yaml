@@ -19,11 +19,11 @@ catalogs:
       specifier: ^6.0.2
       version: 6.0.2
     ai:
-      specifier: ^7.0.83
-      version: 7.0.83
+      specifier: ^7.0.99
+      version: 7.0.99
     eve:
-      specifier: 0.49.0
-      version: 0.49.0
+      specifier: 0.54.3
+      version: 0.54.3
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -35,7 +35,7 @@ catalogs:
       version: 4.4.3
 
 patchedDependencies:
-  eve@0.49.0: 51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a
+  eve@0.54.3: 76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e
 
 importers:
 
@@ -45,7 +45,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.6.15)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -57,8 +57,8 @@ importers:
         specifier: 'catalog:'
         version: 26.2.0
       microsandbox:
-        specifier: ^0.6.15
-        version: 0.6.15
+        specifier: ^0.5.10
+        version: 0.5.10
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -70,7 +70,7 @@ importers:
         version: 3.1116.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -93,7 +93,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -127,10 +127,10 @@ importers:
         version: 26.2.0
       ai:
         specifier: 'catalog:'
-        version: 7.0.83(zod@4.4.3)
+        version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -151,10 +151,10 @@ importers:
         version: 26.2.0
       ai:
         specifier: 'catalog:'
-        version: 7.0.83(zod@4.4.3)
+        version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -173,7 +173,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -192,7 +192,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -211,7 +211,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -233,7 +233,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -252,7 +252,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -271,10 +271,10 @@ importers:
         version: 26.2.0
       ai:
         specifier: 'catalog:'
-        version: 7.0.83(zod@4.4.3)
+        version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -284,8 +284,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/gateway@4.0.67':
-    resolution: {integrity: sha512-LtyxLkg7dZ2iz8Ouh1806BJbA+q+FKc/mXUCl4v/wdNNIGtbfk80dNtlhqjhqOZa4dnfc3caVafRL7ocxzoegA==}
+  '@ai-sdk/gateway@4.0.80':
+    resolution: {integrity: sha512-6t+07o8lSthpKf64Xb1qHWR2bWvJ3Fd2oFvS9fQc45p31bi2OUqan246e/ojAmZpWCiMPjKyQ4TBr4MYytnTiQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -301,6 +301,16 @@ packages:
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@5.0.40':
+    resolution: {integrity: sha512-zsXPwSAQ9mRJ2hvyITaLOYUyuGrBmzFhJXOg4mllGmla1PfNxZcm4GwqMiV2xQaDgcgBMdUGxXkp9xekZZNIkg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@4.0.14':
+    resolution: {integrity: sha512-yukP2tbcQQErG5gLCMBGvpvb/rM3D3KlTKG6eKKOdNHLHqtNNDEeBxdYrY/JL+O76B2ig5dXY19H/f1HFSvRiQ==}
+    engines: {node: '>=22'}
 
   '@ai-sdk/provider@4.0.8':
     resolution: {integrity: sha512-aWO7iwhFUGf347tCwNGggggfmZigaSu7TF739IZSrWWABUp7zkb4Cr3fMqvBe5EIS7ABJJu3Cadn0g/zs1G0QQ==}
@@ -564,95 +574,101 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@oxc-project/types@0.143.0':
-    resolution: {integrity: sha512-u6JZdLBTLotrNC9Vd6vPssINdzcCzleKAH6EJKImQb7GtYvX5keN2dxkoK44stCc4tffE6QQRtZTXVSzsLUlWA==}
+  '@oxc-project/types@0.149.0':
+    resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
 
-  '@rolldown/binding-android-arm64@1.2.3':
-    resolution: {integrity: sha512-zrJtHDcaZJ1Fp7xf4hNl+7seH9Cn/N5TwLYkhgXREtBwAd/jaqW3uqeHxpDugJLVICWg4eW44kOQEGJ1r6jCGw==}
+  '@rolldown/binding-android-arm-eabi@1.2.8':
+    resolution: {integrity: sha512-tN5aztYkKCte4i5SIrrz5yK/HMjEuCqCSCJa418jOV8tZ1cBY3YF2otxB1ktPxzsLA1BeTqwapK0bfjxNvHJVw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [android]
+
+  '@rolldown/binding-android-arm64@1.2.8':
+    resolution: {integrity: sha512-dIYTWl9XprMUiQFoc55KUyk/oS8SKYH3zFl0LTR7RT0Xj4hgSVyuJcroH8JUu8RcpF8fTB6E0aOwCkZoYPcDSQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [android]
 
-  '@rolldown/binding-darwin-arm64@1.2.3':
-    resolution: {integrity: sha512-ieIiibVCp0tX7TLu2cafoNPv8wJyYi01ekXpbf8q2j7F4rGAhhXb/eQh7ge9DRBY78GwmRQtvjZDux7EDbA8kA==}
+  '@rolldown/binding-darwin-arm64@1.2.8':
+    resolution: {integrity: sha512-PCSDQGXD2IyTEFrcgPyBM8jJuGmrbCMuoIOXdbEGVemruKACXoLQJrb+A45Z0L5t1RQkdfJprAYPkikbh7dzdA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [darwin]
 
-  '@rolldown/binding-darwin-x64@1.2.3':
-    resolution: {integrity: sha512-Zh9tCon19eDXJoihx0rqKhMUlMYqzwj3aPsSuHmI4RWZh62dWUL+DJN4C5YQya5TcQBJU/Fe8+rY0jhXTQITqA==}
+  '@rolldown/binding-darwin-x64@1.2.8':
+    resolution: {integrity: sha512-Uk7lRsGhPFHVX/sAUC6D5H9Ol30dFHd6iquokll2th3LpdJ3F5CzQB+7DHn0Ri2mG+U7k2zXiPHDrwZenXhwSA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [darwin]
 
-  '@rolldown/binding-freebsd-x64@1.2.3':
-    resolution: {integrity: sha512-nGbJWewA1wrXXZiQhjAT5rhibGfns5ZNkDVqxsO6zJ3f3YvpoDNNmGMSbbhLuXKjNScaBJVOAboztAWVespQMg==}
+  '@rolldown/binding-freebsd-x64@1.2.8':
+    resolution: {integrity: sha512-DjszaTEVogPqA5bYzsEeqDCQxbcp2fexQwKcRspYji2yzR68fCf+e4fx6kBSRDwX5/brZaHw/hWS9+A/+/w9sQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
 
-  '@rolldown/binding-linux-arm-gnueabihf@1.2.3':
-    resolution: {integrity: sha512-QNniJr5Kml0kDEB98jiDOJjXNroxIIi0IXIbdYzY26Xt1pVbeP62+KnoIZLwirOymX/0jDk/2gI/bNUv7A7OIw==}
+  '@rolldown/binding-linux-arm-gnueabihf@1.2.8':
+    resolution: {integrity: sha512-zmwa7FTmdzB6aaEEuuls18H6Ap5JmJPSoPTuXixeJZV6tG40SyLkApQtz1g8ptZtiEKqj9OM0oNLPh1AgvE31Q==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
 
-  '@rolldown/binding-linux-arm64-gnu@1.2.3':
-    resolution: {integrity: sha512-TkqEAcmmvH3I/q4114NB4RVt6241Dao48pF45uLcFGrwAaIn0iITgTAKP/dLjbN0R4buJjGb91+UHSoFmpgIWw==}
+  '@rolldown/binding-linux-arm64-gnu@1.2.8':
+    resolution: {integrity: sha512-KdYQDPHwJVnbFwdTGMgxsI9SqblBlz6STGM+w1We/d5B8OWWidYH0MwkU/uA1wM5fIpO2MkOVxXrNzzuZhw9ew==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-arm64-musl@1.2.3':
-    resolution: {integrity: sha512-NHqjnxpsndf4MPymxteFAWHHfkTL8HjWh1KB7z23ofZ6QO2euONuxDXjat69dKZRALnGypg8k8SsK8vZJoXv1Q==}
+  '@rolldown/binding-linux-arm64-musl@1.2.8':
+    resolution: {integrity: sha512-jFJTifHnNPY+yzOoNZQfSIysrVyXzEQPhPnOUjmD1bcQGHH6s7c8cViKWar8YplQImE5N9JRqMCLrM2CdxOrZA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@rolldown/binding-linux-ppc64-gnu@1.2.3':
-    resolution: {integrity: sha512-6tbrbwfz5GB9DQ4Jwo6hy9v+vR31xZlvzZ6n5Xut6Hhx5PvrA9q/HsK8KMaYQp063iqZGXwNvZtYNLD7EM/x0w==}
+  '@rolldown/binding-linux-ppc64-gnu@1.2.8':
+    resolution: {integrity: sha512-FhiOziBDWPBjbcmRzfLyIJnaP7AVMFXT7YCXPjXxj7wKU3vx24RjrCNN/zjvVa+N2vVoHJwCoUBvsrN/DG3zIA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-s390x-gnu@1.2.3':
-    resolution: {integrity: sha512-oyuXxXmoZHjXC917IAPFAAv4wWAa0cM9afk8nx1+9/jNNOX1uPf8yDA6p7G0RypOfw/X0PQt5IfoquY1um+zSg==}
+  '@rolldown/binding-linux-s390x-gnu@1.2.8':
+    resolution: {integrity: sha512-WnHfADMzOV2Y55wlx1hzzQnar/wDt/VdvWSD99r18Mz9ylNieIGOkRx3UV21h7m/eJvjySYJkO26VvGNFkwsIQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-x64-gnu@1.2.3':
-    resolution: {integrity: sha512-TytMwF2KVGqP2tgd0I1OY0PAv78dZRAYcF5ssDzjM34SUXCED3uXvSd5+lHoC0bTD6eEdFz7LdQNCO1y0oVk9w==}
+  '@rolldown/binding-linux-x64-gnu@1.2.8':
+    resolution: {integrity: sha512-H9tRr5ibfXFVLxbPOseVewewFpl28zcEdjRDt2FTUZU7odxP0gEv1ki4/kGmcGOh78oRwZuuQllGLZ9zTJp84g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@rolldown/binding-linux-x64-musl@1.2.3':
-    resolution: {integrity: sha512-/E9m3qstrJFVPoULV25mVQblSNExY2+kBsYe4sy0Tn0yOOgJ8wZbZt3KnRbF/XeU2Gl1STKUQnDNTqhIE5MD4A==}
+  '@rolldown/binding-linux-x64-musl@1.2.8':
+    resolution: {integrity: sha512-UefiqfM3D6IVNlZ8tSGs9+Ejjud2T+oxO0IHADU45Y+lyEjD2dVFyZHbkfX0LUb5Zugo/oIv1eCO/KVYhgYJYA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@rolldown/binding-openharmony-arm64@1.2.3':
-    resolution: {integrity: sha512-Kr0OcsoQI816i6HOl3vFHpd1K0eZyh76zgfj4c1nTyaTsd5r2Mj1lwM4R90y/qaCfmTn9eHy0SKwi98eitRxug==}
+  '@rolldown/binding-openharmony-arm64@1.2.8':
+    resolution: {integrity: sha512-637Ke4kWSy6rp9cxQ9gMOXlxPgIw/c1beASV4M//3+9I4uwBVOOl74G+e3zyU3u19U7RkRl/HuewixZ/Z6+Rjg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
 
-  '@rolldown/binding-win32-arm64-msvc@1.2.3':
-    resolution: {integrity: sha512-hOtMwTqnME+/gJcH/PCZ0wn0zPUjiWOgkHpxbSJpfGKMezHltx1S7/k1SitzVa7Ww2cqrDDaFbZEhcJZO8o+Jw==}
+  '@rolldown/binding-win32-arm64-msvc@1.2.8':
+    resolution: {integrity: sha512-xWBkPOF1Q9k/Gv1nQXnVdLxKu74jXppuOM4Z3mnypVUJJJwLsMl7hNJGRAUJoG8A5MgOI1ACKM+wBFxSJzKy4A==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [win32]
 
-  '@rolldown/binding-win32-x64-msvc@1.2.3':
-    resolution: {integrity: sha512-ekcqMMkI2PlhYnfzQnB/cEdYUVVJViWvoUyLrbzgDoi3Snfc1mVBwdnc306ufA5ejy8JSPjT2RlW1nQSjW7efg==}
+  '@rolldown/binding-win32-x64-msvc@1.2.8':
+    resolution: {integrity: sha512-uz2ZvfgXbxqNwijjjbxrnvALwpyODDcgc1T1N8N3rf/DXKQmaFwmB4LX4yyjggpwN2obdQLb2rgirX5ffCWYng==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
@@ -831,21 +847,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@superradcompany/microsandbox-darwin-arm64@0.6.15':
-    resolution: {integrity: sha512-arT8juteFRWc27TcdSk5rGGqjAPOBGsjxYht1DJvPUQzktbU8D/KQbNnV2cujkKJGF2RcwM+FRhKdq1NokIucw==}
-    engines: {node: '>= 22'}
-    cpu: [arm64]
-    os: [darwin]
-
   '@superradcompany/microsandbox-linux-arm64-gnu@0.5.10':
     resolution: {integrity: sha512-4FYoAURc1qbNxIbBFK9shMQ9MxklgPRGEsY7tQog8beqvc3U91W34aZyOu90OTRJm0TNsdoLIg3lxKP4LKIJYQ==}
-    engines: {node: '>= 22'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.15':
-    resolution: {integrity: sha512-0P1+TPzC7CB0VcxLR4fRyfXdkz5H3y/eZqHKDuMxS/sjf6frRTLYUSxLDOXU8pCY2XHmoZ4DD+cJJNSJrkV3Wg==}
     engines: {node: '>= 22'}
     cpu: [arm64]
     os: [linux]
@@ -857,25 +860,6 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
-
-  '@superradcompany/microsandbox-linux-x64-gnu@0.6.15':
-    resolution: {integrity: sha512-+ljPbTmcG9PCMPspNWDEbTXuyLxvOwI0Y5MJaiIs1IRwhrlrRHVlCOCrrdEIEvoVYo1t4So+OVLWYQIMyi8POQ==}
-    engines: {node: '>= 22'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.15':
-    resolution: {integrity: sha512-/00pVSb5iRcxfZJHlKhIzmTxH72yG8RgLiBMsyf+olhHviJierV7cDDRB8Pqttz+ait3GgkS3ide6tuoLmy7Nw==}
-    engines: {node: '>= 22'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@superradcompany/microsandbox-win32-x64-msvc@0.6.15':
-    resolution: {integrity: sha512-7BuxC/sC790Af/33y2Ti44y5+B8NBd91DYDqjrTWA61TTaEm+8jHVInIUVMios3e7VjTdluYWGXNNhtcrn71OQ==}
-    engines: {node: '>= 22'}
-    cpu: [x64]
-    os: [win32]
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1049,8 +1033,8 @@ packages:
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
-  ai@7.0.83:
-    resolution: {integrity: sha512-bg7+SopUwqA7DeQ2O8I9qELyQTHCeeI/0RuNUlT/gGz+LqWrIl5vbYRQv3eMBEnUsVFaM33n6SA8Vqe9gi8L1w==}
+  ai@7.0.99:
+    resolution: {integrity: sha512-Ov+3j/nSajaVH5hO8C94wN9wisG5tAJ8HWsLV9d/+nlzrRGUh3oYO3Kp1fRyUNWjAWLSpGLHLPaHCdfxb307Vg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1073,54 +1057,20 @@ packages:
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
-  crossws@0.4.10:
-    resolution: {integrity: sha512-pz3oubH/dt12KjqsUB0IuXW4nwRDQ583iDsP4555Cpdqx0NoU7pGlWBcayyFI8f/l/idRpgjMEfwuOxSWJYlIA==}
+  crossws@0.4.12:
+    resolution: {integrity: sha512-aypfsr6t0uNvkqaZc6zvBfXzC6pLI0/sIulpkV6RwCVtZqG5ebBzv4weImKK0VNCj91Wl9F5j7p5WU4MNrybng==}
     peerDependencies:
       srvx: '>=0.11.5'
     peerDependenciesMeta:
       srvx:
         optional: true
 
-  db0@0.3.4:
-    resolution: {integrity: sha512-RiXXi4WaNzPTHEOu8UPQKMooIbqOEyqA1t7Z6MsdxSCeb8iUC9ko3LcmsLmeUt2SM5bctfArZKkRQggKZz7JNw==}
-    peerDependencies:
-      '@electric-sql/pglite': '*'
-      '@libsql/client': '*'
-      better-sqlite3: '*'
-      drizzle-orm: '*'
-      mysql2: '*'
-      sqlite3: '*'
-    peerDependenciesMeta:
-      '@electric-sql/pglite':
-        optional: true
-      '@libsql/client':
-        optional: true
-      better-sqlite3:
-        optional: true
-      drizzle-orm:
-        optional: true
-      mysql2:
-        optional: true
-      sqlite3:
-        optional: true
+  db0@0.4.1:
+    resolution: {integrity: sha512-6RBY/bSn42UrqATwsiULj2uYFyEykB3XeA/NLIVQeHNXlYV6D4Idxx3/aa6k5Y45Dwzx7sygeLotnqHWSeURYA==}
 
-  env-runner@0.1.16:
-    resolution: {integrity: sha512-2LRJM4P2KLX6J83QZZrMqvgCDt/D5ea7wPcI3yYiy5cG/9rX5QwdwZFx0D7ktWnjdRyZxYjttGGorb5nFqb1CA==}
+  env-runner@0.2.1:
+    resolution: {integrity: sha512-2iDP2DfheAMMAKeXBggEuFmpSq+1Xs6wQoHba1g65pZFXlC3VHD1O6/tgVzS6GQLv+P2koPKZPKgKhXkigNBdg==}
     hasBin: true
-    peerDependencies:
-      '@netlify/runtime': ^4.1.23
-      '@vercel/queue': '>=0.2.0'
-      miniflare: ^4.20260515.0
-      wrangler: ^4.0.0
-    peerDependenciesMeta:
-      '@netlify/runtime':
-        optional: true
-      '@vercel/queue':
-        optional: true
-      miniflare:
-        optional: true
-      wrangler:
-        optional: true
 
   es-module-lexer@2.3.1:
     resolution: {integrity: sha512-shc1dbU90Yl/xq1QrC7QRtfcwURZuVRfPhZbDoldJ1cn1gzDvBaBWlv0eFolj5+0znnPJz5TXLxsN77X/12KTA==}
@@ -1133,20 +1083,23 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
-  eve@0.49.0:
-    resolution: {integrity: sha512-ij2RJtGs0RNO+1jKtneHfx/atP9LbjlBmyj8SHVoEsFGPgexOOrl1vlvxzIsI2/LY136VBhJ+Lak+dmPjMtpWA==}
+  eve@0.54.3:
+    resolution: {integrity: sha512-OOKmnmcyal5N+qaQcdpNbho+SpXBCZw11q9dSnqtN5f9ccIdcps53do4h49ZyefA/2xYSR8IOVnUB6vqUFtV4w==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
-      ai: ^7.0.82
+      ai: ^7.0.93
       braintrust: ^3.0.0
+      dd-trace: ^6.13.0
       just-bash: ^3.1.0
       microsandbox: ^0.5.0
     peerDependenciesMeta:
       '@opentelemetry/api':
         optional: true
       braintrust:
+        optional: true
+      dd-trace:
         optional: true
       just-bash:
         optional: true
@@ -1178,14 +1131,17 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  h3@2.0.1-rc.22:
-    resolution: {integrity: sha512-Esv0DMIuPkCTSWCA0vO73vcTqwzH1wjSrAO1TXNu/K3up1sZHa9EKMapbmxCDYBeymC3fVTk4qxp7ogQWQ+KgA==}
+  h3@2.0.1-rc.31:
+    resolution: {integrity: sha512-AG7qZzF99a0BSYoXT3evJgIhwSIUKow7R+hwkLRZS06WJ9nbSb7QXUDgs1ByBjp6svTvl++N/GKA7I9YPz9cQQ==}
     engines: {node: '>=20.11.1'}
     hasBin: true
     peerDependencies:
-      crossws: ^0.4.1
+      crossws: ^0.4.12
+      ocache: '>=0.3.0'
     peerDependenciesMeta:
       crossws:
+        optional: true
+      ocache:
         optional: true
 
   hookable@6.1.1:
@@ -1205,62 +1161,25 @@ packages:
     engines: {node: '>= 22'}
     hasBin: true
 
-  microsandbox@0.6.15:
-    resolution: {integrity: sha512-YomYVgvlownnQTK6we1t5ppAOIbqjGMREuIGsedYwDotDZwj8SCeIkidNVczOoNOTUDbkj/ZGhzPmAvjArO2PA==}
-    engines: {node: '>= 22'}
-    hasBin: true
-
   nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nf3@0.3.23:
-    resolution: {integrity: sha512-RWVLAWozmVD3AaDmaU3qMGB3v+yNlH5d9qqStI4e/WLlNQVnJ4YErGDbYCIrGFyrHdbF6I6Baf0Ae6c7tFYmSg==}
+  nf3@0.3.24:
+    resolution: {integrity: sha512-HxLK4bo+5jNsEETZp4w3tJblHOA9MCBY14IN9nZJJV8JDxt9yNIYxuBuLMjTAR5GFa3HL61+8VQDUrXv3/C8fw==}
 
-  nitro@3.0.260610-beta:
-    resolution: {integrity: sha512-KPb4L5yaF/Rx/xoGMpgHRJvZhbhGiqbRKOwwPLCH9jKTKTsEUHLjnJas85AeCzaswqa8Wi52eQBtRsODC4PS0Q==}
+  nitro@3.0.260903-beta:
+    resolution: {integrity: sha512-54gANPi62O8rfMvepiJUVuIzEIinYfpeHbebywlLxvVTgIYXDwSvpaU9Id+0sJOBjBx0wC1/CVYXJkH7SY+l0g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
-    peerDependencies:
-      '@vercel/queue': ^0.3.0
-      dotenv: '*'
-      giget: '*'
-      jiti: ^2.7.0
-      rollup: ^4.61.1
-      vite: ^7 || ^8
-      xml2js: ^0.6.2
-      zephyr-agent: ^0.2.0
-    peerDependenciesMeta:
-      '@vercel/queue':
-        optional: true
-      dotenv:
-        optional: true
-      giget:
-        optional: true
-      jiti:
-        optional: true
-      rollup:
-        optional: true
-      vite:
-        optional: true
-      xml2js:
-        optional: true
-      zephyr-agent:
-        optional: true
 
   obug@2.1.4:
     resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
     engines: {node: '>=12.20.0'}
 
-  ocache@0.1.5:
-    resolution: {integrity: sha512-kNNnkkVQup/QDvmTz8Q84wc2ntiyoVHDxa6eHWKt5qdGAmFRBIxy83rxgCYEjW0x06UJ9E3P6VgM2yY4rOBH4w==}
-
-  ofetch@2.0.0-alpha.3:
-    resolution: {integrity: sha512-zpYTCs2byOuft65vI3z43Dd6iSdFbOZZLb9/d21aCpx2rGastVU9dOCv0lu4ykc1Ur1anAYjDi3SUvR0vq50JA==}
-
-  ohash@2.0.11:
-    resolution: {integrity: sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ==}
+  ocache@0.3.0:
+    resolution: {integrity: sha512-RS/9P0zeBb0gDJmadGERLH8lZNXK7xbufTDhclkXGvFGTsj0G4M5/cLk+mizcERH29mLXNnocfB5wjcK70wGJg==}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -1276,8 +1195,8 @@ packages:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  rolldown@1.2.3:
-    resolution: {integrity: sha512-rn9wpmxplLf7NLNyCk9FyWh3FM43DbY8jOzCdEPzH7uflhTftRbCEpqi6Ly2osgoU8OwObtmavMbWLaWy4LX7A==}
+  rolldown@1.2.8:
+    resolution: {integrity: sha512-Z67nTmhZe7anqnM/EjI392w5i/ANUinjip7QYsOyN37oayduxt3ksdX0hf5OOamkAd53BiIHfbfSzfUmzKFQqQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -1286,8 +1205,8 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
-  rou3@0.8.1:
-    resolution: {integrity: sha512-ePa+XGk00/3HuCqrEnK3LxJW7I0SdNg6EFzKUJG73hMAdDcOUC/i/aSz7LSDwLrGr33kal/rqOGydzwl6U7zBA==}
+  rou3@0.9.2:
+    resolution: {integrity: sha512-3SOzvaAg8rkHrXtRjpCvCvbyO5to9oOO27Z/XqHEYXfMRVSw/qMIVdmaOk9W2lcRLtR6dlqTjo9hDeJk70QBYQ==}
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
@@ -1296,8 +1215,8 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  srvx@0.11.22:
-    resolution: {integrity: sha512-LqZxxBDMKuMAZzFzJnDCkFOrs9MZQZr0LvHiO/SuSZVdQaXD7xQ5UWTUxheJrQPve1qk9MG2B/yttUvJxw8egQ==}
+  srvx@1.0.4:
+    resolution: {integrity: sha512-eZmYaxUfZSo7/8m8UdsHRJNmTLSCTPPom9d7a60vMmuVeZvwhbvflRR+00/CxTCjMOFa5+H8tgBeNDVZ+w7AAQ==}
     engines: {node: '>=20.16.0'}
     hasBin: true
 
@@ -1354,79 +1273,8 @@ packages:
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
 
-  unstorage@2.0.0-alpha.7:
-    resolution: {integrity: sha512-ELPztchk2zgFJnakyodVY3vJWGW9jy//keJ32IOJVGUMyaPydwcA1FtVvWqT0TNRch9H+cMNEGllfVFfScImog==}
-    peerDependencies:
-      '@azure/app-configuration': ^1.11.0
-      '@azure/cosmos': ^4.9.1
-      '@azure/data-tables': ^13.3.2
-      '@azure/identity': ^4.13.0
-      '@azure/keyvault-secrets': ^4.10.0
-      '@azure/storage-blob': ^12.31.0
-      '@capacitor/preferences': ^6 || ^7 || ^8
-      '@deno/kv': '>=0.13.0'
-      '@netlify/blobs': ^6.5.0 || ^7.0.0 || ^8.1.0 || ^9.0.0 || ^10.0.0
-      '@planetscale/database': ^1.19.0
-      '@upstash/redis': ^1.36.2
-      '@vercel/blob': '>=0.27.3'
-      '@vercel/functions': ^2.2.12 || ^3.0.0
-      '@vercel/kv': ^1.0.1
-      aws4fetch: ^1.0.20
-      chokidar: ^4 || ^5
-      db0: '>=0.3.4'
-      idb-keyval: ^6.2.2
-      ioredis: ^5.9.3
-      lru-cache: ^11.2.6
-      mongodb: ^6 || ^7
-      ofetch: '*'
-      uploadthing: ^7.7.4
-    peerDependenciesMeta:
-      '@azure/app-configuration':
-        optional: true
-      '@azure/cosmos':
-        optional: true
-      '@azure/data-tables':
-        optional: true
-      '@azure/identity':
-        optional: true
-      '@azure/keyvault-secrets':
-        optional: true
-      '@azure/storage-blob':
-        optional: true
-      '@capacitor/preferences':
-        optional: true
-      '@deno/kv':
-        optional: true
-      '@netlify/blobs':
-        optional: true
-      '@planetscale/database':
-        optional: true
-      '@upstash/redis':
-        optional: true
-      '@vercel/blob':
-        optional: true
-      '@vercel/functions':
-        optional: true
-      '@vercel/kv':
-        optional: true
-      aws4fetch:
-        optional: true
-      chokidar:
-        optional: true
-      db0:
-        optional: true
-      idb-keyval:
-        optional: true
-      ioredis:
-        optional: true
-      lru-cache:
-        optional: true
-      mongodb:
-        optional: true
-      ofetch:
-        optional: true
-      uploadthing:
-        optional: true
+  unstorage@2.0.0-alpha.10:
+    resolution: {integrity: sha512-6h1veZp8gnp4dGllf0tDijoXxDYymJu251IpKKkrSVH+QHL6tXFbwG85KM+CBHSgpkkgtPuIiZ9oLCLP5+1Evw==}
 
   vite@7.3.6:
     resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
@@ -1519,10 +1367,10 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@4.0.67(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.80(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.8
-      '@ai-sdk/provider-utils': 5.0.32(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.14
+      '@ai-sdk/provider-utils': 5.0.40(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
@@ -1540,6 +1388,19 @@ snapshots:
       eventsource-parser: 3.1.1
       undici: 7.29.0
       zod: 4.4.3
+
+  '@ai-sdk/provider-utils@5.0.40(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.14
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.29.0
+      zod: 4.4.3
+
+  '@ai-sdk/provider@4.0.14':
+    dependencies:
+      json-schema: 0.4.0
 
   '@ai-sdk/provider@4.0.8':
     dependencies:
@@ -1847,48 +1708,51 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
-  '@oxc-project/types@0.143.0': {}
+  '@oxc-project/types@0.149.0': {}
 
-  '@rolldown/binding-android-arm64@1.2.3':
+  '@rolldown/binding-android-arm-eabi@1.2.8':
     optional: true
 
-  '@rolldown/binding-darwin-arm64@1.2.3':
+  '@rolldown/binding-android-arm64@1.2.8':
     optional: true
 
-  '@rolldown/binding-darwin-x64@1.2.3':
+  '@rolldown/binding-darwin-arm64@1.2.8':
     optional: true
 
-  '@rolldown/binding-freebsd-x64@1.2.3':
+  '@rolldown/binding-darwin-x64@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-arm-gnueabihf@1.2.3':
+  '@rolldown/binding-freebsd-x64@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-arm64-gnu@1.2.3':
+  '@rolldown/binding-linux-arm-gnueabihf@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-arm64-musl@1.2.3':
+  '@rolldown/binding-linux-arm64-gnu@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-ppc64-gnu@1.2.3':
+  '@rolldown/binding-linux-arm64-musl@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-s390x-gnu@1.2.3':
+  '@rolldown/binding-linux-ppc64-gnu@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-x64-gnu@1.2.3':
+  '@rolldown/binding-linux-s390x-gnu@1.2.8':
     optional: true
 
-  '@rolldown/binding-linux-x64-musl@1.2.3':
+  '@rolldown/binding-linux-x64-gnu@1.2.8':
     optional: true
 
-  '@rolldown/binding-openharmony-arm64@1.2.3':
+  '@rolldown/binding-linux-x64-musl@1.2.8':
     optional: true
 
-  '@rolldown/binding-win32-arm64-msvc@1.2.3':
+  '@rolldown/binding-openharmony-arm64@1.2.8':
     optional: true
 
-  '@rolldown/binding-win32-x64-msvc@1.2.3':
+  '@rolldown/binding-win32-arm64-msvc@1.2.8':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.2.8':
     optional: true
 
   '@rolldown/pluginutils@1.0.1': {}
@@ -2006,25 +1870,10 @@ snapshots:
   '@superradcompany/microsandbox-darwin-arm64@0.5.10':
     optional: true
 
-  '@superradcompany/microsandbox-darwin-arm64@0.6.15':
-    optional: true
-
   '@superradcompany/microsandbox-linux-arm64-gnu@0.5.10':
     optional: true
 
-  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.15':
-    optional: true
-
   '@superradcompany/microsandbox-linux-x64-gnu@0.5.10':
-    optional: true
-
-  '@superradcompany/microsandbox-linux-x64-gnu@0.6.15':
-    optional: true
-
-  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.15':
-    optional: true
-
-  '@superradcompany/microsandbox-win32-x64-msvc@0.6.15':
     optional: true
 
   '@types/chai@5.2.3':
@@ -2149,11 +1998,11 @@ snapshots:
 
   '@workflow/serde@4.1.0': {}
 
-  ai@7.0.83(zod@4.4.3):
+  ai@7.0.99(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 4.0.67(zod@4.4.3)
-      '@ai-sdk/provider': 4.0.8
-      '@ai-sdk/provider-utils': 5.0.32(zod@4.4.3)
+      '@ai-sdk/gateway': 4.0.80(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.14
+      '@ai-sdk/provider-utils': 5.0.40(zod@4.4.3)
       zod: 4.4.3
 
   assertion-error@2.0.1: {}
@@ -2166,18 +2015,18 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  crossws@0.4.10(srvx@0.11.22):
+  crossws@0.4.12(srvx@1.0.4):
     optionalDependencies:
-      srvx: 0.11.22
+      srvx: 1.0.4
 
-  db0@0.3.4: {}
+  db0@0.4.1: {}
 
-  env-runner@0.1.16:
+  env-runner@0.2.1:
     dependencies:
-      crossws: 0.4.10(srvx@0.11.22)
+      crossws: 0.4.12(srvx@1.0.4)
       exsolve: 1.1.1
       httpxy: 0.5.5
-      srvx: 0.11.22
+      srvx: 1.0.4
 
   es-module-lexer@2.3.1: {}
 
@@ -2214,99 +2063,13 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.5.10)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13)):
+  eve@0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10):
     dependencies:
-      ai: 7.0.83(zod@4.4.3)
-      nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+      ai: 7.0.99(zod@4.4.3)
+      nitro: 3.0.260903-beta
       undici: 8.9.0
     optionalDependencies:
       microsandbox: 0.5.10
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@netlify/runtime'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - '@vercel/queue'
-      - aws4fetch
-      - better-sqlite3
-      - chokidar
-      - dotenv
-      - drizzle-orm
-      - giget
-      - idb-keyval
-      - ioredis
-      - jiti
-      - lru-cache
-      - miniflare
-      - mongodb
-      - mysql2
-      - rollup
-      - sqlite3
-      - uploadthing
-      - vite
-      - wrangler
-      - xml2js
-      - zephyr-agent
-
-  eve@0.49.0(patch_hash=51d3663fc5fbd936a06f41aaa7b1d274a814977cb1455a40dd4b7d0f2a25a09a)(ai@7.0.83(zod@4.4.3))(microsandbox@0.6.15)(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13)):
-    dependencies:
-      ai: 7.0.83(zod@4.4.3)
-      nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
-      undici: 8.9.0
-    optionalDependencies:
-      microsandbox: 0.6.15
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@netlify/runtime'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - '@vercel/queue'
-      - aws4fetch
-      - better-sqlite3
-      - chokidar
-      - dotenv
-      - drizzle-orm
-      - giget
-      - idb-keyval
-      - ioredis
-      - jiti
-      - lru-cache
-      - miniflare
-      - mongodb
-      - mysql2
-      - rollup
-      - sqlite3
-      - uploadthing
-      - vite
-      - wrangler
-      - xml2js
-      - zephyr-agent
 
   eventsource-parser@3.1.1: {}
 
@@ -2321,12 +2084,13 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  h3@2.0.1-rc.22(crossws@0.4.10(srvx@0.11.22)):
+  h3@2.0.1-rc.31(crossws@0.4.12(srvx@1.0.4))(ocache@0.3.0):
     dependencies:
-      rou3: 0.8.1
-      srvx: 0.11.22
+      rou3: 0.9.2
+      srvx: 1.0.4
     optionalDependencies:
-      crossws: 0.4.10(srvx@0.11.22)
+      crossws: 0.4.12(srvx@1.0.4)
+      ocache: 0.3.0
 
   hookable@6.1.1: {}
 
@@ -2343,80 +2107,30 @@ snapshots:
       '@superradcompany/microsandbox-darwin-arm64': 0.5.10
       '@superradcompany/microsandbox-linux-arm64-gnu': 0.5.10
       '@superradcompany/microsandbox-linux-x64-gnu': 0.5.10
-    optional: true
-
-  microsandbox@0.6.15:
-    optionalDependencies:
-      '@superradcompany/microsandbox-darwin-arm64': 0.6.15
-      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.15
-      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.15
-      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.15
-      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.15
 
   nanoid@3.3.18: {}
 
-  nf3@0.3.23: {}
+  nf3@0.3.24: {}
 
-  nitro@3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13)):
+  nitro@3.0.260903-beta:
     dependencies:
       consola: 3.4.2
-      crossws: 0.4.10(srvx@0.11.22)
-      db0: 0.3.4
-      env-runner: 0.1.16
-      h3: 2.0.1-rc.22(crossws@0.4.10(srvx@0.11.22))
+      crossws: 0.4.12(srvx@1.0.4)
+      db0: 0.4.1
+      env-runner: 0.2.1
+      h3: 2.0.1-rc.31(crossws@0.4.12(srvx@1.0.4))(ocache@0.3.0)
       hookable: 6.1.1
-      nf3: 0.3.23
-      ocache: 0.1.5
-      ofetch: 2.0.0-alpha.3
-      ohash: 2.0.11
-      rolldown: 1.2.3
-      srvx: 0.11.22
+      nf3: 0.3.24
+      ocache: 0.3.0
+      rolldown: 1.2.8
+      rou3: 0.9.2
+      srvx: 1.0.4
       unenv: 2.0.0-rc.24
-      unstorage: 2.0.0-alpha.7(db0@0.3.4)(ofetch@2.0.0-alpha.3)
-    optionalDependencies:
-      rollup: 4.62.4
-      vite: 7.3.6(@types/node@26.2.0)(tsx@4.23.13)
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@netlify/runtime'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - aws4fetch
-      - better-sqlite3
-      - chokidar
-      - drizzle-orm
-      - idb-keyval
-      - ioredis
-      - lru-cache
-      - miniflare
-      - mongodb
-      - mysql2
-      - sqlite3
-      - uploadthing
-      - wrangler
+      unstorage: 2.0.0-alpha.10
 
   obug@2.1.4: {}
 
-  ocache@0.1.5:
-    dependencies:
-      ohash: 2.0.11
-
-  ofetch@2.0.0-alpha.3: {}
-
-  ohash@2.0.11: {}
+  ocache@0.3.0: {}
 
   pathe@2.0.3: {}
 
@@ -2430,25 +2144,26 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  rolldown@1.2.3:
+  rolldown@1.2.8:
     dependencies:
-      '@oxc-project/types': 0.143.0
+      '@oxc-project/types': 0.149.0
       '@rolldown/pluginutils': 1.0.1
     optionalDependencies:
-      '@rolldown/binding-android-arm64': 1.2.3
-      '@rolldown/binding-darwin-arm64': 1.2.3
-      '@rolldown/binding-darwin-x64': 1.2.3
-      '@rolldown/binding-freebsd-x64': 1.2.3
-      '@rolldown/binding-linux-arm-gnueabihf': 1.2.3
-      '@rolldown/binding-linux-arm64-gnu': 1.2.3
-      '@rolldown/binding-linux-arm64-musl': 1.2.3
-      '@rolldown/binding-linux-ppc64-gnu': 1.2.3
-      '@rolldown/binding-linux-s390x-gnu': 1.2.3
-      '@rolldown/binding-linux-x64-gnu': 1.2.3
-      '@rolldown/binding-linux-x64-musl': 1.2.3
-      '@rolldown/binding-openharmony-arm64': 1.2.3
-      '@rolldown/binding-win32-arm64-msvc': 1.2.3
-      '@rolldown/binding-win32-x64-msvc': 1.2.3
+      '@rolldown/binding-android-arm-eabi': 1.2.8
+      '@rolldown/binding-android-arm64': 1.2.8
+      '@rolldown/binding-darwin-arm64': 1.2.8
+      '@rolldown/binding-darwin-x64': 1.2.8
+      '@rolldown/binding-freebsd-x64': 1.2.8
+      '@rolldown/binding-linux-arm-gnueabihf': 1.2.8
+      '@rolldown/binding-linux-arm64-gnu': 1.2.8
+      '@rolldown/binding-linux-arm64-musl': 1.2.8
+      '@rolldown/binding-linux-ppc64-gnu': 1.2.8
+      '@rolldown/binding-linux-s390x-gnu': 1.2.8
+      '@rolldown/binding-linux-x64-gnu': 1.2.8
+      '@rolldown/binding-linux-x64-musl': 1.2.8
+      '@rolldown/binding-openharmony-arm64': 1.2.8
+      '@rolldown/binding-win32-arm64-msvc': 1.2.8
+      '@rolldown/binding-win32-x64-msvc': 1.2.8
 
   rollup@4.62.4:
     dependencies:
@@ -2482,13 +2197,13 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.62.4
       fsevents: 2.3.3
 
-  rou3@0.8.1: {}
+  rou3@0.9.2: {}
 
   siginfo@2.0.0: {}
 
   source-map-js@1.2.1: {}
 
-  srvx@0.11.22: {}
+  srvx@1.0.4: {}
 
   stackback@0.0.2: {}
 
@@ -2548,10 +2263,7 @@ snapshots:
     dependencies:
       pathe: 2.0.3
 
-  unstorage@2.0.0-alpha.7(db0@0.3.4)(ofetch@2.0.0-alpha.3):
-    optionalDependencies:
-      db0: 0.3.4
-      ofetch: 2.0.0-alpha.3
+  unstorage@2.0.0-alpha.10: {}
 
   vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13):
     dependencies:

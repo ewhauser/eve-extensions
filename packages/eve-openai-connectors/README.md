@@ -4,9 +4,9 @@ An Eve extension that contributes the current user's authorized ChatGPT connecto
 
 The OpenAI connector endpoint used here is undocumented and experimental. Pin and test upgrades; do not treat it as a stable public API.
 
-## Eve 0.49 patch
+## Eve 0.54.3 patch
 
-This version still carries two small, provider-neutral Eve 0.49.0 patches:
+This version still carries two small, provider-neutral Eve 0.54.3 patches:
 
 - reversible MCP tool-name projection, with Eve retaining the exact upstream name for filtering and execution;
 - MCP annotations and exact upstream identity on connection approval callbacks.
@@ -15,16 +15,16 @@ The old provider-native search/private-marker patch is gone. Discovery always us
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-openai-connectors/patches/eve@0.49.0.patch patches/eve@0.49.0.patch
+cp node_modules/eve-openai-connectors/patches/eve@0.54.3.patch patches/eve@0.54.3.patch
 ```
 
 ```yaml
 # pnpm-workspace.yaml
 patchedDependencies:
-  eve@0.49.0: patches/eve@0.49.0.patch
+  eve@0.54.3: patches/eve@0.54.3.patch
 ```
 
-Keep Eve pinned to `0.49.0` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
+Keep Eve pinned to `0.54.3` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
 
 ## Mount
 

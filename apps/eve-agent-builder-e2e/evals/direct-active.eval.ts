@@ -5,7 +5,7 @@ export default defineEval({
   async test(t) {
     const parent = await t.start("Run the active saved Weather witness agent now.");
     const bootstrapCalled = await parent.waitForEvent("subagent.called", {
-      data: { name: "active-runner", callId: "active-bootstrap" },
+      data: { name: "active-runner", callId: /^active-bootstrap:/ },
     });
     const childId = bootstrapCalled.data.childSessionId;
     const bootstrapLive = t.target.watchTurn(childId);
@@ -15,7 +15,7 @@ export default defineEval({
     bootstrap.event("session.waiting", { count: 1 });
 
     await parent.waitForEvent("subagent.called", {
-      data: { name: "active-runner", callId: "active-execution", childSessionId: childId },
+      data: { name: "active-runner", callId: /^active-execution:/, childSessionId: childId },
     });
     const executionLive = t.target.watchTurn(childId, {
       startIndex: bootstrap.events.length,
@@ -29,14 +29,15 @@ export default defineEval({
     await parent.waitForEvent("subagent.called", {
       data: {
         name: "active-runner",
-        callId: "reject-third-active-turn",
+        callId: /^reject-third-active-turn:/,
         childSessionId: childId,
       },
     });
     const result = await parent.result();
     result.expectOk();
     t.calledTool("agent_builder__prepare_active_run", { count: 1 });
-    t.calledSubagent("active-runner", { count: 2 });
+    t.event("subagent.called", { data: { name: "active-runner" }, count: 3 });
+    t.calledTool("blocking-active-runner", { count: 2 });
     t.eventsSatisfy("all active-runner calls address one declared child", (events) => {
       const childIds = events.flatMap((event) =>
         event.type === "subagent.called" && event.data.name === "active-runner"
