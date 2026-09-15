@@ -295,7 +295,13 @@ function selectRetainedUserMessages(
   maxTokens: number,
 ): ModelMessage[] {
   const users = messages.filter(
-    (message): message is Extract<ModelMessage, { role: "user" }> => message.role === "user",
+    (message): message is Extract<ModelMessage, { role: "user" }> => {
+      if (message.role !== "user") return false;
+      const kind = (message as ModelMessage & { readonly kind?: unknown }).kind;
+      // Eve classifies framework context separately from human input. Keep
+      // legacy provenance intact without treating generated context as intent.
+      return kind === undefined || kind === "user" || kind === "legacy.unknown";
+    },
   );
   const retained: Extract<ModelMessage, { role: "user" }>[] = [];
   let remaining = maxTokens;

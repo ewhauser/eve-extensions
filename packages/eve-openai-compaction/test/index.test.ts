@@ -93,6 +93,23 @@ describe("codexRemoteCompaction", () => {
     ]);
   });
 
+  it("retains user provenance without replaying framework messages as user intent", async () => {
+    const user = { role: "user" as const, kind: "user", content: "Keep my request.", metadata: { source: "chat" } };
+    const legacy = { role: "user" as const, kind: "legacy.unknown", content: "Older context." };
+    const messages = [
+      user,
+      legacy,
+      { role: "user" as const, kind: "context.state", content: "Stale framework state." },
+      { role: "user" as const, kind: "context.compaction", content: "Old summary." },
+      { role: "user" as const, kind: "execution.retry", content: "Retry the tool." },
+    ];
+    const result = await codexRemoteCompaction({
+      apiKey: () => "test-api-key",
+      fetch: vi.fn(async () => compactResponse([{ encrypted_content: "opaque", id: "cmp_kind", type: "compaction" }])),
+    })(strategyInput(messages));
+    expect(result.filter((message) => message.role === "user")).toEqual([user, legacy]);
+  });
+
   it("keeps the newest user messages under the Codex remote-v2 budget", async () => {
     const remoteFetch = vi.fn(async () =>
       compactResponse([{ encrypted_content: "opaque", id: "cmp_2", type: "compaction" }]),

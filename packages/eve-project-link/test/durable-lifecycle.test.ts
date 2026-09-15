@@ -1,3 +1,4 @@
+import { clearDurableDynamicCallbacks } from "../node_modules/eve/dist/src/tools/durable-callbacks.js";
 import { replayDynamicTools } from "../node_modules/eve/dist/src/context/build-dynamic-tools.js";
 import {
   ContextContainer,
@@ -48,6 +49,7 @@ function durableMetadata(
       callbacks: validateDurableDynamicToolCallbacks(
         `project_link__${entryKey}`,
         tool,
+        { sessionId: resolveContext.session.id, scope: "step", resolverSlug: "project-link", entryKey, name: `project_link__${entryKey}` },
       ),
       description: tool.description,
       entryKey,
@@ -59,12 +61,12 @@ function durableMetadata(
 }
 
 afterEach(() => {
-  Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+  clearDurableDynamicCallbacks(resolveContext.session.id);
   vi.resetModules();
 });
 
 describe("durable project-link tools", () => {
-  it("serializes, rebinds, and replays every mounted callback on Eve 0.49", async () => {
+  it("serializes, rebinds, and replays every mounted callback on Eve 0.54.3", async () => {
     const [{ default: projectLink }, { default: projectLinkTools }] =
       await Promise.all([
         import("../extension/extension.js"),
@@ -104,7 +106,7 @@ describe("durable project-link tools", () => {
         channel,
       });
 
-      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      clearDurableDynamicCallbacks(resolveContext.session.id);
       const reboundPending = (await projectLinkTools.events["step.started"]?.(
         {} as never,
         resolveContext,
@@ -112,7 +114,7 @@ describe("durable project-link tools", () => {
       durableMetadata(reboundPending, pendingNames);
 
       const replayedPending = Object.fromEntries(
-        replayDynamicTools(pendingCheckpoint as never).map((tool) => [
+        replayDynamicTools(pendingCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
           tool.name.replace("project_link__", ""),
           tool,
         ]),
@@ -168,7 +170,7 @@ describe("durable project-link tools", () => {
         execute: { closure: { channel } },
       });
 
-      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      clearDurableDynamicCallbacks(resolveContext.session.id);
       const reboundActive = (await projectLinkTools.events["step.started"]?.(
         {} as never,
         resolveContext,
@@ -176,7 +178,7 @@ describe("durable project-link tools", () => {
       durableMetadata(reboundActive, activeNames);
 
       const replayedActive = Object.fromEntries(
-        replayDynamicTools(activeCheckpoint as never).map((tool) => [
+        replayDynamicTools(activeCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
           tool.name.replace("project_link__", ""),
           tool,
         ]),

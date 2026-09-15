@@ -5,7 +5,8 @@ export default defineEval({
   async test(t) {
     const result = await t.send("ROLE_ISOLATION:implementor");
     result.expectOk();
-    t.calledSubagent("implementor", { count: 2 });
+    t.event("subagent.called", { data: { name: "implementor" }, count: 2 });
+    t.calledTool("blocking-implementor", { count: 2 });
     t.messageIncludes("ROLE_ISOLATION_OK implementor");
     t.noFailedActions();
     t.succeeded();

@@ -21,6 +21,7 @@ const requiredDisabled = [
   "load_skill",
   "read_file",
   "todo",
+  "task_cancel",
   "web_fetch",
   "web_search",
   "write_file",
@@ -53,7 +54,7 @@ for (const name of expectedChildren) {
     `${name} did not retain only Eve's isolated default sandbox`,
   );
   assert(child.sandboxWorkspaces?.length === 0, `${name} inherited a root sandbox workspace`);
-  assert(child.tools?.length === 0, `${name} inherited a root authored tool`);
+  assert(child.tools?.length === 0, `${name} has an unexpected authored or framework tool: ${child.tools?.map(({ name }) => name).join(", ")}`);
   assert(
     !child.instructions?.some(({ content }) =>
       content.includes("ROOT_PRIVATE_INSTRUCTION_03"),
@@ -83,4 +84,4 @@ for (const name of expectedChildren) {
 if (failures.length > 0) {
   throw new Error(`Built host isolation verification failed:\n- ${failures.join("\n- ")}`);
 }
-console.log(`Verified Eve 0.49 compiled isolation for ${expectedChildren.join(", ")}.`);
+console.log(`Verified Eve 0.54.3 compiled isolation for ${expectedChildren.join(", ")}.`);
