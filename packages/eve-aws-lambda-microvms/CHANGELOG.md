@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.6.0...eve-aws-lambda-microvms-v0.7.0) (2026-09-15)
+
+
+### Features
+
+* **aws-lambda-microvms:** allow managed build egress ([#121](https://github.com/ewhauser/eve-extensions/issues/121)) ([07256aa](https://github.com/ewhauser/eve-extensions/commit/07256aa8862d1f3f8ec26d27bfe9abb76a868ae2))
+
 ## [0.6.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.5.1...eve-aws-lambda-microvms-v0.6.0) (2026-08-17)
 
 
