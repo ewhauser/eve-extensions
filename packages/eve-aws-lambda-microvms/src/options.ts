@@ -127,11 +127,12 @@ export function resolveAwsLambdaMicrovmOptions(
       buildRoleArn === undefined
         ? accountFromImageArn(verifiedImage!.imageArn)
         : accountFromBuildRoleArn(buildRoleArn);
-    validateCustomerManagedConnector(
+    validateBuildConnector(
       "buildEgressNetworkConnectorArns",
       buildEgressNetworkConnectorArns,
       region,
       account,
+      internetEgress,
     );
     validateCustomerManagedConnector(
       "runtimeEgressNetworkConnectorArns",
@@ -316,6 +317,17 @@ function validateCustomerManagedConnector(
       `AWS Lambda MicroVM ${name}[0] belongs to account ${match[3]}, but the configured image/build role belongs to ${account}.`,
     );
   }
+}
+
+function validateBuildConnector(
+  name: string,
+  values: readonly string[],
+  region: string,
+  account: string,
+  internetEgress: string,
+): void {
+  if (values.length === 1 && values[0] === internetEgress) return;
+  validateCustomerManagedConnector(name, values, region, account);
 }
 
 function expectNonEmpty(name: string, value: string): string {
