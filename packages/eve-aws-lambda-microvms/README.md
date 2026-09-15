@@ -44,6 +44,11 @@ export default defineSandbox({
 
 The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
+Customer-managed runtime networking may be paired with the exact AWS-managed
+`INTERNET_EGRESS` connector for image builds when the build requires public
+package repositories. This intentionally gives the build unrestricted Internet
+egress; the runtime connector remains customer-managed and fail-closed.
+
 `eve dev` and `eve start` provision authored bootstrap and workspace templates. Eve's Vercel build hook also prewarms them during `eve build`. When Eve supplies no template key, this package lazily provisions an empty application template during the first session create. A legacy caller therefore needs image-build permissions unless the same default template was already provisioned.
 
 ### Separate image reconciliation from runtime
