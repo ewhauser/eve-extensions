@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.7.0...eve-aws-lambda-microvms-v0.8.0) (2026-09-16)
+
+
+### Features
+
+* **aws-lambda-microvms:** inject activation provider ([#123](https://github.com/ewhauser/eve-extensions/issues/123)) ([7b6441c](https://github.com/ewhauser/eve-extensions/commit/7b6441c9093e40fc314fbd33c92eb7f80a7dacf1))
+
 ## [0.7.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.6.0...eve-aws-lambda-microvms-v0.7.0) (2026-09-15)
 
 
