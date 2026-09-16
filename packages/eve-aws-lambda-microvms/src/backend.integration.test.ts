@@ -285,6 +285,32 @@ describe("AWS Lambda MicroVM backend", () => {
     expect(fixture.controllers).toHaveLength(0);
   });
 
+  it("injects an activation provider without replacing the other backend services", async () => {
+    const fixture = createServicesFixture();
+    const { activationProvider, ...services } = fixture.services;
+    expect(activationProvider).toBeDefined();
+    const backend = createAwsLambdaMicrovmSandbox({
+      activationProvider: activationProvider!,
+      options: STRICT_OPTIONS,
+      services,
+    });
+
+    await backend.prewarm({
+      runtimeContext: { appRoot: "/app" },
+      seedFiles: [],
+      templateKey: "template-injected-activation-provider",
+    });
+    const handle = await backend.create({
+      runtimeContext: { appRoot: "/app" },
+      sessionKey: "session-injected-activation-provider",
+      templateKey: "template-injected-activation-provider",
+    });
+
+    expect(fixture.api.runMicrovm).toHaveBeenCalledTimes(1);
+    expect(fixture.controllers).toHaveLength(1);
+    await handle.stop();
+  });
+
   it("persists placeholder binding generations and installs fresh replacement material", async () => {
     const fixture = createServicesFixture();
     const backend = createAwsLambdaMicrovmSandbox({

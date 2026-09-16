@@ -272,17 +272,28 @@ See AWS's [security and permissions](https://docs.aws.amazon.com/lambda/latest/d
 
 eve always attaches AWS's `ALL_INGRESS` connector and creates auth tokens scoped only to controller port 8080. Tokens last at most 60 minutes, are refreshed before expiry, and are never persisted. `shellAccess: true` additionally attaches `SHELL_INGRESS`; shell tokens still come from AWS's separate shell-token API.
 
-For production, select customer-managed networking explicitly and provide the non-secret policy lane bound to each connector:
+For production, select customer-managed networking explicitly and provide the non-secret policy lane bound to each connector. Use `createAwsLambdaMicrovmSandbox()` to inject the trusted-host activation provider while retaining the package's default AWS API, controller, and S3 implementations:
 
 ```ts
-awsLambdaMicrovm({
-  // required fields omitted
-  networkingMode: "customer-managed",
-  egressProxyCaBundlePem: process.env.EVE_EGRESS_PROXY_PUBLIC_CA_PEM,
-  buildNetworkLaneId: "package-build-v1",
-  buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
-  runtimeNetworkLaneId: "agent-runtime-v1",
-  runtimeEgressNetworkConnectorArns: [process.env.EVE_AWS_RUNTIME_CONNECTOR_ARN!],
+import {
+  createAwsLambdaMicrovmSandbox,
+  type AwsLambdaMicrovmActivationProvider,
+} from "eve-aws-lambda-microvms";
+
+// Implemented by the trusted host; it never sends proxy credentials to the guest.
+declare const activationProvider: AwsLambdaMicrovmActivationProvider;
+
+createAwsLambdaMicrovmSandbox({
+  activationProvider,
+  options: {
+    // required fields omitted
+    networkingMode: "customer-managed",
+    egressProxyCaBundlePem: process.env.EVE_EGRESS_PROXY_PUBLIC_CA_PEM,
+    buildNetworkLaneId: "package-build-v1",
+    buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
+    runtimeNetworkLaneId: "agent-runtime-v1",
+    runtimeEgressNetworkConnectorArns: [process.env.EVE_AWS_RUNTIME_CONNECTOR_ARN!],
+  },
 });
 ```
 
