@@ -53,6 +53,8 @@ export interface AwsLambdaMicrovmBackendServices {
 }
 
 export interface CreateAwsLambdaMicrovmSandboxInput {
+  /** Trusted-host activation provider for customer-managed networking. */
+  readonly activationProvider?: AwsLambdaMicrovmActivationProvider;
   readonly options: AwsLambdaMicrovmSandboxOptions;
   readonly services?: AwsLambdaMicrovmBackendServices;
 }
@@ -67,12 +69,16 @@ export interface AwsLambdaMicrovmSandboxBackend extends SandboxBackend {
 
 type SandboxBackendPrewarmResult = Awaited<ReturnType<SandboxBackend["prewarm"]>>;
 
-/** Creates an AWS Lambda MicroVM sandbox backend with injectable services. */
+/** Creates an AWS Lambda MicroVM sandbox backend with an optional activation provider or injectable services. */
 export function createAwsLambdaMicrovmSandbox(
   input: CreateAwsLambdaMicrovmSandboxInput,
 ): AwsLambdaMicrovmSandboxBackend {
   const options = resolveAwsLambdaMicrovmOptions(input.options);
-  const services = input.services ?? createDefaultServices(options);
+  const defaultOrInjectedServices = input.services ?? createDefaultServices(options);
+  const services =
+    input.activationProvider === undefined
+      ? defaultOrInjectedServices
+      : { ...defaultOrInjectedServices, activationProvider: input.activationProvider };
 
   return {
     name: AWS_LAMBDA_MICROVM_BACKEND_NAME,
