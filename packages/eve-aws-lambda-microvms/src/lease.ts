@@ -17,8 +17,8 @@ export interface AwsLambdaMicrovmLease {
   readonly signal: AbortSignal;
   readonly state: unknown;
   ensureHeld(): Promise<void>;
-  /** Confirm launch before removing its absolute deadline. */
-  promote(): Promise<void>;
+  /** Synchronous handoff after the final bounded ownership check; starts renewal next turn. */
+  promote(): void;
   /** Publish state with the SAME conditional write used for ownership. */
   updateState(state: unknown): Promise<void>;
   release(): Promise<void>;
@@ -84,7 +84,7 @@ export async function acquireAwsLambdaMicrovmLease(input: {
             })).etag;
             span.setAttributes({
               "eve.aws_lambda_microvm.lease.attempts": attempts,
-              "eve.aws_lambda_microvm.lease.contended": contended || previous !== undefined,
+              "eve.aws_lambda_microvm.lease.contended": contended || (previous !== undefined && previous.expiresAt > 0),
             });
             return { etag, document };
           }
@@ -109,9 +109,11 @@ export async function acquireAwsLambdaMicrovmLease(input: {
   let releasePromise: Promise<void> | undefined;
   let operations = Promise.resolve();
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  let promotionTimer: ReturnType<typeof setTimeout> | undefined;
   function fail(error: unknown): never {
     clearInterval(renewalTimer);
     clearTimeout(expiryTimer);
+    clearTimeout(promotionTimer);
     abort.abort(error);
     throw error;
   }
@@ -122,6 +124,7 @@ export async function acquireAwsLambdaMicrovmLease(input: {
   }
   function armExpiry(): void {
     clearTimeout(expiryTimer);
+    clearTimeout(promotionTimer);
     expiryTimer = setTimeout(() => {
       clearInterval(renewalTimer);
       abort.abort(new Error(Date.now() >= deadlineAt
@@ -164,6 +167,7 @@ export async function acquireAwsLambdaMicrovmLease(input: {
   signal.addEventListener("abort", () => {
     clearInterval(renewalTimer);
     clearTimeout(expiryTimer);
+    clearTimeout(promotionTimer);
   }, { once: true });
   armExpiry();
 
@@ -176,13 +180,17 @@ export async function acquireAwsLambdaMicrovmLease(input: {
       // Verify remote ownership, including forced takeover, without a read/write gap.
       await enqueue(() => write(document.state));
     },
-    async promote() {
-      await enqueue(async () => {
-        await write(document.state);
-        check();
-        deadlineAt = Infinity;
-        await write(document.state);
-      });
+    promote() {
+      check();
+      if (deadlineAt === Infinity) return;
+      deadlineAt = Infinity;
+      // Keep the persisted launch expiry until the handle has been delivered.
+      // Scheduling instead of awaiting also prevents a lost renewal response
+      // from blocking create() behind a ten-minute persisted lease.
+      promotionTimer = setTimeout(() => {
+        void enqueue(() => write(document.state)).catch(() => undefined);
+      }, 0);
+      promotionTimer.unref?.();
     },
     async updateState(state) {
       await enqueue(() => write(state));
@@ -192,16 +200,17 @@ export async function acquireAwsLambdaMicrovmLease(input: {
       released = true;
       clearInterval(renewalTimer);
       clearTimeout(expiryTimer);
+      clearTimeout(promotionTimer);
       abort.abort(new Error("AWS Lambda MicroVM lease released."));
       releasePromise = enqueue(async () => await instrumentAwsLambdaMicrovmOperation(
         { name: "eve.aws_lambda_microvm.lease.release" },
         async () => {
-        // Exact ETag prevents even a delayed release from deleting a successor.
-        if (input.durable) {
-          etag = (await input.storage.putJson(input.key, { ...document, expiresAt: 0 }, { etag })).etag;
-        } else {
-          await input.storage.deleteObject(input.key, { etag });
-        }
+          // Exact ETag prevents even a delayed release from deleting a successor.
+          if (input.durable) {
+            etag = (await input.storage.putJson(input.key, { ...document, expiresAt: 0 }, { etag })).etag;
+          } else {
+            await input.storage.deleteObject(input.key, { etag });
+          }
         },
       ));
       return releasePromise;

@@ -18,7 +18,7 @@ describe("AWS Lambda MicroVM S3 leases", () => {
     expect(lease.signal.aborted).toBe(true);
     expect(storage.json.get("lease")?.etag).toBe(etag);
     await expect(lease.ensureHeld()).rejects.toThrow(/deadline|expired/);
-    await expect(lease.promote()).rejects.toThrow(/deadline|expired/);
+    expect(() => lease.promote()).toThrow(/deadline|expired/);
   });
 
   it("cannot resurrect expired authority when timers have not run", async () => {
@@ -41,6 +41,28 @@ describe("AWS Lambda MicroVM S3 leases", () => {
     await expect(lease.ensureHeld()).resolves.toBeUndefined();
     expect(lease.signal.aborted).toBe(false);
     await lease.release();
+  });
+
+  it("does not extend persisted expiry until the promotion timer runs", async () => {
+    vi.useFakeTimers();
+    const storage = new MemoryStorage();
+    const deadline = Date.now() + 2500;
+    const lease = await acquireAwsLambdaMicrovmLease({ key: "lease", storage, ttlMs: 3000, deadlineAt: deadline });
+    lease.promote();
+    expect(storage.json.get("lease")!.value).toMatchObject({ expiresAt: deadline });
+    await vi.advanceTimersByTimeAsync(0);
+    expect((storage.json.get("lease")!.value as { expiresAt: number }).expiresAt).toBeGreaterThan(deadline);
+    await lease.release();
+  });
+
+  it("cancels scheduled promotion renewal when the handle is released immediately", async () => {
+    vi.useFakeTimers();
+    const storage = new MemoryStorage();
+    const lease = await acquireAwsLambdaMicrovmLease({ key: "lease", storage, ttlMs: 3000, deadlineAt: Date.now() + 2500 });
+    lease.promote();
+    await lease.release();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(storage.json.has("lease")).toBe(false);
   });
 
   it("atomically fences state updates against a successor and retains generations on release", async () => {

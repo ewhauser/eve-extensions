@@ -3,10 +3,10 @@
 ## Plan and implemented design
 
 1. Reproduce the unlimited renewal and expiry-resurrection bugs with fake-clock lease tests.
-2. Cap persisted launch expiry at an absolute deadline, independently abort/reject the caller, and pass that signal into the AWS SDK. Keep the cap through controller readiness and restore; promote only a confirmed session to renewable authority.
+2. Cap persisted launch expiry at an absolute deadline, independently abort/reject the caller, and pass that signal into the AWS SDK. Keep the cap through controller readiness, restore, and the final ownership check. Promote synchronously at ready-handle handoff and schedule the first full-TTL renewal afterward, so a stalled S3 response cannot block launch behind an extended lease.
 3. Persist a launch identity before contacting AWS, then persist the exact request and activation before sending `RunMicrovm`. Reuse both across unconfirmed retries. A committed checkpoint or explicitly retired launch ends that identity.
 4. Store committed checkpoint metadata in the same S3 document and conditional write as lease ownership. Advance fencing generations on acquisition and retain them on release. Use distinct checkpoint object names for every upload. This avoids the time-of-check/time-of-use gap inherent in checking a lease and then writing a separate manifest.
-5. Reject stale results and acquire cleanup authority before termination. Publish the known VM identity/retirement intent before dispatching termination, so even a stalled termination cannot target a VM later adopted by a successor. An idempotent response can name the successor's VM, so unconditional late-result termination is unsafe.
+5. Reject stale results and acquire cleanup authority before termination. Publish the known VM identity/retirement intent before dispatching termination, so even a stalled termination cannot target a VM later adopted by a successor. An idempotent response can name the successor's VM, so unconditional late-result termination is unsafe. Treat AWS ResourceNotFoundException/HTTP 404 as successful retirement; retain the launch record and propagate all other termination errors.
 6. Emit allowlisted phase timings and SDK metadata, and exercise timeout, takeover, cancellation, idempotency, and credential-redaction behavior without AWS calls.
 
 ## Why a token alone is insufficient
@@ -33,5 +33,8 @@ S3 compare-and-swap fences publication against takeover, even if a previous writ
 - Stale checkpoint CAS already in flight during takeover, plus distinct upload object names.
 - Persisted launch caps, stalled renewals, clock jumps without timer execution, forced ETag loss, generation retention, and normal long-lived renewal.
 - Safe SDK request metadata on success/failure, credential-free diagnostics, and launch option validation.
+- Already-removed VM recovery, non-404 retirement failures, stalled final confirmation, and no full-TTL renewal before handle handoff.
+
+The rebase onto `fa221ab4` preserves the OpenTelemetry lifecycle instrumentation added by PR #126, alongside the structured lifecycle callback.
 
 Run `pnpm --filter eve-aws-lambda-microvms test` and `pnpm check` from the repository root.

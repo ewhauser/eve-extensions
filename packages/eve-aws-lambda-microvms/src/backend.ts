@@ -258,7 +258,7 @@ async function prewarmTemplateWithLease(input: {
     );
   } finally {
     if (temporaryMicrovm !== undefined) {
-      await input.services.api.terminateMicrovm(temporaryMicrovm.microvmId).catch(() => undefined);
+      await terminateMicrovmIfPresent(input.services.api, temporaryMicrovm.microvmId).catch(() => undefined);
     }
   }
 }
@@ -305,8 +305,19 @@ async function createSessionHandle(input: {
       key: leaseKey, storage: input.services.storage, durable: true, deadlineAt, abortSignal: signal,
     }), signal, async (lateLease) => { await lateLease.release(); });
     emitLifecycle(input.options.onLifecycleEvent, { phase: "lease-acquisition", status: "completed", durationMs: Date.now() - started });
-    return await bounded(createLeasedSessionHandle({ ...input, createInput, initialLease, onLaunched: (id, microvm) => { launched = { id, microvm }; } }),
-      AbortSignal.any([signal, initialLease.signal]));
+    const handle = await bounded(
+      createLeasedSessionHandle({
+        ...input,
+        createInput,
+        initialLease,
+        onLaunched: (id, microvm) => { launched = { id, microvm }; },
+      }),
+      AbortSignal.any([signal, initialLease.signal]),
+    );
+    // No awaited work after this handoff: uncapped renewal may only start once
+    // create has returned a ready handle, with its launch timer cleared.
+    initialLease.promote();
+    return handle;
   } catch (error) {
     emitLifecycle(input.options.onLifecycleEvent, {
       phase: "launch", status: Date.now() >= deadlineAt ? "deadline" : signal.aborted ? "cancelled" : "failed",
@@ -372,7 +383,7 @@ async function createLeasedSessionHandle(input: {
   authority ??= { metadata: persistedSession ?? null };
   if (authority.launch?.microvmId !== undefined) {
     // A previous owner learned the VM identity. Retire it before fresh authority.
-    await input.services.api.terminateMicrovm(authority.launch.microvmId);
+    await terminateMicrovmIfPresent(input.services.api, authority.launch.microvmId);
     authority = { metadata: authority.metadata };
   }
   authority = { ...authority, launch: authority.launch ?? {
@@ -433,12 +444,12 @@ async function createLeasedSessionHandle(input: {
         }), input.initialLease.signal);
       }
     }
-    await input.initialLease.promote();
+    await input.initialLease.ensureHeld();
   } catch (error) {
     if (launchedMicrovm) {
       try {
         await bounded(input.initialLease.ensureHeld(), input.initialLease.signal);
-        await bounded(input.services.api.terminateMicrovm(activeMicrovm.microvmId), input.initialLease.signal);
+        await bounded(terminateMicrovmIfPresent(input.services.api, activeMicrovm.microvmId), input.initialLease.signal);
         await input.initialLease.updateState({ metadata: authority.metadata } satisfies SessionAuthority);
       } catch {
         // The outer launch scope releases ownership before retrying cleanup.
@@ -547,7 +558,7 @@ async function createLeasedSessionHandle(input: {
             trustedBindingGeneration: nextMetadata.trustedBindingGeneration!,
           });
         } catch (error) {
-          await input.services.api.terminateMicrovm(activeMicrovm.microvmId).catch(() => undefined);
+          await terminateMicrovmIfPresent(input.services.api, activeMicrovm.microvmId).catch(() => undefined);
           throw new Error(
             "AWS Lambda MicroVM checkpoint is durable, but revoking its trusted proxy binding failed; the MicroVM was terminated and the checkpoint remains available.",
             { cause: error },
@@ -555,7 +566,7 @@ async function createLeasedSessionHandle(input: {
         }
       }
       try {
-        await input.services.api.terminateMicrovm(activeMicrovm.microvmId);
+        await terminateMicrovmIfPresent(input.services.api, activeMicrovm.microvmId);
       } catch (error) {
         throw new Error(
           "AWS Lambda MicroVM checkpoint is durable, but terminating the retired MicroVM failed; stale authority remains unusable.",
@@ -597,7 +608,7 @@ async function createLeasedSessionHandle(input: {
             trustedBindingGeneration: activeMicrovm.trustedBindingGeneration!,
           });
         }
-        await input.services.api.terminateMicrovm(activeMicrovm.microvmId);
+        await terminateMicrovmIfPresent(input.services.api, activeMicrovm.microvmId);
         controllerPaused = true;
       }
       options?.abortSignal?.throwIfAborted();
@@ -696,7 +707,7 @@ async function retireLateLaunch(
     // Publish retirement intent BEFORE dispatch: a delayed termination must never
     // target a VM a successor could adopt after this cleanup lease expires.
     await cleanup.updateState({ ...state, launch: { ...state.launch, microvmId: microvm.microvmId } });
-    await bounded(input.services.api.terminateMicrovm(microvm.microvmId), cleanup.signal);
+    await bounded(terminateMicrovmIfPresent(input.services.api, microvm.microvmId), cleanup.signal);
     await cleanup.updateState({ metadata: state.metadata } satisfies SessionAuthority);
     emitLifecycle(input.options.onLifecycleEvent, { phase: "late-result", status: "terminated", durationMs: Date.now() - started });
   } catch {
@@ -818,7 +829,7 @@ async function runMicrovmWithAuthority(input: {
     throw error;
   });
   const microvm = await bounded(requestPromise, signal,
-    input.onLate ?? (async (late) => { await input.services.api.terminateMicrovm(late.microvmId); }));
+    input.onLate ?? (async (late) => { await terminateMicrovmIfPresent(input.services.api, late.microvmId); }));
   // Handles a suspended JS process where the wall clock advanced before timers fired.
   try { await input.lease?.ensureHeld(); } catch (error) {
     void input.onLate?.(microvm).catch(() => undefined);
@@ -836,7 +847,7 @@ async function runMicrovmWithAuthority(input: {
         const state = input.lease.state as SessionAuthority;
         await input.lease.updateState({ ...state, launch: { ...state.launch!, microvmId: microvm.microvmId } });
       }
-      await bounded(input.services.api.terminateMicrovm(microvm.microvmId), signal).catch(() => undefined);
+      await bounded(terminateMicrovmIfPresent(input.services.api, microvm.microvmId), signal).catch(() => undefined);
       throw new Error(
         `AWS Lambda MicroVM activation did not match the requested image and customer-managed connector; terminated ${microvm.microvmId} before controller traffic.`,
       );
@@ -949,4 +960,25 @@ function expectRecord(value: unknown, name: string): Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Retirement is complete when the VM is confirmed absent, including after a lost response. */
+async function terminateMicrovmIfPresent(
+  api: AwsLambdaMicrovmApi,
+  microvmId: string,
+): Promise<void> {
+  try {
+    await api.terminateMicrovm(microvmId);
+  } catch (error) {
+    if (typeof error === "object" && error !== null) {
+      const record = error as {
+        readonly name?: unknown;
+        readonly $metadata?: { readonly httpStatusCode?: unknown };
+      };
+      if (record.name === "ResourceNotFoundException" || record.$metadata?.httpStatusCode === 404) {
+        return;
+      }
+    }
+    throw error;
+  }
 }
