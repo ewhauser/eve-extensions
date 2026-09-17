@@ -41,6 +41,9 @@ vi.mock("@opentelemetry/api", () => ({
   },
 }));
 
+import type { LambdaMicrovmsClient } from "@aws-sdk/client-lambda-microvms";
+import { SdkAwsLambdaMicrovmApi } from "./sdk-api.js";
+
 import { restoreAwsLambdaMicrovmCheckpoint } from "./checkpoint.js";
 import type { AwsLambdaMicrovmStorage } from "./storage.js";
 import type { AwsLambdaMicrovmController } from "./controller-client.js";
@@ -53,6 +56,32 @@ import {
 describe("AWS Lambda MicroVM telemetry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("preserves SDK spans and callbacks while forwarding the launch abort signal", async () => {
+    const startedAt = new Date("2026-09-17T00:00:00Z");
+    const send = vi.fn().mockResolvedValue({
+      endpoint: "mvm.example.test", imageArn: "image", imageVersion: "1",
+      microvmId: "mvm-1", state: "RUNNING", startedAt,
+      $metadata: { requestId: "request-1", attempts: 2, totalRetryDelay: 42 },
+    });
+    const api = new SdkAwsLambdaMicrovmApi("us-east-1", { send } as unknown as LambdaMicrovmsClient);
+    const abortSignal = new AbortController().signal;
+    const onRequestMetadata = vi.fn();
+    await api.runMicrovm({
+      abortSignal, onRequestMetadata, clientToken: "stable-token",
+      egressNetworkConnectorArns: [], ingressNetworkConnectorArns: [],
+      imageArn: "image", imageVersion: "1", maximumDurationSeconds: 600,
+      idlePolicy: { autoResumeEnabled: false, maxIdleDurationSeconds: 300, suspendedDurationSeconds: 1 },
+      logging: { disabled: true }, runHookPayload: "private-activation",
+    });
+    expect(send.mock.calls[0]![1]).toEqual({ abortSignal });
+    expect(onRequestMetadata).toHaveBeenCalledExactlyOnceWith({ requestId: "request-1", attempts: 2, totalRetryDelay: 42 });
+    expect(otel.span.setAttribute).toHaveBeenCalledWith("aws.request_id", "request-1");
+    expect(otel.span.setAttribute).toHaveBeenCalledWith("aws.sdk.attempts", 2);
+    expect(otel.span.addEvent).toHaveBeenCalledWith("microvm.started", {}, startedAt);
+    expect(otel.span.end).toHaveBeenCalledOnce();
+    expect(JSON.stringify(otel.span.setAttribute.mock.calls)).not.toContain("private-activation");
   });
 
   it("records successful operations with bounded metric attributes", async () => {

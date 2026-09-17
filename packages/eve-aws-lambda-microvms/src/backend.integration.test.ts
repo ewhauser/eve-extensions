@@ -1,5 +1,5 @@
 // Derived from vercel/eve PR #208 (Apache-2.0); adapted to current Eve lifecycle semantics.
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AwsLambdaMicrovmApi, AwsLambdaMicrovmRecord } from "./api.js";
 import { createAwsLambdaMicrovmActivationEnvelope } from "./activation.js";
@@ -208,6 +208,10 @@ describe("AWS Lambda MicroVM backend", () => {
     await handle.delete();
 
     for (const key of sessionKeys) {
+      if (key.endsWith("/lease.json")) {
+        expect(fixture.storage.json.get(key)?.value).toMatchObject({ expiresAt: 0, state: { metadata: null } });
+        continue;
+      }
       expect(fixture.storage.json.has(key) || fixture.storage.objects.has(key)).toBe(false);
     }
     for (const key of templateKeys) {
@@ -476,6 +480,386 @@ describe("AWS Lambda MicroVM backend", () => {
   });
 });
 
+describe("bounded session launch authority", () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function setup(strict = false) {
+    const fixture = createServicesFixture();
+    const events: import("./types.js").AwsLambdaMicrovmLifecycleEvent[] = [];
+    const backend = createAwsLambdaMicrovmSandbox({
+      options: { ...(strict ? STRICT_OPTIONS : OPTIONS), launchTimeoutMs: 3000, onLifecycleEvent: (event) => events.push(event) },
+      services: fixture.services,
+    });
+    await backend.prewarm({ runtimeContext: { appRoot: "/app" }, seedFiles: [], templateKey: "bounded" });
+    vi.useFakeTimers();
+    const createInput = { runtimeContext: { appRoot: "/app" }, sessionKey: "bounded-session", templateKey: "bounded" };
+    return { ...fixture, backend, events, createInput };
+  }
+
+  it.each([
+    { name: "ResourceNotFoundException" },
+    { $metadata: { httpStatusCode: 404 } },
+  ])("recovers when a recorded VM is already gone (%j)", async (details) => {
+    const f = await setup();
+    await f.backend.create(f.createInput);
+    vi.setSystemTime(Date.now() + 600001);
+    f.api.terminateMicrovm.mockRejectedValueOnce(Object.assign(new Error("VM already removed"), details));
+    const handle = await f.backend.create(f.createInput);
+    expect(f.api.runMicrovm).toHaveBeenCalledTimes(2);
+    expect(f.api.runMicrovm.mock.calls[1]![0].clientToken).not.toBe(f.api.runMicrovm.mock.calls[0]![0].clientToken);
+    await handle.stop();
+  });
+
+  it.each([
+    { name: "AccessDeniedException", $metadata: { httpStatusCode: 403 } },
+    { name: "ThrottlingException", $metadata: { httpStatusCode: 429 } },
+    { name: "ConflictException", $metadata: { httpStatusCode: 409 } },
+    { name: "Error" },
+  ])("retains the launch when retirement is not confirmed (%j)", async (details) => {
+    const f = await setup();
+    await f.backend.create(f.createInput);
+    vi.setSystemTime(Date.now() + 600001);
+    const error = Object.assign(new Error("retirement not confirmed"), details);
+    f.api.terminateMicrovm.mockRejectedValueOnce(error);
+    await expect(f.backend.create(f.createInput)).rejects.toBe(error);
+    expect(f.api.runMicrovm).toHaveBeenCalledTimes(1);
+    const authority = [...f.storage.json.entries()].find(([key]) => key.includes("/sessions/") && key.endsWith("lease.json"))![1];
+    expect(authority.value).toMatchObject({ state: { launch: { microvmId: "mvm-1" } } });
+    await vi.advanceTimersByTimeAsync(0);
+    const recovered = await f.backend.create(f.createInput);
+    expect(f.api.terminateMicrovm).toHaveBeenNthCalledWith(2, "mvm-1");
+    await recovered.stop();
+  });
+
+  it("keeps a stalled final ownership check bounded and fences its late response", async () => {
+    const f = await setup();
+    const deadline = Date.now() + 3000;
+    let ready = false;
+    let confirmationWrites = 0;
+    let delayedResult!: { etag: string };
+    const delayed = deferred<{ etag: string }>();
+    vi.spyOn(FakeController.prototype, "waitUntilReady").mockImplementation(async () => { ready = true; });
+    const original = f.storage.putJson.bind(f.storage);
+    vi.spyOn(f.storage, "putJson").mockImplementation(async (key, value, condition) => {
+      const result = await original(key, value, condition);
+      if (ready && key.includes("/sessions/") && ++confirmationWrites === 2) {
+        delayedResult = result;
+        return await delayed.promise;
+      }
+      return result;
+    });
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    expect(confirmationWrites).toBe(2);
+    const key = [...f.storage.json.keys()].find((key) => key.includes("/sessions/") && key.endsWith("lease.json"))!;
+    expect((f.storage.json.get(key)!.value as { expiresAt: number }).expiresAt).toBeLessThanOrEqual(deadline);
+    const successor = await f.backend.create(f.createInput);
+    const before = f.storage.json.get(key);
+    delayed.resolve(delayedResult);
+    await vi.advanceTimersByTimeAsync(0);
+    // Promotion may renew the successor; its authority and VM must remain intact.
+    expect(f.storage.json.get(key)!.value).toMatchObject({
+      generation: (before!.value as { generation: number }).generation,
+      state: { launch: { microvmId: "mvm-2" } },
+    });
+    expect(f.api.terminateMicrovm.mock.calls.every(([id]) => id === "mvm-1")).toBe(true);
+    await successor.stop();
+  });
+
+  it("does not dispatch an uncapped renewal before handing off a ready session", async () => {
+    const f = await setup();
+    const deadline = Date.now() + 3000;
+    const original = f.storage.putJson.bind(f.storage);
+    let handedOff = false;
+    let renewedBeforeHandoff: boolean | undefined;
+    vi.spyOn(f.storage, "putJson").mockImplementation(async (key, value, condition) => {
+      const result = await original(key, value, condition);
+      if (key.includes("/sessions/") && Number((value as { expiresAt?: number }).expiresAt) > deadline) {
+        renewedBeforeHandoff = !handedOff;
+        return await new Promise(() => {});
+      }
+      return result;
+    });
+    const creating = f.backend.create(f.createInput).then((handle) => {
+      handedOff = true;
+      return handle;
+    });
+    void creating.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(renewedBeforeHandoff).toBe(false);
+    expect(handedOff).toBe(true);
+    await creating;
+  });
+
+  it("rejects a never-settling RunMicrovm and stops persisted launch renewal", async () => {
+    const f = await setup();
+    f.api.runMicrovm.mockImplementation(() => new Promise(() => {}));
+    const started = Date.now();
+    const result = f.backend.create(f.createInput);
+    const failure = expect(result).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(0);
+    const request = f.api.runMicrovm.mock.calls[0]![0];
+    expect(request.abortSignal?.aborted).toBe(false);
+    const key = [...f.storage.json.keys()].find((key) => key.includes("/sessions/") && key.endsWith("lease.json"))!;
+    expect(f.storage.json.get(key)?.value).toMatchObject({ expiresAt: started + 3000 });
+    await vi.advanceTimersByTimeAsync(3000);
+    await failure;
+    expect(request.abortSignal?.aborted).toBe(true);
+    const after = f.storage.json.get(key);
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+    expect(f.storage.json.get(key)).toEqual(after);
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "launch", status: "deadline", durationMs: 3000 }));
+  });
+
+  it("replays the exact durable request and activation after a retry; rejects a stale copy of the adopted VM", async () => {
+    const f = await setup(true);
+    const first = deferred<AwsLambdaMicrovmRecord>();
+    const realRun = f.api.runMicrovm.getMockImplementation()!;
+    let shared: AwsLambdaMicrovmRecord;
+    f.api.runMicrovm.mockImplementationOnce(async (request) => {
+      shared = await realRun(request);
+      return await first.promise;
+    }).mockImplementationOnce(async () => shared);
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    const handle = await f.backend.create(f.createInput);
+    const [a, b] = f.api.runMicrovm.mock.calls.map(([request]) => request);
+    expect(a!.clientToken).toBe(b!.clientToken);
+    const { abortSignal: _aSignal, onRequestMetadata: _aLog, ...aRequest } = a!;
+    const { abortSignal: _bSignal, onRequestMetadata: _bLog, ...bRequest } = b!;
+    expect(bRequest).toEqual(aRequest);
+    expect(JSON.parse(b!.runHookPayload).activationId).toBe("activation-fixture-1");
+    first.resolve(shared!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.terminateMicrovm).not.toHaveBeenCalled();
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "late-result", status: "rejected" }));
+    await handle.stop();
+    const next = await f.backend.create(f.createInput);
+    expect(f.api.runMicrovm.mock.calls[2]![0].clientToken).not.toBe(a!.clientToken);
+    await next.stop();
+  });
+
+  it("terminates an unowned late success without publishing a checkpoint", async () => {
+    const f = await setup();
+    const late = deferred<AwsLambdaMicrovmRecord>();
+    const realRun = f.api.runMicrovm.getMockImplementation()!;
+    let record: AwsLambdaMicrovmRecord;
+    f.api.runMicrovm.mockImplementationOnce(async (request) => {
+      record = await realRun(request);
+      return await late.promise;
+    });
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    late.resolve(record!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.terminateMicrovm).toHaveBeenCalledWith(record!.microvmId);
+    expect(f.controllers).toHaveLength(0);
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "late-result", status: "terminated" }));
+    const authority = [...f.storage.json.entries()].find(([key]) => key.includes("/sessions/") && key.endsWith("lease.json"))![1];
+    expect(authority.value).toMatchObject({ state: { metadata: null }, expiresAt: 0 });
+    expect((authority.value as { state: object }).state).not.toHaveProperty("launch");
+  });
+
+  it("clears a late launch record when the returned VM was already removed", async () => {
+    const f = await setup();
+    const late = deferred<AwsLambdaMicrovmRecord>();
+    const realRun = f.api.runMicrovm.getMockImplementation()!;
+    let record!: AwsLambdaMicrovmRecord;
+    f.api.runMicrovm.mockImplementationOnce(async (request) => {
+      record = await realRun(request);
+      return await late.promise;
+    });
+    f.api.terminateMicrovm.mockRejectedValueOnce(Object.assign(new Error("already removed"), {
+      name: "ResourceNotFoundException",
+    }));
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    late.resolve(record);
+    await vi.advanceTimersByTimeAsync(0);
+    const authority = [...f.storage.json.entries()].find(([key]) => key.includes("/sessions/") && key.endsWith("lease.json"))![1];
+    expect((authority.value as { state: unknown }).state).toEqual({ metadata: null });
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "late-result", status: "terminated" }));
+    const successor = await f.backend.create(f.createInput);
+    await successor.stop();
+  });
+
+  it("never adopts a VM targeted by an in-flight late-result termination", async () => {
+    const f = await setup();
+    const late = deferred<AwsLambdaMicrovmRecord>();
+    const termination = deferred<void>();
+    const realRun = f.api.runMicrovm.getMockImplementation()!;
+    let oldVm: AwsLambdaMicrovmRecord;
+    f.api.runMicrovm.mockImplementationOnce(async (request) => {
+      oldVm = await realRun(request);
+      return await late.promise;
+    });
+    f.api.terminateMicrovm.mockImplementationOnce(() => termination.promise);
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    late.resolve(oldVm!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.terminateMicrovm).toHaveBeenCalledWith(oldVm!.microvmId);
+    await vi.advanceTimersByTimeAsync(3000);
+    const successor = await f.backend.create(f.createInput);
+    expect(f.api.runMicrovm.mock.calls[1]![0].clientToken).not.toBe(f.api.runMicrovm.mock.calls[0]![0].clientToken);
+    termination.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.terminateMicrovm.mock.calls.every(([id]) => id === oldVm!.microvmId)).toBe(true);
+    await successor.stop();
+  });
+
+  it("keeps confirmed session authority renewable beyond both the launch budget and sliding TTL", async () => {
+    const f = await setup();
+    const handle = await f.backend.create(f.createInput);
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+    await handle.session.writeTextFile({ path: "/workspace/alive", content: "yes" });
+    await expect(handle.captureState()).resolves.toMatchObject({ metadata: { checkpoint: { generation: 1 } } });
+  });
+
+  it("bounds blocked metadata reads without later issuing RunMicrovm", async () => {
+    const f = await setup();
+    const read = deferred<StoredJson<unknown> | null>();
+    const original = f.storage.getJson.bind(f.storage);
+    vi.spyOn(f.storage, "getJson").mockImplementation(async (key) => {
+      if (key.includes("/templates/") && key.endsWith("manifest.json")) return await read.promise as never;
+      return await original(key) as never;
+    });
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    read.resolve(null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.runMicrovm).not.toHaveBeenCalled();
+  });
+
+  it("bounds blocked activation creation and cannot launch when it eventually returns", async () => {
+    const f = await setup(true);
+    const provider = f.services.activationProvider!;
+    const activation = await provider.createActivation({ networkLaneId: "runtime-lane", purposeHash: "a".repeat(64) });
+    const late = deferred<typeof activation>();
+    vi.spyOn(provider, "createActivation").mockReturnValue(late.promise);
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    late.resolve(activation);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.runMicrovm).not.toHaveBeenCalled();
+  });
+
+  it("bounds a controller that never becomes ready and retires its MicroVM", async () => {
+    const f = await setup();
+    vi.spyOn(FakeController.prototype, "waitUntilReady").mockImplementation(() => new Promise(() => {}));
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.api.terminateMicrovm).toHaveBeenCalledWith("mvm-1");
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "late-result", status: "terminated" }));
+  });
+
+  it("fails closed if a retry changes the pending launch configuration", async () => {
+    const f = await setup();
+    f.api.runMicrovm.mockImplementationOnce(() => new Promise(() => {}));
+    const failed = expect(f.backend.create(f.createInput)).rejects.toThrow(/deadline/);
+    await vi.advanceTimersByTimeAsync(3000);
+    await failed;
+    const changed = createAwsLambdaMicrovmSandbox({ options: { ...OPTIONS, maximumDurationSeconds: 60 }, services: f.services });
+    await expect(changed.create(f.createInput)).rejects.toThrow(/pending launch configuration changed/);
+    expect(f.api.runMicrovm).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a diagnostics callback failure affect the session", async () => {
+    const f = await setup();
+    const backend = createAwsLambdaMicrovmSandbox({ options: { ...OPTIONS, onLifecycleEvent() { throw new Error("observer failed"); } }, services: f.services });
+    const handle = await backend.create(f.createInput);
+    await handle.stop();
+  });
+
+  it("propagates caller cancellation to a non-cooperative API", async () => {
+    const f = await setup();
+    const abort = new AbortController();
+    f.api.runMicrovm.mockImplementation(() => new Promise(() => {}));
+    const failed = expect(f.backend.create({ ...f.createInput, abortSignal: abort.signal })).rejects.toThrow("caller cancelled");
+    await vi.advanceTimersByTimeAsync(0);
+    abort.abort(new Error("caller cancelled"));
+    await failed;
+    expect(f.api.runMicrovm.mock.calls[0]![0].abortSignal?.aborted).toBe(true);
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "launch", status: "cancelled" }));
+  });
+
+  it("restores authoritative state ahead of stale workflow metadata and retains deletion tombstones", async () => {
+    const f = await setup();
+    const first = await f.backend.create(f.createInput);
+    await first.session.writeTextFile({ path: "/workspace/one", content: "one" });
+    const oldState = await first.captureState();
+    const second = await f.backend.create(f.createInput);
+    expect(f.controllers.at(-1)!.restored).toHaveLength(1);
+    await second.session.writeTextFile({ path: "/workspace/two", content: "two" });
+    const newState = await second.captureState();
+    await expect(first.delete()).rejects.toThrow(/replaced by another holder/);
+    const third = await f.backend.create({ ...f.createInput, existingMetadata: oldState.metadata });
+    const expectedKey = (newState.metadata.checkpoint as { key: string }).key;
+    expect(f.controllers.at(-1)!.restored[0]!.url).toContain(expectedKey);
+    await third.delete();
+    const fourth = await f.backend.create({ ...f.createInput, existingMetadata: oldState.metadata });
+    expect(f.controllers.at(-1)!.restored).toHaveLength(0);
+    await fourth.stop();
+  });
+
+  it("fences a checkpoint CAS already in flight when a successor takes ownership", async () => {
+    const f = await setup();
+    const first = await f.backend.create(f.createInput);
+    await first.session.writeTextFile({ path: "/workspace/old", content: "old" });
+    const gate = deferred<void>();
+    const original = f.storage.putJson.bind(f.storage);
+    let blocked = false;
+    vi.spyOn(f.storage, "putJson").mockImplementation(async (key, value, condition) => {
+      if (!blocked && key.includes("/sessions/") && (value as { state?: { metadata?: unknown } }).state?.metadata) {
+        blocked = true;
+        await gate.promise;
+      }
+      return await original(key, value, condition);
+    });
+    const captured = first.captureState();
+    const failed = expect(captured).rejects.toThrow(/expired|released|precondition/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(blocked).toBe(true);
+    vi.setSystemTime(Date.now() + 600001);
+    const second = await f.backend.create(f.createInput);
+    await second.session.writeTextFile({ path: "/workspace/new", content: "new" });
+    const successor = await second.captureState();
+    const key = [...f.storage.json.keys()].find((key) => key.includes("/sessions/") && key.endsWith("lease.json"))!;
+    const before = f.storage.json.get(key);
+    gate.resolve();
+    await failed;
+    expect(f.storage.json.get(key)).toEqual(before);
+    expect(before?.value).toMatchObject({ state: { metadata: successor.metadata } });
+    // Same content/generation still has distinct object names across owners.
+    expect([...f.storage.objects.keys()].filter((key) => key.includes("/sessions/") && key.endsWith(".tar.zst"))).toHaveLength(2);
+  });
+
+  it("emits allowlisted timings and SDK metadata without activation or error credentials", async () => {
+    const f = await setup(true);
+    f.api.runMicrovm.mockImplementationOnce(async (request) => {
+      request.onRequestMetadata?.({ requestId: "aws-request-1", attempts: 3, totalRetryDelay: 41, secret: request.runHookPayload } as never);
+      throw new Error(request.runHookPayload);
+    });
+    await expect(f.backend.create(f.createInput)).rejects.toThrow();
+    expect(f.events).toContainEqual(expect.objectContaining({ phase: "run-microvm", requestId: "aws-request-1", attempts: 3, totalRetryDelay: 41 }));
+    expect(f.events.map((event) => event.phase)).toEqual(expect.arrayContaining(["lease-acquisition", "metadata-read", "activation", "run-microvm", "launch"]));
+    expect(JSON.stringify(f.events)).not.toMatch(/eve_local|eve_placeholder|controllerSessionToken|runHookPayload|secret/);
+  });
+});
+
 function createServicesFixture(
   input: {
     readonly controllerReadyError?: Error;
@@ -730,4 +1114,14 @@ function byteStream(value: string): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }

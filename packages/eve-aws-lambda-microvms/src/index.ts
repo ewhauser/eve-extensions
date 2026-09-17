@@ -29,5 +29,6 @@ export type {
   AwsLambdaMicrovmMemoryMiB,
   AwsLambdaMicrovmNetworkingMode,
   AwsLambdaMicrovmSandboxOptions,
+  AwsLambdaMicrovmLifecycleEvent,
   AwsLambdaMicrovmVerifiedImage,
 } from "./types.js";
