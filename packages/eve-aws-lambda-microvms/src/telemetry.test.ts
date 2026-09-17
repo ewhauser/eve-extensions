@@ -41,6 +41,10 @@ vi.mock("@opentelemetry/api", () => ({
   },
 }));
 
+import { restoreAwsLambdaMicrovmCheckpoint } from "./checkpoint.js";
+import type { AwsLambdaMicrovmStorage } from "./storage.js";
+import type { AwsLambdaMicrovmController } from "./controller-client.js";
+
 import {
   instrumentAwsLambdaMicrovmOperation,
   recordAwsSdkMetadata,
@@ -92,12 +96,52 @@ describe("AWS Lambda MicroVM telemetry", () => {
       ),
     ).rejects.toBe(error);
 
-    expect(otel.span.recordException).toHaveBeenCalledWith(error);
+    expect(otel.span.recordException).toHaveBeenCalledWith({
+      name: "Error",
+      message: "AWS Lambda MicroVM operation failed.",
+    });
     expect(otel.span.setStatus).toHaveBeenCalledWith({ code: 2 });
     expect(otel.span.end).toHaveBeenCalledOnce();
     expect(otel.counter.add).toHaveBeenCalledWith(1, {
       "eve.aws_lambda_microvm.operation": "aws.lambda_microvms.run_microvm",
       "eve.aws_lambda_microvm.outcome": "error",
+    });
+  });
+
+  it("does not export checkpoint keys from restore failures", async () => {
+    await expect(restoreAwsLambdaMicrovmCheckpoint({
+      checkpoint: {
+        key: "private/checkpoint-key",
+        generation: 1,
+        size: 10,
+        sha256: "a".repeat(64),
+      },
+      storage: { getObjectInfo: async () => null } as unknown as AwsLambdaMicrovmStorage,
+      controller: {} as AwsLambdaMicrovmController,
+    })).rejects.toThrow("private/checkpoint-key");
+
+    expect(otel.span.recordException).toHaveBeenCalledWith({
+      name: "Error",
+      message: "AWS Lambda MicroVM operation failed.",
+    });
+    expect(JSON.stringify(otel.span.recordException.mock.calls)).not.toContain("private/checkpoint-key");
+  });
+
+  it.each([
+    Object.assign(new Error("secret-message", { cause: new Error("secret-cause") }), {
+      name: "secret-name",
+      stack: "secret-stack",
+    }),
+    "secret-string",
+    { toString() { throw new Error("must not stringify thrown objects"); } },
+  ])("redacts arbitrary failures and preserves the original rejection (%#)", async (error) => {
+    await expect(instrumentAwsLambdaMicrovmOperation(
+      { name: "eve.aws_lambda_microvm.template.prewarm" },
+      async () => { throw error; },
+    )).rejects.toBe(error);
+    expect(otel.span.recordException).toHaveBeenCalledWith({
+      name: "Error",
+      message: "AWS Lambda MicroVM operation failed.",
     });
   });
 

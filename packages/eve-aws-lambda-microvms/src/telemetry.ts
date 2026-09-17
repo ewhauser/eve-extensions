@@ -3,6 +3,9 @@ import {
   SpanStatusCode,
   trace,
   type Attributes,
+  type Counter,
+  type Histogram,
+  type Meter,
   type Span,
 } from "@opentelemetry/api";
 import { performance } from "node:perf_hooks";
@@ -10,18 +13,27 @@ import { performance } from "node:perf_hooks";
 const INSTRUMENTATION_NAME = "eve-aws-lambda-microvms";
 
 const tracer = trace.getTracer(INSTRUMENTATION_NAME);
-const meter = metrics.getMeter(INSTRUMENTATION_NAME);
-const operationDuration = meter.createHistogram(
-  "eve.aws_lambda_microvm.operation.duration",
-  {
-    description: "Duration of AWS Lambda MicroVM lifecycle operations.",
-    unit: "s",
-  },
-);
-const operationCount = meter.createCounter("eve.aws_lambda_microvm.operation.count", {
-  description: "Completed AWS Lambda MicroVM lifecycle operations.",
-  unit: "{operation}",
-});
+const instruments = new WeakMap<Meter, { duration: Histogram; count: Counter }>();
+
+function operationMetrics(): { duration: Histogram; count: Counter } {
+  // Unlike tracers, no-op meters do not reconnect when a provider is registered.
+  const meter = metrics.getMeter(INSTRUMENTATION_NAME);
+  let result = instruments.get(meter);
+  if (result === undefined) {
+    result = {
+      duration: meter.createHistogram("eve.aws_lambda_microvm.operation.duration", {
+        description: "Duration of AWS Lambda MicroVM lifecycle operations.",
+        unit: "s",
+      }),
+      count: meter.createCounter("eve.aws_lambda_microvm.operation.count", {
+        description: "Completed AWS Lambda MicroVM lifecycle operations.",
+        unit: "{operation}",
+      }),
+    };
+    instruments.set(meter, result);
+  }
+  return result;
+}
 
 export interface AwsLambdaMicrovmTelemetryOperation {
   readonly attributes?: Attributes;
@@ -43,7 +55,12 @@ export async function instrumentAwsLambdaMicrovmOperation<T>(
       return result;
     } catch (error) {
       outcome = "error";
-      span.recordException(error instanceof Error ? error : String(error));
+      // Messages, names, stacks, and causes can contain credentials or guest data.
+      // Keep the original error for the caller, but export only a fixed diagnostic.
+      span.recordException({
+        name: "Error",
+        message: "AWS Lambda MicroVM operation failed.",
+      });
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
@@ -52,8 +69,9 @@ export async function instrumentAwsLambdaMicrovmOperation<T>(
         "eve.aws_lambda_microvm.operation": input.name,
         "eve.aws_lambda_microvm.outcome": outcome,
       };
-      operationDuration.record((performance.now() - startedAt) / 1000, attributes);
-      operationCount.add(1, attributes);
+      const { duration, count } = operationMetrics();
+      duration.record((performance.now() - startedAt) / 1000, attributes);
+      count.add(1, attributes);
       span.end();
     }
   });

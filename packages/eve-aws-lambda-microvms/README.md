@@ -344,7 +344,9 @@ SDK returns them. The
 `eve.aws_lambda_microvm.operation.count` counter use only operation, outcome, Region, and
 networking mode where available. MicroVM IDs and image versions are trace-only; client tokens,
 controller credentials, activation payloads, checkpoint keys, presigned URLs, and command or
-environment values are never recorded.
+environment values are never recorded. Exception events use a fixed message without the original
+error name, message, stack, or cause; callers still receive the original error. Metrics also activate
+when the host registers its provider after this package has been imported or used.
 
 eve does not prune images or durable checkpoints. Configure S3 lifecycle rules appropriate to your retention policy for abandoned multipart uploads, temporary objects, noncurrent object versions, old checkpoint generations, and deleted applications. Do not expire the currently referenced checkpoint or template descriptor.
 
