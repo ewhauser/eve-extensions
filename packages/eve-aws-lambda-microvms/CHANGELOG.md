@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.8.0...eve-aws-lambda-microvms-v0.9.0) (2026-09-17)
+
+
+### Features
+
+* **aws-lambda-microvms:** add OpenTelemetry lifecycle instrumentation ([#126](https://github.com/ewhauser/eve-extensions/issues/126)) ([fa221ab](https://github.com/ewhauser/eve-extensions/commit/fa221ab40160929e7e394467c8209669fed473c9))
+
+
+### Bug Fixes
+
+* **aws-lambda-microvms:** bound launch authority and fence session state ([#127](https://github.com/ewhauser/eve-extensions/issues/127)) ([2c7a957](https://github.com/ewhauser/eve-extensions/commit/2c7a9576f853add7a284fa422519f7781aec00e2))
+
 ## [0.8.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.7.0...eve-aws-lambda-microvms-v0.8.0) (2026-09-16)
 
 
