@@ -41,6 +41,7 @@ import { ensureAwsLambdaMicrovmImage } from "./provision.js";
 import { SdkAwsLambdaMicrovmApi } from "./sdk-api.js";
 import { createAwsLambdaMicrovmSession, createLoggingSandboxSession } from "./session.js";
 import { SdkAwsLambdaMicrovmStorage, type AwsLambdaMicrovmStorage } from "./storage.js";
+import { instrumentAwsLambdaMicrovmOperation } from "./telemetry.js";
 import type { AwsLambdaMicrovmSandboxOptions } from "./types.js";
 
 export const AWS_LAMBDA_MICROVM_BACKEND_NAME = "aws-lambda-microvms";
@@ -88,10 +89,16 @@ export function createAwsLambdaMicrovmSandbox(
       scopeKey: options.applicationId,
     },
     async create(createInput) {
-      return await createSessionHandle({ createInput, options, services });
+      return await instrumentAwsLambdaMicrovmOperation(
+        telemetryOperation(options, "eve.aws_lambda_microvm.session.create"),
+        async () => await createSessionHandle({ createInput, options, services }),
+      );
     },
     async prewarm(prewarmInput) {
-      return await prewarmTemplate({ options, prewarmInput, services });
+      return await instrumentAwsLambdaMicrovmOperation(
+        telemetryOperation(options, "eve.aws_lambda_microvm.template.prewarm"),
+        async () => await prewarmTemplate({ options, prewarmInput, services }),
+      );
     },
   };
 }
@@ -606,67 +613,109 @@ async function runMicrovm(input: {
   readonly services: AwsLambdaMicrovmBackendServices;
   readonly templateHash: string;
 }): Promise<AwsLambdaMicrovmRecord> {
-  if (input.options.networkingMode === "customer-managed" && input.services.activationProvider === undefined) {
-    throw new Error("AWS Lambda MicroVM customer-managed networking requires an activation provider.");
-  }
-  const ingressNetworkConnectorArns = [input.options.httpIngressNetworkConnectorArn];
-  if (input.options.shellIngressNetworkConnectorArn !== undefined) {
-    ingressNetworkConnectorArns.push(input.options.shellIngressNetworkConnectorArn);
-  }
-  const activation =
-    input.options.networkingMode === "customer-managed"
-      ? await input.services.activationProvider!.createActivation({
-          networkLaneId:
-            input.sessionKey === undefined
-              ? input.options.buildNetworkLaneId!
-              : input.options.runtimeNetworkLaneId!,
-          purposeHash: hashKey(input.purposeKey),
-          replacementOf: input.replacementOf,
-        })
-      : undefined;
-  const runHookPayload =
-    activation === undefined
-      ? JSON.stringify({
-          controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
-          eveSession: hashKey(input.purposeKey),
-        })
-      : serializeAwsLambdaMicrovmActivationEnvelope(activation);
-  const microvm = await input.services.api.runMicrovm({
-    clientToken: randomUUID(),
-    egressNetworkConnectorArns: input.egressNetworkConnectorArns,
-    executionRoleArn: input.options.executionRoleArn,
-    idlePolicy: input.options.idlePolicy,
-    imageArn: input.imageArn,
-    imageVersion: input.imageVersion,
-    ingressNetworkConnectorArns,
-    logging: resolveLogging(input.options),
-    maximumDurationSeconds: input.options.maximumDurationSeconds,
-    runHookPayload,
-  });
-  if (input.options.networkingMode === "customer-managed") {
-    const expectedConnector = input.egressNetworkConnectorArns[0]!;
-    const matchesConnector =
-      microvm.egressNetworkConnectorArns.length === 1 &&
-      microvm.egressNetworkConnectorArns[0] === expectedConnector;
-    const matchesImage =
-      microvm.imageArn === input.imageArn && microvm.imageVersion === input.imageVersion;
-    if (!matchesConnector || !matchesImage) {
-      await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
-      throw new Error(
-        `AWS Lambda MicroVM activation did not match the requested image and customer-managed connector; terminated ${microvm.microvmId} before controller traffic.`,
-      );
-    }
-    Object.defineProperties(microvm, {
-      activationId: { value: activation!.activationId },
-      controllerCaSha256: { value: activation!.controllerCaSha256 },
-      egressProxyCaSha256: { value: input.egressProxyCaSha256 },
-      controllerSessionToken: { value: activation!.controllerSessionToken },
-      placeholderGeneration: { value: activation!.placeholder.generation },
-      placeholderPlacement: { value: activation!.placeholder.placement },
-      trustedBindingGeneration: { value: activation!.placeholder.trustedBindingGeneration },
-    });
-  }
-  return microvm;
+  const operation = telemetryOperation(input.options, "eve.aws_lambda_microvm.run");
+  return await instrumentAwsLambdaMicrovmOperation(
+    {
+      ...operation,
+      attributes: {
+        ...operation.attributes,
+        "eve.aws_lambda_microvm.image_version": input.imageVersion,
+        "eve.aws_lambda_microvm.purpose":
+          input.sessionKey === undefined ? "template" : "session",
+      },
+    },
+    async (span) => {
+      if (
+        input.options.networkingMode === "customer-managed" &&
+        input.services.activationProvider === undefined
+      ) {
+        throw new Error(
+          "AWS Lambda MicroVM customer-managed networking requires an activation provider.",
+        );
+      }
+      const ingressNetworkConnectorArns = [input.options.httpIngressNetworkConnectorArn];
+      if (input.options.shellIngressNetworkConnectorArn !== undefined) {
+        ingressNetworkConnectorArns.push(input.options.shellIngressNetworkConnectorArn);
+      }
+      const activation =
+        input.options.networkingMode === "customer-managed"
+          ? await instrumentAwsLambdaMicrovmOperation(
+              telemetryOperation(
+                input.options,
+                "eve.aws_lambda_microvm.activation.create",
+              ),
+              async () =>
+                await input.services.activationProvider!.createActivation({
+                  networkLaneId:
+                    input.sessionKey === undefined
+                      ? input.options.buildNetworkLaneId!
+                      : input.options.runtimeNetworkLaneId!,
+                  purposeHash: hashKey(input.purposeKey),
+                  replacementOf: input.replacementOf,
+                }),
+            )
+          : undefined;
+      const runHookPayload =
+        activation === undefined
+          ? JSON.stringify({
+              controllerProtocolVersion: AWS_LAMBDA_MICROVM_CONTROLLER_PROTOCOL_VERSION,
+              eveSession: hashKey(input.purposeKey),
+            })
+          : serializeAwsLambdaMicrovmActivationEnvelope(activation);
+      const microvm = await input.services.api.runMicrovm({
+        clientToken: randomUUID(),
+        egressNetworkConnectorArns: input.egressNetworkConnectorArns,
+        executionRoleArn: input.options.executionRoleArn,
+        idlePolicy: input.options.idlePolicy,
+        imageArn: input.imageArn,
+        imageVersion: input.imageVersion,
+        ingressNetworkConnectorArns,
+        logging: resolveLogging(input.options),
+        maximumDurationSeconds: input.options.maximumDurationSeconds,
+        runHookPayload,
+      });
+      span.setAttribute("eve.aws_lambda_microvm.microvm_id", microvm.microvmId);
+      if (input.options.networkingMode === "customer-managed") {
+        const expectedConnector = input.egressNetworkConnectorArns[0]!;
+        const matchesConnector =
+          microvm.egressNetworkConnectorArns.length === 1 &&
+          microvm.egressNetworkConnectorArns[0] === expectedConnector;
+        const matchesImage =
+          microvm.imageArn === input.imageArn && microvm.imageVersion === input.imageVersion;
+        if (!matchesConnector || !matchesImage) {
+          await input.services.api.terminateMicrovm(microvm.microvmId).catch(() => undefined);
+          throw new Error(
+            `AWS Lambda MicroVM activation did not match the requested image and customer-managed connector; terminated ${microvm.microvmId} before controller traffic.`,
+          );
+        }
+        Object.defineProperties(microvm, {
+          activationId: { value: activation!.activationId },
+          controllerCaSha256: { value: activation!.controllerCaSha256 },
+          egressProxyCaSha256: { value: input.egressProxyCaSha256 },
+          controllerSessionToken: { value: activation!.controllerSessionToken },
+          placeholderGeneration: { value: activation!.placeholder.generation },
+          placeholderPlacement: { value: activation!.placeholder.placement },
+          trustedBindingGeneration: { value: activation!.placeholder.trustedBindingGeneration },
+        });
+      }
+      return microvm;
+    },
+  );
+}
+
+function telemetryOperation(
+  options: ResolvedAwsLambdaMicrovmOptions,
+  name: string,
+): {
+  readonly attributes: Record<string, string>;
+  readonly metricAttributes: Record<string, string>;
+  readonly name: string;
+} {
+  const attributes = {
+    "cloud.region": options.region,
+    "eve.aws_lambda_microvm.networking_mode": options.networkingMode,
+  };
+  return { attributes, metricAttributes: attributes, name };
 }
 
 function resolveLogging(options: ResolvedAwsLambdaMicrovmOptions): AwsLambdaMicrovmLogging {

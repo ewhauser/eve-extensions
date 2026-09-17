@@ -334,6 +334,18 @@ fallback.
 
 Image build logs use `/aws/lambda/microvms/<image-name>` unless you supply another CloudWatch target. Runtime logs use the configured `runtimeLogging` group. eve logs lifecycle phases and failures, but not command text or environment values. Enable CloudTrail management events for Lambda operations and S3 data events on the artifact prefix when you need an audit trail.
 
+The package also emits OpenTelemetry spans through `@opentelemetry/api`; they are no-ops unless
+the host application configures an SDK. The `eve.aws_lambda_microvm.session.create` parent breaks
+runtime acquisition into lease, activation, `aws.lambda_microvms.run_microvm`, controller
+readiness, authentication-token, and checkpoint-restore spans. AWS call spans include request ID,
+attempt count, total retry delay, HTTP status, and the service-reported MicroVM start time when the
+SDK returns them. The
+`eve.aws_lambda_microvm.operation.duration` histogram and
+`eve.aws_lambda_microvm.operation.count` counter use only operation, outcome, Region, and
+networking mode where available. MicroVM IDs and image versions are trace-only; client tokens,
+controller credentials, activation payloads, checkpoint keys, presigned URLs, and command or
+environment values are never recorded.
+
 eve does not prune images or durable checkpoints. Configure S3 lifecycle rules appropriate to your retention policy for abandoned multipart uploads, temporary objects, noncurrent object versions, old checkpoint generations, and deleted applications. Do not expire the currently referenced checkpoint or template descriptor.
 
 For failures, start with the image version `stateReason`, its CloudWatch build stream, and AWS's [troubleshooting guide](https://docs.aws.amazon.com/lambda/latest/dg/microvms-troubleshooting.html). Also review AWS's [snapshot model](https://docs.aws.amazon.com/lambda/latest/dg/microvms-images-snapshots.html) and [best practices](https://docs.aws.amazon.com/lambda/latest/dg/microvms-best-practices.html).
