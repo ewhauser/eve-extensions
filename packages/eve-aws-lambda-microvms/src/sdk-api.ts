@@ -24,26 +24,50 @@ import type {
   AwsLambdaMicrovmRunInput,
   AwsLambdaMicrovmState,
 } from "./api.js";
+import {
+  instrumentAwsLambdaMicrovmOperation,
+  recordAwsSdkMetadata,
+} from "./telemetry.js";
 
 const LIST_PAGE_SIZE = 50;
 
 export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
   readonly #client: LambdaMicrovmsClient;
+  readonly #region: string;
 
   constructor(region: string) {
+    this.#region = region;
     this.#client = new LambdaMicrovmsClient({ region });
   }
 
   async createAuthToken(microvmId: string): Promise<string> {
-    const output = await this.#client.send(
-      new CreateMicrovmAuthTokenCommand({
-        allowedPorts: [{ port: 8080 }],
-        expirationInMinutes: 60,
-        microvmIdentifier: microvmId,
-      }),
+    return await instrumentAwsLambdaMicrovmOperation(
+      {
+        attributes: {
+          "cloud.region": this.#region,
+          "eve.aws_lambda_microvm.microvm_id": microvmId,
+        },
+        metricAttributes: { "cloud.region": this.#region },
+        name: "aws.lambda_microvms.create_auth_token",
+      },
+      async (span) => {
+        try {
+          const output = await this.#client.send(
+            new CreateMicrovmAuthTokenCommand({
+              allowedPorts: [{ port: 8080 }],
+              expirationInMinutes: 60,
+              microvmIdentifier: microvmId,
+            }),
+          );
+          recordAwsSdkMetadata(span, output);
+          const authToken = expectRecord(output.authToken, "authToken");
+          return expectString(authToken["X-aws-proxy-auth"], 'authToken["X-aws-proxy-auth"]');
+        } catch (error) {
+          recordAwsSdkMetadata(span, error);
+          throw error;
+        }
+      },
     );
-    const authToken = expectRecord(output.authToken, "authToken");
-    return expectString(authToken["X-aws-proxy-auth"], 'authToken["X-aws-proxy-auth"]');
   }
 
   async createImage(
@@ -210,21 +234,47 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
   }
 
   async runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord> {
-    return microvmFromOutput(
-      await this.#client.send(
-        new RunMicrovmCommand({
-          clientToken: input.clientToken,
-          egressNetworkConnectors: [...input.egressNetworkConnectorArns],
-          executionRoleArn: input.executionRoleArn,
-          idlePolicy: input.idlePolicy,
-          imageIdentifier: input.imageArn,
-          imageVersion: input.imageVersion,
-          ingressNetworkConnectors: [...input.ingressNetworkConnectorArns],
-          logging: toSdkLogging(input.logging),
-          maximumDurationInSeconds: input.maximumDurationSeconds,
-          runHookPayload: input.runHookPayload,
-        }),
-      ),
+    return await instrumentAwsLambdaMicrovmOperation(
+      {
+        attributes: {
+          "cloud.region": this.#region,
+          "eve.aws_lambda_microvm.image_version": input.imageVersion,
+        },
+        metricAttributes: { "cloud.region": this.#region },
+        name: "aws.lambda_microvms.run_microvm",
+      },
+      async (span) => {
+        try {
+          const output = await this.#client.send(
+            new RunMicrovmCommand({
+              clientToken: input.clientToken,
+              egressNetworkConnectors: [...input.egressNetworkConnectorArns],
+              executionRoleArn: input.executionRoleArn,
+              idlePolicy: input.idlePolicy,
+              imageIdentifier: input.imageArn,
+              imageVersion: input.imageVersion,
+              ingressNetworkConnectors: [...input.ingressNetworkConnectorArns],
+              logging: toSdkLogging(input.logging),
+              maximumDurationInSeconds: input.maximumDurationSeconds,
+              runHookPayload: input.runHookPayload,
+            }),
+          );
+          recordAwsSdkMetadata(span, output);
+          if (output.startedAt !== undefined) {
+            span.setAttribute(
+              "eve.aws_lambda_microvm.started_at",
+              output.startedAt.toISOString(),
+            );
+            span.addEvent("microvm.started", {}, output.startedAt);
+          }
+          const microvm = microvmFromOutput(output);
+          span.setAttribute("eve.aws_lambda_microvm.microvm_id", microvm.microvmId);
+          return microvm;
+        } catch (error) {
+          recordAwsSdkMetadata(span, error);
+          throw error;
+        }
+      },
     );
   }
 

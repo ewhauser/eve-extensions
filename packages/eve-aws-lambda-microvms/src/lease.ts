@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { AwsLambdaMicrovmStorage } from "./storage.js";
+import { instrumentAwsLambdaMicrovmOperation } from "./telemetry.js";
 
 const LEASE_VERSION = 1;
 
@@ -25,46 +26,68 @@ export async function acquireAwsLambdaMicrovmLease(input: {
   const holder = randomUUID();
   const ttlMs = input.ttlMs ?? 10 * 60 * 1000;
   const deadline = Date.now() + (input.waitMs ?? 30_000);
-  let etag: string;
+  const acquisition = await instrumentAwsLambdaMicrovmOperation(
+    {
+      attributes: {
+        "eve.aws_lambda_microvm.lease.ttl_ms": ttlMs,
+        "eve.aws_lambda_microvm.lease.wait_ms": input.waitMs ?? 30_000,
+      },
+      name: "eve.aws_lambda_microvm.lease.acquire",
+    },
+    async (span) => {
+      let attempts = 0;
+      let contended = false;
+      for (;;) {
+        attempts++;
+        const now = Date.now();
+        const current = await input.storage.getJson<unknown>(input.key);
+        try {
+          if (current === null) {
+            const stored = await input.storage.putJson(
+              input.key,
+              leaseDocument(holder, now + ttlMs),
+              { absent: true },
+            );
+            span.setAttributes({
+              "eve.aws_lambda_microvm.lease.attempts": attempts,
+              "eve.aws_lambda_microvm.lease.contended": contended,
+            });
+            return stored.etag;
+          }
+          const document = parseLease(current.value);
+          if (document.expiresAt <= now) {
+            const stored = await input.storage.putJson(
+              input.key,
+              leaseDocument(holder, now + ttlMs),
+              { etag: current.etag },
+            );
+            span.setAttributes({
+              "eve.aws_lambda_microvm.lease.attempts": attempts,
+              "eve.aws_lambda_microvm.lease.contended": true,
+            });
+            return stored.etag;
+          }
+          contended = true;
+          if (now >= deadline) {
+            throw new Error(
+              `AWS Lambda MicroVM lease ${input.key} is held by another runtime until ${new Date(document.expiresAt).toISOString()}.`,
+            );
+          }
+        } catch (error) {
+          if (!isPreconditionFailed(error)) throw error;
+          contended = true;
+          if (Date.now() >= deadline) {
+            throw new Error(`Timed out acquiring AWS Lambda MicroVM lease ${input.key}.`, {
+              cause: error,
+            });
+          }
+        }
+        await sleep(250 + Math.floor(Math.random() * 251));
+      }
+    },
+  );
 
-  for (;;) {
-    const now = Date.now();
-    const current = await input.storage.getJson<unknown>(input.key);
-    try {
-      if (current === null) {
-        etag = (
-          await input.storage.putJson(input.key, leaseDocument(holder, now + ttlMs), {
-            absent: true,
-          })
-        ).etag;
-        break;
-      }
-      const document = parseLease(current.value);
-      if (document.expiresAt <= now) {
-        etag = (
-          await input.storage.putJson(input.key, leaseDocument(holder, now + ttlMs), {
-            etag: current.etag,
-          })
-        ).etag;
-        break;
-      }
-      if (now >= deadline) {
-        throw new Error(
-          `AWS Lambda MicroVM lease ${input.key} is held by another runtime until ${new Date(document.expiresAt).toISOString()}.`,
-        );
-      }
-    } catch (error) {
-      if (!isPreconditionFailed(error)) throw error;
-      if (Date.now() >= deadline) {
-        throw new Error(`Timed out acquiring AWS Lambda MicroVM lease ${input.key}.`, {
-          cause: error,
-        });
-      }
-    }
-    await sleep(250 + Math.floor(Math.random() * 251));
-  }
-
-  let currentEtag = etag;
+  let currentEtag = acquisition;
   let expiresAt = Date.now() + ttlMs;
   let released = false;
   let lost: unknown;
@@ -83,11 +106,15 @@ export async function acquireAwsLambdaMicrovmLease(input: {
     if (released || lost !== undefined) return;
     const nextExpiresAt = Date.now() + ttlMs;
     try {
-      currentEtag = (
-        await input.storage.putJson(input.key, leaseDocument(holder, nextExpiresAt), {
-          etag: currentEtag,
-        })
-      ).etag;
+      currentEtag = await instrumentAwsLambdaMicrovmOperation(
+        { name: "eve.aws_lambda_microvm.lease.renew" },
+        async () =>
+          (
+            await input.storage.putJson(input.key, leaseDocument(holder, nextExpiresAt), {
+              etag: currentEtag,
+            })
+          ).etag,
+      );
       expiresAt = nextExpiresAt;
     } catch (error) {
       lost = error;
@@ -118,7 +145,10 @@ export async function acquireAwsLambdaMicrovmLease(input: {
         if (lost !== undefined) {
           throw new Error(`AWS Lambda MicroVM lease ${input.key} was lost.`, { cause: lost });
         }
-        await input.storage.deleteObject(input.key, { etag: currentEtag });
+        await instrumentAwsLambdaMicrovmOperation(
+          { name: "eve.aws_lambda_microvm.lease.release" },
+          async () => await input.storage.deleteObject(input.key, { etag: currentEtag }),
+        );
       });
       released = true;
     },
