@@ -35,9 +35,9 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
   readonly #client: LambdaMicrovmsClient;
   readonly #region: string;
 
-  constructor(region: string) {
+  constructor(region: string, client?: LambdaMicrovmsClient) {
     this.#region = region;
-    this.#client = new LambdaMicrovmsClient({ region });
+    this.#client = client ?? new LambdaMicrovmsClient({ region });
   }
 
   async createAuthToken(microvmId: string): Promise<string> {
@@ -258,8 +258,10 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
               maximumDurationInSeconds: input.maximumDurationSeconds,
               runHookPayload: input.runHookPayload,
             }),
+            { abortSignal: input.abortSignal },
           );
           recordAwsSdkMetadata(span, output);
+          input.onRequestMetadata?.(requestMetadata(output));
           if (output.startedAt !== undefined) {
             span.setAttribute(
               "eve.aws_lambda_microvm.started_at",
@@ -272,6 +274,7 @@ export class SdkAwsLambdaMicrovmApi implements AwsLambdaMicrovmApi {
           return microvm;
         } catch (error) {
           recordAwsSdkMetadata(span, error);
+          input.onRequestMetadata?.(requestMetadata(error));
           throw error;
         }
       },
@@ -386,4 +389,16 @@ function isAwsNotFound(error: unknown): boolean {
       (error as { readonly $metadata?: { readonly httpStatusCode?: unknown } }).$metadata
         ?.httpStatusCode === 404)
   );
+}
+
+function requestMetadata(value: unknown): import("./api.js").AwsLambdaMicrovmRequestMetadata {
+  const metadata = typeof value === "object" && value !== null && "$metadata" in value
+    ? value.$metadata : undefined;
+  if (typeof metadata !== "object" || metadata === null) return {};
+  const record = metadata as Record<string, unknown>;
+  return {
+    ...(typeof record.requestId === "string" ? { requestId: record.requestId } : {}),
+    ...(typeof record.attempts === "number" ? { attempts: record.attempts } : {}),
+    ...(typeof record.totalRetryDelay === "number" ? { totalRetryDelay: record.totalRetryDelay } : {}),
+  };
 }

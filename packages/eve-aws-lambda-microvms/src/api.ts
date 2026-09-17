@@ -60,6 +60,8 @@ export interface AwsLambdaMicrovmCreateImageInput {
 }
 
 export interface AwsLambdaMicrovmRunInput {
+  readonly abortSignal?: AbortSignal;
+  readonly onRequestMetadata?: (metadata: AwsLambdaMicrovmRequestMetadata) => void;
   readonly clientToken: string;
   readonly egressNetworkConnectorArns: readonly string[];
   readonly executionRoleArn?: string;
@@ -97,4 +99,10 @@ export interface AwsLambdaMicrovmApi {
   ): Promise<readonly { readonly imageArn: string; readonly imageVersion: string }[]>;
   runMicrovm(input: AwsLambdaMicrovmRunInput): Promise<AwsLambdaMicrovmRecord>;
   terminateMicrovm(microvmId: string): Promise<void>;
+}
+
+export interface AwsLambdaMicrovmRequestMetadata {
+  readonly requestId?: string;
+  readonly attempts?: number;
+  readonly totalRetryDelay?: number;
 }

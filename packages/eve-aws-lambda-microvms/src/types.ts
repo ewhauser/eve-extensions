@@ -78,6 +78,11 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly memoryMiB?: AwsLambdaMicrovmMemoryMiB;
   /** Maximum MicroVM lifetime in seconds. Defaults to AWS's 28,800 second limit. */
   readonly maximumDurationSeconds?: number;
+  /** Absolute launch budget, including lease acquisition and controller readiness.
+   * Defaults to 240 seconds; configure below the owning workflow attempt timeout. */
+  readonly launchTimeoutMs?: number;
+  /** Safe lifecycle timings and AWS request metadata. Never receives credentials. */
+  readonly onLifecycleEvent?: (event: AwsLambdaMicrovmLifecycleEvent) => void;
   /** Idle policy. Defaults to 5 minutes running and 30 minutes suspended. */
   readonly idlePolicy?: Partial<AwsLambdaMicrovmIdlePolicy>;
   /** Exact managed base image. Omit to use the newest available AL2023 image. */
@@ -114,4 +119,15 @@ export interface AwsLambdaMicrovmSandboxOptions {
   readonly runtimeLogging?: AwsLambdaMicrovmCloudWatchLogging | false;
   /** Tags attached to eve-owned MicroVM images. */
   readonly tags?: Readonly<Record<string, string>>;
+}
+
+/** Allowlisted diagnostics; errors and request/response bodies are never included. */
+export interface AwsLambdaMicrovmLifecycleEvent {
+  readonly phase: "lease-acquisition" | "metadata-read" | "activation" | "run-microvm" | "launch" | "late-result";
+  readonly status: "started" | "completed" | "failed" | "deadline" | "cancelled" | "terminated" | "rejected";
+  readonly durationMs: number;
+  readonly sessionHash?: string;
+  readonly requestId?: string;
+  readonly attempts?: number;
+  readonly totalRetryDelay?: number;
 }

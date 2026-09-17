@@ -29,6 +29,8 @@ export interface ResolvedAwsLambdaMicrovmOptions {
   readonly httpIngressNetworkConnectorArn: string;
   readonly idlePolicy: AwsLambdaMicrovmIdlePolicy;
   readonly maximumDurationSeconds: number;
+  readonly launchTimeoutMs: number;
+  readonly onLifecycleEvent?: AwsLambdaMicrovmSandboxOptions["onLifecycleEvent"];
   readonly memoryMiB: AwsLambdaMicrovmMemoryMiB;
   readonly networkingMode: "legacy" | "customer-managed";
   readonly region: string;
@@ -67,6 +69,10 @@ export function resolveAwsLambdaMicrovmOptions(
     throw new Error("AWS Lambda MicroVM memoryMiB must be one of 512, 1024, 2048, 4096, or 8192.");
   }
 
+  const launchTimeoutMs = options.launchTimeoutMs ?? 240_000;
+  if (!Number.isSafeInteger(launchTimeoutMs) || launchTimeoutMs < 1 || launchTimeoutMs > 240_000) {
+    throw new Error("AWS Lambda MicroVM launchTimeoutMs must be an integer from 1 to 240000, below the workflow attempt timeout.");
+  }
   const maximumDurationSeconds = options.maximumDurationSeconds ?? MAXIMUM_DURATION_SECONDS;
   if (
     !Number.isInteger(maximumDurationSeconds) ||
@@ -171,6 +177,8 @@ export function resolveAwsLambdaMicrovmOptions(
     httpIngressNetworkConnectorArn: `${managedConnectorPrefix}:ALL_INGRESS`,
     idlePolicy,
     maximumDurationSeconds,
+    launchTimeoutMs,
+    onLifecycleEvent: options.onLifecycleEvent,
     memoryMiB,
     networkingMode,
     region,
