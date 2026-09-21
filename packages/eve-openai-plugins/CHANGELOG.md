@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/ewhauser/eve-extensions/compare/eve-openai-plugins-v0.3.1...eve-openai-plugins-v0.3.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* upgrade Eve to 0.63.0 and resolve compatibility issues ([#120](https://github.com/ewhauser/eve-extensions/issues/120)) ([e5f505b](https://github.com/ewhauser/eve-extensions/commit/e5f505b0a52f42bbdda9cc38b2d0c55d6c6b8328))
+
 ## [0.3.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-plugins-v0.3.0...eve-openai-plugins-v0.3.1) (2026-08-29)
 
 

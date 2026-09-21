@@ -1,6 +1,6 @@
 {
   "name": "eve-slack-participation",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An Eve-only Slack participation policy for deciding when Eve should join active threads.",
   "license": "MIT",
   "type": "module",

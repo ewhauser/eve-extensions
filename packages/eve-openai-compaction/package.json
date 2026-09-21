@@ -1,6 +1,6 @@
 {
   "name": "eve-openai-compaction",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Codex-style checkpoint compaction strategy for Eve agents.",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "eve-openai-connectors",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "An Eve dynamic MCP connection for a ChatGPT user's authorized connectors.",
   "license": "MIT",
   "type": "module",
