@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.8.0...eve-aws-lambda-microvms-v0.9.0) (2026-09-17)
+
+
+### Features
+
+* **aws-lambda-microvms:** add OpenTelemetry lifecycle instrumentation ([#126](https://github.com/ewhauser/eve-extensions/issues/126)) ([fa221ab](https://github.com/ewhauser/eve-extensions/commit/fa221ab40160929e7e394467c8209669fed473c9))
+
+
+### Bug Fixes
+
+* **aws-lambda-microvms:** bound launch authority and fence session state ([#127](https://github.com/ewhauser/eve-extensions/issues/127)) ([2c7a957](https://github.com/ewhauser/eve-extensions/commit/2c7a9576f853add7a284fa422519f7781aec00e2))
+
+## [0.8.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.7.0...eve-aws-lambda-microvms-v0.8.0) (2026-09-16)
+
+
+### Features
+
+* **aws-lambda-microvms:** inject activation provider ([#123](https://github.com/ewhauser/eve-extensions/issues/123)) ([7b6441c](https://github.com/ewhauser/eve-extensions/commit/7b6441c9093e40fc314fbd33c92eb7f80a7dacf1))
+
+## [0.7.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.6.0...eve-aws-lambda-microvms-v0.7.0) (2026-09-15)
+
+
+### Features
+
+* **aws-lambda-microvms:** allow managed build egress ([#121](https://github.com/ewhauser/eve-extensions/issues/121)) ([07256aa](https://github.com/ewhauser/eve-extensions/commit/07256aa8862d1f3f8ec26d27bfe9abb76a868ae2))
+
 ## [0.6.0](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.5.1...eve-aws-lambda-microvms-v0.6.0) (2026-08-17)
 
 

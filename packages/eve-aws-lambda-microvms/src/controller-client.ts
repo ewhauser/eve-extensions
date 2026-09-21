@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { AwsLambdaMicrovmApi, AwsLambdaMicrovmRecord } from "./api.js";
+import { instrumentAwsLambdaMicrovmOperation } from "./telemetry.js";
 
 const TOKEN_REFRESH_MS = 55 * 60 * 1000;
 const PROCESS_POLL_MS = 100;
@@ -234,28 +235,50 @@ export class HttpAwsLambdaMicrovmController implements AwsLambdaMicrovmControlle
   }
 
   async waitUntilReady(timeoutMs = 120_000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    let lastError: unknown;
-    while (Date.now() < deadline) {
-      try {
-        const output = await this.#json("/v1/health");
-        if (
-          output.status === "ready" &&
-          output.protocolVersion === 2 &&
-          (this.#activationId === undefined || output.activationId === this.#activationId) &&
-          (this.#controllerCaSha256 === undefined ||
-            output.controllerCaSha256 === this.#controllerCaSha256)
-        ) return;
-        lastError = new Error("Controller returned an incompatible protocol response.");
-      } catch (error) {
-        lastError = error;
-      }
-      await sleep(500);
-    }
-    throw new Error(
-      `AWS Lambda MicroVM controller did not become ready: ${errorMessage(lastError)}`,
+    await instrumentAwsLambdaMicrovmOperation(
       {
-        cause: lastError,
+        attributes: {
+          "eve.aws_lambda_microvm.microvm_id": this.#microvmId,
+          "eve.aws_lambda_microvm.ready_timeout_ms": timeoutMs,
+        },
+        name: "eve.aws_lambda_microvm.controller.wait_ready",
+      },
+      async (span) => {
+        const deadline = Date.now() + timeoutMs;
+        let attempts = 0;
+        let connected = false;
+        let lastError: unknown;
+        while (Date.now() < deadline) {
+          attempts++;
+          try {
+            const output = await this.#json("/v1/health");
+            if (!connected) {
+              connected = true;
+              span.addEvent("controller.connected", { attempts });
+            }
+            if (
+              output.status === "ready" &&
+              output.protocolVersion === 2 &&
+              (this.#activationId === undefined || output.activationId === this.#activationId) &&
+              (this.#controllerCaSha256 === undefined ||
+                output.controllerCaSha256 === this.#controllerCaSha256)
+            ) {
+              span.setAttribute("eve.aws_lambda_microvm.controller.ready_attempts", attempts);
+              return;
+            }
+            lastError = new Error("Controller returned an incompatible protocol response.");
+          } catch (error) {
+            lastError = error;
+          }
+          await sleep(500);
+        }
+        span.setAttribute("eve.aws_lambda_microvm.controller.ready_attempts", attempts);
+        throw new Error(
+          `AWS Lambda MicroVM controller did not become ready: ${errorMessage(lastError)}`,
+          {
+            cause: lastError,
+          },
+        );
       },
     );
   }

@@ -44,6 +44,11 @@ export default defineSandbox({
 
 The important defaults are 2 GiB baseline memory, an eight-hour maximum lifetime, suspension after five minutes without endpoint traffic, suspended retention for 30 minutes, automatic resume, no shell access, and no guest execution role. For compatibility, omitted `networkingMode` (or explicit `"legacy"`) retains 0.1.0's managed Internet connector defaults. Production callers should use the explicit fail-closed `"customer-managed"` mode below. Supplying an execution role enables CloudWatch runtime logging by default. Set `runtimeLogging: false` to disable it.
 
+Customer-managed runtime networking may be paired with the exact AWS-managed
+`INTERNET_EGRESS` connector for image builds when the build requires public
+package repositories. This intentionally gives the build unrestricted Internet
+egress; the runtime connector remains customer-managed and fail-closed.
+
 `eve dev` and `eve start` provision authored bootstrap and workspace templates. Eve's Vercel build hook also prewarms them during `eve build`. When Eve supplies no template key, this package lazily provisions an empty application template during the first session create. A legacy caller therefore needs image-build permissions unless the same default template was already provisioned.
 
 ### Separate image reconciliation from runtime
@@ -100,7 +105,21 @@ Before eve terminates a session, it freezes workload processes and publishes the
 
 AWS terminates every MicroVM by its configured maximum duration, at the end of suspended retention, or after an operational failure. On the next turn, eve launches the exact image version recorded in the checkpoint and restores all writable paths, including changes under `/etc`, `/usr/local`, `/root`, `/var`, `/tmp`, and `/workspace`. Files survive replacement; processes do not. If AWS has recalled or removed the recorded image version, eve leaves the checkpoint intact and fails instead of restoring only `/workspace` onto a different image.
 
-S3 conditional manifests and per-session leases reject concurrent writers. eve never puts AWS credentials, auth tokens, or presigned URLs in durable session metadata.
+Session ownership and the committed checkpoint metadata share one conditional S3 authority write. Every takeover advances a fencing generation; stale holders cannot publish a checkpoint over a successor, including when their S3 write was already in flight. Checkpoint object names are unique to each upload so a stale upload cannot replace a successor's bytes. Eve-returned session metadata contains no AWS credentials, activation tokens, or presigned URLs.
+
+### Bounded launch authority
+
+`launchTimeoutMs` defaults to 240,000 ms and accepts positive integer values up to that limit. Set it below your owning workflow attempt timeout. The budget starts after bucket validation and any lazy template provisioning, and includes session lease acquisition, template/session reads, activation creation, `RunMicrovm`, controller readiness, and restore. Build-time image provisioning has its own lifecycle and is not included in this budget.
+
+The launch lease's persisted expiry never exceeds its absolute deadline. Deadline or cancellation aborts the SDK request and rejects the caller even if an injected provider ignores cancellation. The final ownership check remains bounded. Promotion happens synchronously when returning the ready handle, and the first full-TTL renewal is scheduled afterward, so a stalled renewal response cannot block launch. The ready session then uses the normal renewable ten-minute lease; the short launch budget does not limit its session lifetime. The concrete backend's `create` method also accepts `abortSignal`; the pinned Eve 0.49 API does not supply a workflow cancellation signal automatically.
+
+Retries replay the same durable client token **and exact request payload**. An unconfirmed request survives lease expiry and release. After a successful checkpoint/retirement, the next launch receives a new token and activation. A retry cannot silently change a pending launch's image or runtime request configuration. A late result is rejected; cleanup terminates it only after acquiring session authority and confirming the launch identity. If a successor is using the same idempotent result, cleanup leaves its VM alone. An AWS `ResourceNotFoundException` or HTTP 404 confirms successful retirement; other termination failures retain the launch record for retry.
+
+The session `lease.json` now uses authority format version 2 and retains its fencing generation and checkpoint metadata after release. Existing version-1 leases and separate manifests are imported on first acquisition. Older runtimes reject the new format: drain old runtime owners before rollout, and do not roll back to a version that cannot read version 2 for migrated sessions. Session deletion clears the authoritative checkpoint reference and deletes its checkpoint, but retains a small tombstone to prevent stale state resurrection. Never independently delete authority records while a session might have an outstanding attempt.
+
+For customer-managed networking, the pending authority record stores the activation envelope and exact launch payload, including controller and placeholder tokens, to make AWS idempotency safe across retries. This is sensitive runtime state, distinct from the credential-free metadata returned to Eve. Restrict the session prefix to the trusted runtime, keep it inaccessible to guests, use the bucket's encryption policy or `artifactKmsKeyId`, and apply appropriate noncurrent-version retention. Successful checkpoint/retirement clears the pending request from the current authority record; S3 version history follows your bucket retention policy.
+
+Set `onLifecycleEvent` to receive structured phase timings and allowlisted AWS request ID, SDK attempt count, and total retry delay. Deadline, cancellation, and late-result outcomes are included. The callback never receives activation envelopes, request bodies, controller tokens, or raw provider errors, and observer failures do not affect session authority.
 
 ## IAM boundaries
 
@@ -267,17 +286,28 @@ See AWS's [security and permissions](https://docs.aws.amazon.com/lambda/latest/d
 
 eve always attaches AWS's `ALL_INGRESS` connector and creates auth tokens scoped only to controller port 8080. Tokens last at most 60 minutes, are refreshed before expiry, and are never persisted. `shellAccess: true` additionally attaches `SHELL_INGRESS`; shell tokens still come from AWS's separate shell-token API.
 
-For production, select customer-managed networking explicitly and provide the non-secret policy lane bound to each connector:
+For production, select customer-managed networking explicitly and provide the non-secret policy lane bound to each connector. Use `createAwsLambdaMicrovmSandbox()` to inject the trusted-host activation provider while retaining the package's default AWS API, controller, and S3 implementations:
 
 ```ts
-awsLambdaMicrovm({
-  // required fields omitted
-  networkingMode: "customer-managed",
-  egressProxyCaBundlePem: process.env.EVE_EGRESS_PROXY_PUBLIC_CA_PEM,
-  buildNetworkLaneId: "package-build-v1",
-  buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
-  runtimeNetworkLaneId: "agent-runtime-v1",
-  runtimeEgressNetworkConnectorArns: [process.env.EVE_AWS_RUNTIME_CONNECTOR_ARN!],
+import {
+  createAwsLambdaMicrovmSandbox,
+  type AwsLambdaMicrovmActivationProvider,
+} from "eve-aws-lambda-microvms";
+
+// Implemented by the trusted host; it never sends proxy credentials to the guest.
+declare const activationProvider: AwsLambdaMicrovmActivationProvider;
+
+createAwsLambdaMicrovmSandbox({
+  activationProvider,
+  options: {
+    // required fields omitted
+    networkingMode: "customer-managed",
+    egressProxyCaBundlePem: process.env.EVE_EGRESS_PROXY_PUBLIC_CA_PEM,
+    buildNetworkLaneId: "package-build-v1",
+    buildEgressNetworkConnectorArns: [process.env.EVE_AWS_BUILD_CONNECTOR_ARN!],
+    runtimeNetworkLaneId: "agent-runtime-v1",
+    runtimeEgressNetworkConnectorArns: [process.env.EVE_AWS_RUNTIME_CONNECTOR_ARN!],
+  },
 });
 ```
 
@@ -317,6 +347,20 @@ fallback.
 ## Operations and retention
 
 Image build logs use `/aws/lambda/microvms/<image-name>` unless you supply another CloudWatch target. Runtime logs use the configured `runtimeLogging` group. eve logs lifecycle phases and failures, but not command text or environment values. Enable CloudTrail management events for Lambda operations and S3 data events on the artifact prefix when you need an audit trail.
+
+The package also emits OpenTelemetry spans through `@opentelemetry/api`; they are no-ops unless
+the host application configures an SDK. The `eve.aws_lambda_microvm.session.create` parent breaks
+runtime acquisition into lease, activation, `aws.lambda_microvms.run_microvm`, controller
+readiness, authentication-token, and checkpoint-restore spans. AWS call spans include request ID,
+attempt count, total retry delay, HTTP status, and the service-reported MicroVM start time when the
+SDK returns them. The
+`eve.aws_lambda_microvm.operation.duration` histogram and
+`eve.aws_lambda_microvm.operation.count` counter use only operation, outcome, Region, and
+networking mode where available. MicroVM IDs and image versions are trace-only; client tokens,
+controller credentials, activation payloads, checkpoint keys, presigned URLs, and command or
+environment values are never recorded. Exception events use a fixed message without the original
+error name, message, stack, or cause; callers still receive the original error. Metrics also activate
+when the host registers its provider after this package has been imported or used.
 
 eve does not prune images or durable checkpoints. Configure S3 lifecycle rules appropriate to your retention policy for abandoned multipart uploads, temporary objects, noncurrent object versions, old checkpoint generations, and deleted applications. Do not expire the currently referenced checkpoint or template descriptor.
 

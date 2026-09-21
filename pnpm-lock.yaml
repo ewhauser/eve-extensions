@@ -45,7 +45,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -70,7 +70,7 @@ importers:
         version: 3.1116.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -93,13 +93,13 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-aws-lambda-microvms:
     dependencies:
@@ -112,6 +112,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 3.1116.0
         version: 3.1116.0
+      '@opentelemetry/api':
+        specifier: 1.9.0
+        version: 1.9.0
     devDependencies:
       '@aws-sdk/client-cloudformation':
         specifier: 3.1118.0
@@ -130,7 +133,7 @@ importers:
         version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -139,7 +142,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-openai-compaction:
     devDependencies:
@@ -154,13 +157,13 @@ importers:
         version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-openai-connectors:
     dependencies:
@@ -173,13 +176,13 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-openai-imagegen:
     dependencies:
@@ -192,13 +195,13 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-openai-plugins:
     dependencies:
@@ -211,7 +214,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -220,7 +223,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-progress:
     dependencies:
@@ -233,13 +236,13 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-project-link:
     dependencies:
@@ -252,13 +255,13 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
   packages/eve-slack-participation:
     dependencies:
@@ -274,13 +277,13 @@ importers:
         version: 7.0.99(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
+        version: 0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
 
 packages:
 
@@ -573,6 +576,10 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@opentelemetry/api@1.9.0':
+    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
+    engines: {node: '>=8.0.0'}
 
   '@oxc-project/types@0.149.0':
     resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
@@ -1708,6 +1715,8 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
+  '@opentelemetry/api@1.9.0': {}
+
   '@oxc-project/types@0.149.0': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.8':
@@ -2063,12 +2072,13 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10):
+  eve@0.54.3(patch_hash=76bdaa51f995bdbe9d8aa008ae69b4d126ef7ec07389ad0c8674501bb4afbc7e)(@opentelemetry/api@1.9.0)(ai@7.0.99(zod@4.4.3))(microsandbox@0.5.10):
     dependencies:
       ai: 7.0.99(zod@4.4.3)
       nitro: 3.0.260903-beta
       undici: 8.9.0
     optionalDependencies:
+      '@opentelemetry/api': 1.9.0
       microsandbox: 0.5.10
 
   eventsource-parser@3.1.1: {}
@@ -2278,7 +2288,7 @@ snapshots:
       fsevents: 2.3.3
       tsx: 4.23.13
 
-  vitest@4.1.11(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13)):
+  vitest@4.1.11(@opentelemetry/api@1.9.0)(@types/node@26.2.0)(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@7.3.6(@types/node@26.2.0)(tsx@4.23.13))
@@ -2301,6 +2311,7 @@ snapshots:
       vite: 7.3.6(@types/node@26.2.0)(tsx@4.23.13)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@opentelemetry/api': 1.9.0
       '@types/node': 26.2.0
     transitivePeerDependencies:
       - msw

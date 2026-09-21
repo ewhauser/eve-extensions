@@ -1,6 +1,7 @@
 import type { AwsLambdaMicrovmController } from "./controller-client.js";
 import type { AwsLambdaMicrovmCheckpoint } from "./metadata.js";
 import type { AwsLambdaMicrovmStorage } from "./storage.js";
+import { instrumentAwsLambdaMicrovmOperation } from "./telemetry.js";
 
 export interface PendingAwsLambdaMicrovmCheckpoint {
   readonly checkpoint: AwsLambdaMicrovmCheckpoint;
@@ -86,21 +87,43 @@ export async function restoreAwsLambdaMicrovmCheckpoint(input: {
   readonly controller: AwsLambdaMicrovmController;
   readonly storage: AwsLambdaMicrovmStorage;
 }): Promise<void> {
-  const stored = await input.storage.getObjectInfo(input.checkpoint.key);
-  if (
-    stored === null ||
-    stored.size !== input.checkpoint.size ||
-    (input.checkpoint.etag !== undefined && stored.etag !== input.checkpoint.etag)
-  ) {
-    throw new Error(
-      `AWS Lambda MicroVM checkpoint ${input.checkpoint.key} no longer matches its manifest.`,
-    );
-  }
-  await input.controller.restoreCheckpoint({
-    sha256: input.checkpoint.sha256,
-    size: input.checkpoint.size,
-    url: await input.storage.presignGet(input.checkpoint.key),
-  });
+  await instrumentAwsLambdaMicrovmOperation(
+    {
+      attributes: {
+        "eve.aws_lambda_microvm.checkpoint.generation": input.checkpoint.generation,
+        "eve.aws_lambda_microvm.checkpoint.size": input.checkpoint.size,
+      },
+      name: "eve.aws_lambda_microvm.checkpoint.restore",
+    },
+    async () => {
+      const stored = await instrumentAwsLambdaMicrovmOperation(
+        { name: "eve.aws_lambda_microvm.checkpoint.verify" },
+        async () => await input.storage.getObjectInfo(input.checkpoint.key),
+      );
+      if (
+        stored === null ||
+        stored.size !== input.checkpoint.size ||
+        (input.checkpoint.etag !== undefined && stored.etag !== input.checkpoint.etag)
+      ) {
+        throw new Error(
+          `AWS Lambda MicroVM checkpoint ${input.checkpoint.key} no longer matches its manifest.`,
+        );
+      }
+      const url = await instrumentAwsLambdaMicrovmOperation(
+        { name: "eve.aws_lambda_microvm.checkpoint.presign" },
+        async () => await input.storage.presignGet(input.checkpoint.key),
+      );
+      await instrumentAwsLambdaMicrovmOperation(
+        { name: "eve.aws_lambda_microvm.controller.restore_checkpoint" },
+        async () =>
+          await input.controller.restoreCheckpoint({
+            sha256: input.checkpoint.sha256,
+            size: input.checkpoint.size,
+            url,
+          }),
+      );
+    },
+  );
 }
 
 function expectDefined<T>(value: T | undefined, name: string): T {

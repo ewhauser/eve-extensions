@@ -12,6 +12,8 @@ const BUILD_CONNECTOR =
   "arn:aws:lambda:us-east-1:123456789012:network-connector:build-egress";
 const RUNTIME_CONNECTOR =
   "arn:aws:lambda:us-east-1:123456789012:network-connector:runtime-egress";
+const INTERNET_EGRESS =
+  "arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:INTERNET_EGRESS";
 const PUBLIC_TEST_CA = `-----BEGIN CERTIFICATE-----
 MIICwjCCAaoCCQCw/VQlcDz3ETANBgkqhkiG9w0BAQsFADAjMSEwHwYDVQQDDBhl
 dmUtZWdyZXNzLXByb3h5LXRlc3QtY2EwHhcNMjYwODE2MDIyNjU1WhcNMjYwODE3
@@ -31,6 +33,15 @@ cvKZSIRd5mmzmvNtQgWJanxamFuq2VD4N3Syvyplb/BiY46nN04=
 -----END CERTIFICATE-----`;
 
 describe("resolveAwsLambdaMicrovmOptions", () => {
+  it.each([0, -1, 0.5, NaN, Infinity, 240001])("rejects an invalid launch budget %s", (launchTimeoutMs) => {
+    expect(() => resolveAwsLambdaMicrovmOptions({ ...REQUIRED, launchTimeoutMs })).toThrow(/launchTimeoutMs/);
+  });
+
+  it("defaults to a four-minute launch budget and accepts a shorter budget", () => {
+    expect(resolveAwsLambdaMicrovmOptions(REQUIRED).launchTimeoutMs).toBe(240000);
+    expect(resolveAwsLambdaMicrovmOptions({ ...REQUIRED, launchTimeoutMs: 120000 }).launchTimeoutMs).toBe(120000);
+  });
+
   it("preserves 0.1.0 lifecycle and connector defaults in legacy mode", () => {
     const resolved = resolveAwsLambdaMicrovmOptions(REQUIRED);
 
@@ -89,6 +100,25 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
     });
   });
 
+  it("allows managed Internet egress for image builds while runtime remains customer-managed", () => {
+    const resolved = resolveAwsLambdaMicrovmOptions({
+      ...REQUIRED,
+      buildEgressNetworkConnectorArns: [INTERNET_EGRESS],
+      buildNetworkLaneId: "aws-managed-internet-egress",
+      networkingMode: "customer-managed",
+      runtimeEgressNetworkConnectorArns: [RUNTIME_CONNECTOR],
+      runtimeNetworkLaneId: "runtime-reviewed",
+    });
+
+    expect(resolved).toMatchObject({
+      buildEgressNetworkConnectorArns: [INTERNET_EGRESS],
+      buildNetworkLaneId: "aws-managed-internet-egress",
+      networkingMode: "customer-managed",
+      runtimeEgressNetworkConnectorArns: [RUNTIME_CONNECTOR],
+      runtimeNetworkLaneId: "runtime-reviewed",
+    });
+  });
+
   it.each([
     [{ buildEgressNetworkConnectorArns: undefined }, /exactly one/],
     [{ buildEgressNetworkConnectorArns: [] }, /exactly one/],
@@ -116,7 +146,7 @@ describe("resolveAwsLambdaMicrovmOptions", () => {
     [
       {
         buildEgressNetworkConnectorArns: [
-          "arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:INTERNET_EGRESS",
+          "arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:ALL_INGRESS",
         ],
       },
       /customer-managed/,
