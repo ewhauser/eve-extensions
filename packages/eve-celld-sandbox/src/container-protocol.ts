@@ -40,7 +40,11 @@ const path = z
 const generation = z.string().uuid();
 const handle = { generation, incarnation: generation };
 export const RecipeStep = z.discriminatedUnion("op", [
-  z.strictObject({ op: z.literal("execute"), command: ContainerCommand }),
+  z.strictObject({
+    op: z.literal("execute"),
+    command: ContainerCommand,
+    expectedExitCode: z.number().int(),
+  }),
   z.strictObject({
     op: z.literal("write"),
     path,

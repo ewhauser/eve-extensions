@@ -361,7 +361,11 @@ export class ContainerCell extends Sandbox<ContainerEnv> {
       if (identity.kind === "build") {
         if (result.state === "completed") {
           try {
-            this.appendRecipe({ op: "execute", command: op.command });
+            this.appendRecipe({
+              op: "execute",
+              command: op.command,
+              expectedExitCode: result.exitCode,
+            });
           } catch (error) {
             this.putMeta("recipe_failed", "true");
             throw error;
@@ -513,6 +517,12 @@ export class ContainerCell extends Sandbox<ContainerEnv> {
                     );
                     if (result.state !== "completed")
                       throw new ProtocolError("BOOTSTRAP", result.stderr, 409);
+                    if (result.exitCode !== step.expectedExitCode)
+                      throw new ProtocolError(
+                        "BOOTSTRAP",
+                        `Initialization command exited with ${result.exitCode}; expected ${step.expectedExitCode}. ${result.stderr}`,
+                        409,
+                      );
                   } else await this.applyFile(step);
                 }
                 this.putMeta("ready", "true");

@@ -101,7 +101,9 @@ A normal nonzero shell exit commits preceding writes.
 **Containers:** prewarm validates seed files and the bootstrap callback in a
 temporary container, recording the successful file writes, removals, and command
 invocations as a bounded initialization recipe. New physical containers replay
-that recipe. This is initialization, not a snapshot: generated values may differ,
+that recipe and require each command to return its recorded exit status (including
+intentional nonzero exits). A mismatch fails initialization and destroys the
+container. This is initialization, not a snapshot: generated values may differ,
 the callback's Node-side logic is not rerun, and commands can repeat external
 effects. Keep initialization deterministic and idempotent. Bake dependencies
 into the Dockerfile to avoid reinstalling them on each replacement. Up to 256

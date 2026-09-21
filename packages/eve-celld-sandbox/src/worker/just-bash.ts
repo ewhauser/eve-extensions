@@ -261,6 +261,7 @@ export class SandboxCell extends DurableObject<Env> {
         for (const a of this.active.values()) a.controller.abort();
         // A barrier behind every accepted mutation. Cancellation bypasses the queue.
         await this.serialize(async () => {
+          this.check(op.generation);
           if (op.op === "delete")
             await this.ctx.storage.transaction(async () => {
               await this.store.clear();
