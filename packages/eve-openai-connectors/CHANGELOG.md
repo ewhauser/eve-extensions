@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.7.0...eve-openai-connectors-v0.7.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* upgrade Eve to 0.63.0 and resolve compatibility issues ([#120](https://github.com/ewhauser/eve-extensions/issues/120)) ([e5f505b](https://github.com/ewhauser/eve-extensions/commit/e5f505b0a52f42bbdda9cc38b2d0c55d6c6b8328))
+
 ## [0.7.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.6.2...eve-openai-connectors-v0.7.0) (2026-09-02)
 
 
