@@ -11,8 +11,9 @@ repository root. It carries:
   provenance validation, the request-overhead-adjusted history budget, and
   current authorization/provider options.
 - Connector tool-name projection, upstream-name filtering, approval annotations,
-  and descriptor validation before execution. The 0.63.0 scoped authorization
-  lifecycle remains in place.
+  descriptor validation before execution, call-input transformation, optional
+  connection-name qualification, and deterministic collision priority. The
+  0.63.0 scoped authorization lifecycle remains in place.
 - An optional-property declaration correction for `AlsContext.localDevRequest`
   so `ContextContainer` satisfies it with `exactOptionalPropertyTypes` enabled.
 

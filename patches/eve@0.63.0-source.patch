@@ -166,7 +166,7 @@ index db6064b..618298f 100644
      historyProjector: input.historyProjector,
      historyView: input.historyView,
 diff --git a/packages/eve/src/execution/tools/connection-search.ts b/packages/eve/src/execution/tools/connection-search.ts
-index a7353d6..d346536 100644
+index a7353d6..917b4f5 100644
 --- a/packages/eve/src/execution/tools/connection-search.ts
 +++ b/packages/eve/src/execution/tools/connection-search.ts
 @@ -1,3 +1,4 @@
@@ -205,7 +205,31 @@ index a7353d6..d346536 100644
  function tokenize(text: string): string[] {
    return text
      .toLowerCase()
-@@ -170,7 +177,11 @@ async function executeConnectionSearch(
+@@ -159,6 +166,23 @@ async function completePendingAuthorizations(
+   }
+ }
+ 
++export function selectConnectionMatches<
++  T extends { item: { qualifiedName?: string; connection: string }; score: number; priority: number },
++>(matches: T[], limit: number): T[] {
++  matches.sort((a, b) =>
++    b.priority - a.priority || b.score - a.score ||
++    (a.item.qualifiedName ?? "").localeCompare(b.item.qualifiedName ?? "") ||
++    a.item.connection.localeCompare(b.item.connection),
++  );
++  const seen = new Set<string>();
++  return matches.filter((match) => {
++    if (match.item.qualifiedName === undefined) return true;
++    if (seen.has(match.item.qualifiedName)) return false;
++    seen.add(match.item.qualifiedName);
++    return true;
++  }).slice(0, limit);
++}
++
+ async function executeConnectionSearch(
+   input: ConnectionSearchInput,
+ ): Promise<ConnectionSearchResultItem[] | AuthorizationSignal> {
+@@ -170,7 +194,12 @@ async function executeConnectionSearch(
  
    const limit = input.limit ?? 10;
    const queryTokens = tokenize(input.keywords);
@@ -214,11 +238,12 @@ index a7353d6..d346536 100644
 +    item: ConnectionSearchResultItem;
 +    stored: StoredConnectionSearchResult;
 +    score: number;
++    priority: number;
 +  }> = [];
    const failedConnections: ConnectionSearchResultItem[] = [];
  
    const targetConnections =
-@@ -256,16 +267,32 @@ async function executeConnectionSearch(
+@@ -256,16 +285,35 @@ async function executeConnectionSearch(
      for (const tool of tools) {
        const score = scoreMatch(queryTokens, tool);
        if (score > 0) {
@@ -228,7 +253,9 @@ index a7353d6..d346536 100644
 +          description: tool.description,
 +          inputSchema: tool.inputSchema,
 +          outputSchema: tool.outputSchema,
-+          qualifiedName: qualifiedConnectionToolName(conn.connectionName, modelName),
++          qualifiedName: conn.toolName?.qualify === false
++            ? modelName
++            : qualifiedConnectionToolName(conn.connectionName, modelName),
 +          tool: modelName,
 +        };
 +        let annotations: JsonObject | undefined;
@@ -250,6 +277,7 @@ index a7353d6..d346536 100644
 -          },
 +          item,
            score,
++          priority: conn.toolName?.collisionPriority ?? 0,
 +          stored: {
 +            ...item,
 +            ...(conn.instanceId === undefined ? {} : { connectionInstanceId: conn.instanceId }),
@@ -259,12 +287,13 @@ index a7353d6..d346536 100644
          });
        }
      }
-@@ -284,14 +311,15 @@ async function executeConnectionSearch(
+@@ -283,15 +331,15 @@ async function executeConnectionSearch(
+     throw new Error(terminalFailures.map((failure) => failure.error).join("\n"));
    }
  
-   results.sort((a, b) => b.score - a.score);
+-  results.sort((a, b) => b.score - a.score);
 -  const matched = results.slice(0, limit).map((r) => r.item);
-+  const selected = results.slice(0, limit);
++  const selected = selectConnectionMatches(results, limit);
 +  const matched = selected.map((r) => r.item);
  
    if (matched.length > 0) {
@@ -278,7 +307,7 @@ index a7353d6..d346536 100644
      }
      ctx.set(ConnectionSearchResultsKey, [...merged.values()]);
      return allResults;
-@@ -311,14 +339,53 @@ async function executeConnectionSearch(
+@@ -311,14 +359,53 @@ async function executeConnectionSearch(
  
  function readDiscoveredToolClosure(closure: JsonObject): {
    readonly connectionName: string;
@@ -334,7 +363,7 @@ index a7353d6..d346536 100644
  }
  
  async function executeDiscoveredConnectionTool(
-@@ -326,7 +393,7 @@ async function executeDiscoveredConnectionTool(
+@@ -326,7 +413,7 @@ async function executeDiscoveredConnectionTool(
    input: Record<string, unknown>,
    executeCtx: ToolContext,
  ): Promise<unknown> {
@@ -343,7 +372,7 @@ index a7353d6..d346536 100644
    const registry = loadContext().get(ConnectionRegistryKey);
    if (registry === undefined) {
      throw new Error("Connection registry is unavailable while replaying a discovered tool.");
-@@ -340,6 +407,7 @@ async function executeDiscoveredConnectionTool(
+@@ -340,6 +427,7 @@ async function executeDiscoveredConnectionTool(
      return await client.executeTool(toolName, input, {
        abortSignal: executeCtx.abortSignal,
        callId: executeCtx.callId,
@@ -351,7 +380,7 @@ index a7353d6..d346536 100644
      });
    } catch (error) {
      return await auth.handleError(error, scoped);
-@@ -363,22 +431,35 @@ async function requestDiscoveredConnectionToolApproval(
+@@ -363,22 +451,35 @@ async function requestDiscoveredConnectionToolApproval(
    closure: JsonObject,
    context: ApprovalContext,
  ) {
@@ -391,7 +420,7 @@ index a7353d6..d346536 100644
  }
  
  export async function resolveConnectionSearchDynamicTools() {
-@@ -387,10 +468,30 @@ export async function resolveConnectionSearchDynamicTools() {
+@@ -387,10 +488,32 @@ export async function resolveConnectionSearchDynamicTools() {
  
    const connections = registry.getConnections();
    const connectionNames = connections.map((c) => c.connectionName);
@@ -416,7 +445,9 @@ index a7353d6..d346536 100644
 +      return (
 +        modelName !== undefined &&
 +        modelName === result.tool &&
-+        result.qualifiedName === qualifiedConnectionToolName(result.connection, modelName)
++        result.qualifiedName === (connection.toolName?.qualify === false
++          ? modelName
++          : qualifiedConnectionToolName(result.connection, modelName))
 +      );
 +    } catch {
 +      return false;
@@ -425,7 +456,7 @@ index a7353d6..d346536 100644
  
    const tools: Record<string, object> = {};
  
-@@ -418,10 +519,15 @@ export async function resolveConnectionSearchDynamicTools() {
+@@ -418,10 +541,15 @@ export async function resolveConnectionSearchDynamicTools() {
  
    for (const result of discovered) {
      const connectionName = result.connection;
@@ -443,7 +474,7 @@ index a7353d6..d346536 100644
      const discoveredTool = defineTool({
        description: result.description,
        inputSchema: (result.inputSchema ?? {
-@@ -454,7 +560,7 @@ export async function resolveConnectionSearchDynamicTools() {
+@@ -454,7 +582,7 @@ export async function resolveConnectionSearchDynamicTools() {
              },
            }),
      });
@@ -687,7 +718,7 @@ index 6facf38..417dec2 100644
    /** Projects raw durable history before it crosses a message-bearing boundary. */
    readonly historyProjector?: HistoryViewProjector;
 diff --git a/packages/eve/src/internal/authored-definition/connection.ts b/packages/eve/src/internal/authored-definition/connection.ts
-index fdf0750..282ccd0 100644
+index fdf0750..8757f02 100644
 --- a/packages/eve/src/internal/authored-definition/connection.ts
 +++ b/packages/eve/src/internal/authored-definition/connection.ts
 @@ -1,3 +1,4 @@
@@ -703,6 +734,15 @@ index fdf0750..282ccd0 100644
    "toolCall",
    "tools",
    "url",
+@@ -54,7 +56,7 @@ const KNOWN_AUTHORIZATION_KEYS = [
+   // canonical producer.
+   "vercelConnect",
+ ] as const;
+-const KNOWN_TOOL_CALL_KEYS = ["providedArguments"] as const;
++const KNOWN_TOOL_CALL_KEYS = ["providedArguments", "transformInput"] as const;
+ 
+ /**
+  * Validates one authored MCP client connection module export at build time
 @@ -77,6 +79,7 @@ export function normalizeMcpClientConnectionDefinition(
    const authorization = normalizeAuthorization(record, message);
    const headers = normalizeHeaders(record, message);
@@ -719,7 +759,37 @@ index fdf0750..282ccd0 100644
    if (tools !== undefined) {
      result.tools = tools;
    }
-@@ -385,36 +389,43 @@ function normalizeFilterField(
+@@ -140,8 +144,14 @@ function normalizeConnectionToolCall(
+   );
+   expectOnlyKnownKeys(toolCall, KNOWN_TOOL_CALL_KEYS, `${message} The "toolCall" field`);
+ 
++  if (toolCall.transformInput !== undefined && typeof toolCall.transformInput !== "function") {
++    throw new Error(`${message} The "toolCall.transformInput" field must be a function.`);
++  }
++
+   if (toolCall.providedArguments === undefined) {
+-    return {};
++    return toolCall.transformInput === undefined
++      ? {}
++      : { transformInput: toolCall.transformInput as NonNullable<ConnectionToolCallDefinition["transformInput"]> };
+   }
+ 
+   const providedArguments = expectObjectRecord(
+@@ -169,7 +179,12 @@ function normalizeConnectionToolCall(
+     }
+   }
+ 
+-  return { providedArguments: providedArguments as ProvidedArgumentsDefinition };
++  return {
++    providedArguments: providedArguments as ProvidedArgumentsDefinition,
++    ...(toolCall.transformInput === undefined
++      ? {}
++      : { transformInput: toolCall.transformInput as NonNullable<ConnectionToolCallDefinition["transformInput"]> }),
++  };
+ }
+ 
+ /**
+@@ -385,36 +400,54 @@ function normalizeFilterField(
    message: string,
  ): ToolFilterDefinition | undefined {
    const value = record[fieldName];
@@ -780,10 +850,21 @@ index fdf0750..282ccd0 100644
 +    record.toolName,
 +    `${message} The "toolName" field must be a plain object.`,
 +  );
-+  expectOnlyKnownKeys(value, ["toModelName"], `${message} The "toolName" field`);
++  expectOnlyKnownKeys(value, ["toModelName", "qualify", "collisionPriority"], `${message} The "toolName" field`);
++  if (value.qualify !== undefined && typeof value.qualify !== "boolean")
++    throw new Error(`${message} The "toolName.qualify" field must be a boolean.`);
++  if (value.collisionPriority !== undefined &&
++      (typeof value.collisionPriority !== "number" || !Number.isSafeInteger(value.collisionPriority)))
++    throw new Error(`${message} The "toolName.collisionPriority" field must be a safe integer.`);
 +  if (typeof value.toModelName !== "function")
 +    throw new Error(`${message} The "toolName.toModelName" field must be a function.`);
-+  return { toModelName: value.toModelName as (name: string) => string };
++  return {
++    toModelName: value.toModelName as (name: string) => string,
++    ...(value.qualify === undefined ? {} : { qualify: value.qualify as boolean }),
++    ...(value.collisionPriority === undefined
++      ? {}
++      : { collisionPriority: value.collisionPriority as number }),
++  };
  }
  
  function validateStringArray(value: unknown, label: string): void {
@@ -894,6 +975,21 @@ index 746a6aa..cbc5bb6 100644
    /**
     * Client-side tool filter. When set, the model sees only tools
     * whose names pass the filter; `connection_search` drops all
+diff --git a/packages/eve/src/public/definitions/connections/tool-call.ts b/packages/eve/src/public/definitions/connections/tool-call.ts
+index 340db10..65c5874 100644
+--- a/packages/eve/src/public/definitions/connections/tool-call.ts
++++ b/packages/eve/src/public/definitions/connections/tool-call.ts
+@@ -27,4 +27,10 @@ export type ProvidedArgumentsDefinition = Readonly<Record<string, ProvidedArgume
+ export interface ConnectionToolCallDefinition {
+   /** Application-owned arguments hidden from the model and added at execution time. */
+   readonly providedArguments?: ProvidedArgumentsDefinition;
++  /** Runs after authorization and metadata revalidation, just before execution. */
++  readonly transformInput?: (
++    ctx: ProvidedArgumentContext,
++    upstreamToolName: string,
++    input: Readonly<Record<string, unknown>>,
++  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
+ }
 diff --git a/packages/eve/src/public/index.ts b/packages/eve/src/public/index.ts
 index 7eaefc2..fb75632 100644
 --- a/packages/eve/src/public/index.ts
@@ -989,15 +1085,22 @@ index 356eb0a..458936f 100644
    readonly catalog?: RuntimeModelCatalog;
    readonly durability: "durable" | "live";
 diff --git a/packages/eve/src/runtime/connections/mcp-client.ts b/packages/eve/src/runtime/connections/mcp-client.ts
-index 8ecb362..a2266f6 100644
+index 8ecb362..547e209 100644
 --- a/packages/eve/src/runtime/connections/mcp-client.ts
 +++ b/packages/eve/src/runtime/connections/mcp-client.ts
-@@ -1,3 +1,4 @@
+@@ -1,9 +1,11 @@
 +import { jsonValuesEqual } from "#shared/json.js";
  import { createMCPClient, type MCPClient } from "#compiled/@ai-sdk/mcp/index.js";
  import type { ToolSet } from "ai";
  
-@@ -129,7 +130,17 @@ export class McpConnectionClient implements ConnectionClient {
+ import { buildCallbackContext } from "#context/build-callback-context.js";
+ import { ConnectionAuthorizationRequiredError } from "#connections/errors.js";
+ import type { SessionContext } from "#context/session-context.js";
++import type { ProvidedArgumentContext } from "#public/definitions/connections/tool-call.js";
+ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
+ import { evictScopedToken, resolveScopedToken } from "#runtime/connections/scoped-authorization.js";
+ import { resolveConnectionAuthorization } from "#runtime/connections/resolve-authorization.js";
+@@ -129,23 +131,33 @@ export class McpConnectionClient implements ConnectionClient {
      options: ConnectionToolExecuteOptions,
    ): Promise<unknown> {
      try {
@@ -1015,8 +1118,32 @@ index 8ecb362..a2266f6 100644
 +      this.#toolsPromise = Promise.resolve(this.#tools);
  
        const sdkTool = tools[toolName];
-       if (sdkTool?.execute === undefined) {
-@@ -192,6 +203,10 @@ export class McpConnectionClient implements ConnectionClient {
+-      if (sdkTool?.execute === undefined) {
++      const sdkExecute = sdkTool?.execute;
++      if (sdkExecute === undefined) {
+         throw new Error(
+           `Tool "${toolName}" not found in connection "${this.#connection.connectionName}".`,
+         );
+       }
+ 
+-      const resolvedArgs = await resolveProvidedArguments({
+-        args,
+-        callId: options.callId,
+-        connection: this.#connection,
++      return await executeWithTransform(
++        this.#connection,
+         toolName,
+-      });
+-
+-      return await sdkTool.execute(resolvedArgs, { abortSignal: options.abortSignal } as never);
++        args,
++        options,
++        async (input) => await sdkExecute(input, { abortSignal: options.abortSignal } as never),
++      );
+     } catch (error) {
+       return await this.#rethrowClassified(error);
+     }
+@@ -192,6 +204,10 @@ export class McpConnectionClient implements ConnectionClient {
      // elements are `Tool<unknown, CallToolResult>`. The AI SDK's
      // `ToolSet` constraint only admits `Tool<any | never, any | never>`,
      // so a single-hop cast is required — the runtime shape is identical.
@@ -1027,7 +1154,7 @@ index 8ecb362..a2266f6 100644
      const providedArgumentNames = Object.keys(this.#connection.toolCall?.providedArguments ?? {});
      const projectedTools = filteredTools.map((tool) => ({
        ...tool,
-@@ -204,6 +219,7 @@ export class McpConnectionClient implements ConnectionClient {
+@@ -204,6 +220,7 @@ export class McpConnectionClient implements ConnectionClient {
        annotations: t.annotations as Record<string, unknown> | undefined,
        description: t.description ?? "",
        inputSchema: (t.inputSchema ?? {}) as Record<string, unknown>,
@@ -1035,7 +1162,45 @@ index 8ecb362..a2266f6 100644
        name: t.name,
        outputSchema:
          "outputSchema" in t && t.outputSchema !== undefined
-@@ -364,7 +380,7 @@ export function passesToolFilter(
+@@ -266,6 +283,37 @@ export class McpConnectionClient implements ConnectionClient {
+   }
+ }
+ 
++/** Executes after the caller's authorization and current tool metadata have been checked. */
++export async function executeWithTransform(
++  connection: ResolvedConnectionDefinition,
++  upstreamToolName: string,
++  args: unknown,
++  options: ConnectionToolExecuteOptions,
++  execute: (input: Record<string, unknown>) => Promise<unknown>,
++  context?: ProvidedArgumentContext,
++): Promise<unknown> {
++  let input = await resolveProvidedArguments({
++    args,
++    callId: options.callId,
++    connection,
++    toolName: upstreamToolName,
++  });
++  const transform = connection.toolCall?.transformInput;
++  if (transform !== undefined) {
++    input = await transform(
++      context ?? { ...buildCallbackContext(), callId: options.callId, toolName: upstreamToolName },
++      upstreamToolName,
++      input,
++    );
++    if (!isObject(input) || Array.isArray(input)) {
++      throw new Error(
++        `Connection "${connection.connectionName}" toolCall.transformInput must return an object.`,
++      );
++    }
++  }
++  return await execute(input);
++}
++
+ /**
+  * Returns `true` when an error from the MCP transport indicates the
+  * bearer was rejected by the remote server — an HTTP `401`. Per
+@@ -364,7 +412,7 @@ export function passesToolFilter(
    if ("allow" in filter) {
      return filter.allow.includes(toolName);
    }
@@ -1044,7 +1209,7 @@ index 8ecb362..a2266f6 100644
  }
  
  /**
-@@ -454,3 +470,50 @@ async function resolveHeaderValue(
+@@ -454,3 +502,52 @@ async function resolveHeaderValue(
    }
    return await value;
  }
@@ -1061,7 +1226,9 @@ index 8ecb362..a2266f6 100644
 +        throw new Error(
 +          `Connection "${connection.connectionName}" mapped upstream tool ${JSON.stringify(upstreamName)} to an invalid empty model name.`,
 +        );
-+      const qualified = `${connection.connectionName}__${modelName}`;
++      const qualified = connection.toolName?.qualify === false
++        ? modelName
++        : `${connection.connectionName}__${modelName}`;
 +      if (!pattern.test(qualified))
 +        throw new Error(
 +          `Connection "${connection.connectionName}" mapped upstream tool ${JSON.stringify(upstreamName)} to ${JSON.stringify(qualified)}, which must match ${String(pattern)}.`,
@@ -1095,6 +1262,43 @@ index 8ecb362..a2266f6 100644
 +    jsonValuesEqual(a.annotations, b.annotations)
 +  );
 +}
+diff --git a/packages/eve/src/runtime/connections/openapi-client.ts b/packages/eve/src/runtime/connections/openapi-client.ts
+index 453acf0..5838c05 100644
+--- a/packages/eve/src/runtime/connections/openapi-client.ts
++++ b/packages/eve/src/runtime/connections/openapi-client.ts
+@@ -2,10 +2,9 @@ import { tool, type ToolSet } from "ai";
+ 
+ import { createLogger } from "#internal/logging.js";
+ import type { ResolvedConnectionDefinition } from "#runtime/types.js";
+-import { passesToolFilter, resolveHeaders } from "#runtime/connections/mcp-client.js";
++import { executeWithTransform, passesToolFilter, resolveHeaders } from "#runtime/connections/mcp-client.js";
+ import {
+   omitProvidedArgumentsFromSchema,
+-  resolveProvidedArguments,
+ } from "#runtime/connections/provided-arguments.js";
+ import {
+   HTTP_METHODS,
+@@ -429,13 +428,14 @@ export class OpenApiConnectionClient implements ConnectionClient {
+     args: Record<string, unknown>,
+     options: ConnectionToolExecuteOptions,
+   ): Promise<OpenApiToolResult> {
+-    const resolvedArgs = await resolveProvidedArguments({
+-      args,
+-      callId: options.callId,
+-      connection: this.#connection,
+-      toolName: operation.toolName,
+-    });
+     const headers = await resolveHeaders(this.#connection);
++    const resolvedArgs = await executeWithTransform(
++      this.#connection,
++      operation.toolName,
++      args,
++      options,
++      async (input) => input,
++    ) as Record<string, unknown>;
+ 
+     let path = operation.pathTemplate;
+     const query = new URLSearchParams();
 diff --git a/packages/eve/src/runtime/resolve-agent.ts b/packages/eve/src/runtime/resolve-agent.ts
 index 147b32d..1d367ac 100644
 --- a/packages/eve/src/runtime/resolve-agent.ts
@@ -1288,10 +1492,10 @@ index 491d69c..de62852 100644
     * Fraction of the primary model context window that triggers compaction.
     *
 diff --git a/packages/eve/src/shared/connection-types.ts b/packages/eve/src/shared/connection-types.ts
-index 67dd5f8..d05a99f 100644
+index 67dd5f8..6f46dad 100644
 --- a/packages/eve/src/shared/connection-types.ts
 +++ b/packages/eve/src/shared/connection-types.ts
-@@ -73,7 +73,12 @@ export type HeadersDefinition =
+@@ -73,7 +73,14 @@ export type HeadersDefinition =
   */
  export type ToolFilterDefinition =
    | { readonly allow: readonly string[] }
@@ -1301,11 +1505,13 @@ index 67dd5f8..d05a99f 100644
 +
 +export interface ConnectionToolNameDefinition {
 +  readonly toModelName: (upstreamName: string) => string;
++  readonly qualify?: boolean;
++  readonly collisionPriority?: number;
 +}
  
  /**
   * Framework-resolved identity on whose behalf a connection is
-@@ -444,6 +449,7 @@ export function supportsInteractiveAuthorization(
+@@ -444,6 +451,7 @@ export function supportsInteractiveAuthorization(
  
  /** Metadata for a single tool exposed by a connection. */
  export interface ConnectionToolMetadata {
@@ -1313,7 +1519,7 @@ index 67dd5f8..d05a99f 100644
    readonly annotations?: Record<string, unknown>;
    readonly description: string;
    readonly inputSchema: Record<string, unknown>;
-@@ -453,6 +459,7 @@ export interface ConnectionToolMetadata {
+@@ -453,6 +461,7 @@ export interface ConnectionToolMetadata {
  
  /** Per-call options for {@link ConnectionClient.executeTool}. */
  export interface ConnectionToolExecuteOptions {

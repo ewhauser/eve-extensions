@@ -6,10 +6,11 @@ The OpenAI connector endpoint used here is undocumented and experimental. Pin an
 
 ## Eve 0.63.0 patch
 
-This version still carries two small, provider-neutral Eve 0.63.0 patches:
+This version carries provider-neutral Eve 0.63.0 patches for:
 
 - reversible MCP tool-name projection, with Eve retaining the exact upstream name for filtering and execution;
 - MCP annotations and exact upstream identity on connection approval callbacks.
+- a post-authorization call-input transform, optional connection-name qualification, and deterministic tool-name collision priority.
 
 The old provider-native search/private-marker patch is gone. Discovery always uses Eve's ordinary `connection_search` path. Install the carried patch in an application because pnpm does not apply a dependency's patch automatically:
 
@@ -24,7 +25,7 @@ patchedDependencies:
   eve@0.63.0: patches/eve@0.63.0.patch
 ```
 
-Keep Eve pinned to `0.63.0` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
+Keep Eve pinned to `0.63.0` until these connection primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
 
 ## Mount
 
@@ -41,7 +42,7 @@ export default connectors({
 });
 ```
 
-The model initially sees Eve's `connection_search`, not the complete connector catalog. A search result materializes an exact callable name such as `connectors__github__search_repositories` on the next step.
+The model initially sees Eve's `connection_search`, not the complete connector catalog. A search result materializes an exact callable name such as `github__search_repositories` on the next step. Explicitly authored app connections win when they project the same name.
 
 ## Configuration
 
@@ -54,6 +55,8 @@ The model initially sees Eve's `connection_search`, not the complete connector c
 | `baseUrl` | ChatGPT connector MCP endpoint | Override the experimental endpoint. |
 | `allowedServices` | all well-formed services | Case-insensitive allowlist over the exact upstream dotted-name prefix. |
 | `excludedServices` | none | Case-insensitive denylist; deny wins over allow. |
+| `serviceAliases` | none | Map an exact upstream service segment to a stable model-facing segment. Keys and values use lowercase letters, digits, `_`, or `-`; values are at most 32 characters. Filtering and execution retain upstream names. |
+| `transformCallInput(ctx, upstreamToolName, input)` | none | Async input transform after Eve authorization and metadata revalidation, immediately before the upstream call. A failure prevents execution. |
 | `approvals` | simple | Annotation-driven policy or ordered detailed rules over exact dotted names. |
 | `approval` | none | Fully custom ordinary Eve connection approval; overrides `approvals`. |
 
@@ -77,7 +80,7 @@ export default connectors({
 
 Treat this as a breaking pre-1.0 minor upgrade: update the extension mount and install the carried Eve patch before deploying the new connector runtime.
 
-Remove `discovery`, `protocolClientLifetime`, inventory/search/materialization limits, `includeStatus`, `approvalFor`, `transformCallInput`, `onAuthError`, `onResolution`, and `logger`. Use Eve connection behavior directly; replace `onAuthError` with `evictToken`, and replace `approvalFor(item)` with `approval(ctx)` or declarative `approvals`.
+Remove `discovery`, `protocolClientLifetime`, inventory/search/materialization limits, `includeStatus`, `approvalFor`, `onAuthError`, `onResolution`, and `logger`. Use Eve connection behavior directly; replace `onAuthError` with `evictToken`, and replace `approvalFor(item)` with `approval(ctx)` or declarative `approvals`. `transformCallInput` is available again on the mounted connection path.
 
 The `eve-openai-connectors/tools` and `eve-openai-connectors/connectors` subpaths are removed. Mount the extension package and use Eve's `connection_search` plus the returned qualified names.
 
