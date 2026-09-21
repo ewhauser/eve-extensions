@@ -1,5 +1,6 @@
 import {
   defineDynamic,
+  defineDurableSchema,
   defineTool,
   type DynamicToolEntry,
   type DynamicToolSet,
@@ -15,6 +16,7 @@ import type {
 import { z } from "zod";
 
 import {
+  serializeRunnerSchema,
   type ResolvedRunnerCapability,
   type RunnerCapabilityDescriptor,
   type RunnerCapabilityMode,
@@ -636,6 +638,59 @@ async function projectDurableCapabilityOutput(
     : { type: "json" as const, value: output === undefined ? null : output };
 }
 
+interface DurableCapabilitySchemaSnapshot {
+  readonly reference: DurableCapabilityReference;
+  readonly owner: ExecutionLeaseRecord["owner"];
+  readonly direction: "input" | "output";
+  readonly jsonSchema: NonNullable<ReturnType<typeof serializeRunnerSchema>>;
+  readonly validate: boolean;
+}
+
+/** Persist schema data; reacquire host validators under the selected capability contract. */
+export function durableCapabilitySchema(
+  source: unknown,
+  direction: "input" | "output",
+  reference: DurableCapabilityReference,
+  owner: ExecutionLeaseRecord["owner"],
+) {
+  const jsonSchema = serializeRunnerSchema(source, direction);
+  if (jsonSchema === undefined) throw new Error("CAPABILITY_SCHEMA_MISSING");
+  const standard = (source as { "~standard"?: { validate?: unknown } | null })["~standard"];
+  const snapshot: DurableCapabilitySchemaSnapshot = {
+    reference, owner, direction, jsonSchema,
+    validate: typeof standard?.validate === "function",
+  };
+  return {
+    closure: snapshot,
+    schema: (snapshot: DurableCapabilitySchemaSnapshot): NonNullable<ToolDefinition<unknown, unknown>["inputSchema"]> => {
+      if (!snapshot.validate) return snapshot.jsonSchema;
+      return {
+        "~standard": {
+          version: 1,
+          vendor: "eve-agent-builder",
+          jsonSchema: {
+            input: () => structuredClone(snapshot.jsonSchema),
+            output: () => structuredClone(snapshot.jsonSchema),
+          },
+          async validate(value: unknown) {
+            const capability = await resolveDurableCapability(snapshot.owner, snapshot.reference);
+            const source = snapshot.direction === "input"
+              ? capability.tool.inputSchema : capability.tool.outputSchema;
+            const schema = source as {
+              readonly "~standard"?: { readonly validate?: z.ZodType["~standard"]["validate"] };
+            } | undefined;
+            const standard = schema?.["~standard"];
+            if (typeof standard?.validate !== "function") {
+              throw new Error("CAPABILITY_SCHEMA_CHANGED");
+            }
+            return await standard.validate(value);
+          },
+        },
+      };
+    },
+  };
+}
+
 function lowerDurableCapabilities(input: {
   readonly capabilities: readonly ResolvedRunnerCapability[];
   readonly lease: ExecutionLeaseRecord;
@@ -669,10 +724,10 @@ function lowerDurableCapabilities(input: {
     const tool = capability.tool;
     lowered[reference.modelToolName] = defineTool({
       description: tool.description,
-      inputSchema: tool.inputSchema as ToolDefinition<any, any>["inputSchema"],
+      inputSchema: defineDurableSchema(durableCapabilitySchema(tool.inputSchema, "input", reference, lease.owner)),
       ...(tool.outputSchema === undefined
         ? {}
-        : { outputSchema: tool.outputSchema as ToolDefinition<any, any>["outputSchema"] }),
+        : { outputSchema: defineDurableSchema(durableCapabilitySchema(tool.outputSchema, "output", reference, lease.owner)) }),
       approval: {
         request: async (ctx) =>
           requestDurableCapabilityApproval({

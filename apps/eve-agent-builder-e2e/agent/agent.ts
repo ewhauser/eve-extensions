@@ -1,9 +1,9 @@
 import { defineAgent } from "eve";
-import { mockModel } from "eve/evals";
+import { mockModel, type MockModelRequest, type MockModelResponse } from "eve/evals";
 
 import { FIXTURE_TASK, fixtureState } from "./lib/fixture.js";
 
-const AGENT_ID_PATTERN = /<agent id="([^"]+)" name="active-runner">/u;
+const AGENT_ID_PATTERN = /<agent id="([^"]+)" name="active-runner"[^>]*>/u;
 const ROLE_CASE_PATTERN = /^ROLE_ISOLATION:(pm|implementor|qa|test-runner)$/u;
 const READY_OUTPUT_SCHEMA = {
   type: "object",
@@ -60,7 +60,7 @@ function outputValue(output: unknown): Record<string, unknown> | null {
 }
 
 function latestChildId(messages: readonly string[], name: string): string {
-  const pattern = new RegExp(`<agent id="([^"]+)" name="${name}">`, "gu");
+  const pattern = new RegExp(`<agent id="([^"]+)" name="${name}"[^>]*>`, "gu");
   const matches = [...messages.join("\n").matchAll(pattern)];
   const id = matches.at(-1)?.[1];
   if (id === undefined) throw new Error(`BUILD_CHILD_ID_MISSING:${name}`);
@@ -94,7 +94,7 @@ function assertStructuredReady(output: unknown): void {
   }
 }
 
-const model = mockModel(async (request) => {
+async function respond(request: MockModelRequest): Promise<string | MockModelResponse> {
   const scenarioMessages = request.messages.map((message) => message.text);
   const buildScenario = scenarioMessages.some((message) =>
     message.includes("BUILD_WORKFLOW_"),
@@ -494,7 +494,7 @@ const model = mockModel(async (request) => {
     }
     if (roleResults.length === 1) {
       assertStructuredReady(roleResults[0]?.output);
-      const pattern = new RegExp(`<agent id="([^"]+)" name="${subagentName}">`, "u");
+      const pattern = new RegExp(`<agent id="([^"]+)" name="${subagentName}"[^>]*>`, "u");
       const allMessages = request.messages.map((message) => message.text).join("\n");
       const agentId = pattern.exec(allMessages)?.[1];
       if (agentId === undefined) throw new Error(`Parked ${subagentName} child ID missing`);
@@ -592,6 +592,28 @@ const model = mockModel(async (request) => {
     throw new Error("ACTIVE_LEASE_REUSE_NOT_BLOCKED_PRE_MODEL");
   }
   return `${String(activeResults[1]?.output)} LEASE_CLOSED_PROVED`;
+}
+
+// Model-facing delegation is asynchronous in Eve 0.54. Use the public
+// blocking workflow API so each deterministic scenario can inspect the
+// child's structured result before advancing its state machine.
+const childNames = new Set(["pm", "implementor", "qa", "test-runner", "active-runner"]);
+const model = mockModel(async (request) => {
+  const response = await respond({
+    ...request,
+    toolResults: request.toolResults.map((result) => ({
+      ...result,
+      name: result.name.replace(/^blocking-/, ""),
+    })),
+  });
+  if (typeof response === "string" || response.toolCalls === undefined) return response;
+  return {
+    ...response,
+    toolCalls: response.toolCalls.map((call) => ({
+      ...call,
+      name: childNames.has(call.name) ? `blocking-${call.name}` : call.name,
+    })),
+  };
 });
 
 export default defineAgent({

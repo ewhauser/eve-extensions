@@ -1,3 +1,4 @@
+import { clearDurableDynamicCallbacks } from "../node_modules/eve/dist/src/tools/durable-callbacks.js";
 import { replayDynamicTools } from "../node_modules/eve/dist/src/context/build-dynamic-tools.js";
 import {
   ContextContainer,
@@ -36,7 +37,8 @@ const resolveContext = {
     metadata: { teamId: "T1", channelId: "C1" },
   },
   messages: [],
-} as unknown as DynamicResolveContext;
+  model: null,
+} satisfies DynamicResolveContext;
 
 function durableMetadata(
   tools: Record<string, DynamicToolEntry>,
@@ -48,6 +50,7 @@ function durableMetadata(
       callbacks: validateDurableDynamicToolCallbacks(
         `project_link__${entryKey}`,
         tool,
+        { sessionId: resolveContext.session.id, scope: "step", resolverSlug: "project-link", entryKey, name: `project_link__${entryKey}` },
       ),
       description: tool.description,
       entryKey,
@@ -59,12 +62,12 @@ function durableMetadata(
 }
 
 afterEach(() => {
-  Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+  clearDurableDynamicCallbacks(resolveContext.session.id);
   vi.resetModules();
 });
 
 describe("durable project-link tools", () => {
-  it("serializes, rebinds, and replays every mounted callback on Eve 0.49", async () => {
+  it("serializes, rebinds, and replays every mounted callback on Eve 0.63.0", async () => {
     const [{ default: projectLink }, { default: projectLinkTools }] =
       await Promise.all([
         import("../extension/extension.js"),
@@ -104,7 +107,7 @@ describe("durable project-link tools", () => {
         channel,
       });
 
-      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      clearDurableDynamicCallbacks(resolveContext.session.id);
       const reboundPending = (await projectLinkTools.events["step.started"]?.(
         {} as never,
         resolveContext,
@@ -112,7 +115,7 @@ describe("durable project-link tools", () => {
       durableMetadata(reboundPending, pendingNames);
 
       const replayedPending = Object.fromEntries(
-        replayDynamicTools(pendingCheckpoint as never).map((tool) => [
+        replayDynamicTools(pendingCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
           tool.name.replace("project_link__", ""),
           tool,
         ]),
@@ -166,9 +169,10 @@ describe("durable project-link tools", () => {
       expect(savedContext.callbacks).toEqual({
         approvalRequest: { closure: { channel } },
         execute: { closure: { channel } },
+        inputSchema: { closure: {} },
       });
 
-      Reflect.set(globalThis, Symbol.for("eve:dynamic-tool-callbacks"), new Map());
+      clearDurableDynamicCallbacks(resolveContext.session.id);
       const reboundActive = (await projectLinkTools.events["step.started"]?.(
         {} as never,
         resolveContext,
@@ -176,11 +180,23 @@ describe("durable project-link tools", () => {
       durableMetadata(reboundActive, activeNames);
 
       const replayedActive = Object.fromEntries(
-        replayDynamicTools(activeCheckpoint as never).map((tool) => [
+        replayDynamicTools(activeCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
           tool.name.replace("project_link__", ""),
           tool,
         ]),
       );
+      const schema = replayedActive.save_context!.inputSchema;
+      if (schema === undefined || !("~standard" in schema)) {
+        throw new Error("Replayed context tool lost its schema validator.");
+      }
+      const validated = await schema["~standard"].validate({ summary: "  After restart.  " });
+      expect(validated).toMatchObject({ value: {
+        summary: "After restart.", principals: [], decisions: [], milestones: [],
+        upcomingMeetings: [], sources: [], openQuestions: [], nextSteps: [],
+      } });
+      const invalid = await schema["~standard"].validate({ summary: " " });
+      expect(invalid.issues?.length).toBeGreaterThan(0);
+
       await expect(
         replayedActive.save_context!.execute!(
           {

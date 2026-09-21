@@ -10,10 +10,10 @@ the compaction attempt.
 
 ## Compatibility
 
-The package targets `eve@0.49.0`, `ai@7`, and `@ai-sdk/openai@4`. It requires
+The package targets `eve@0.63.0`, `ai@7`, and `@ai-sdk/openai@4`. It requires
 the included Eve patch to expose custom compaction strategies.
 
-The package also ships `patches/eve@0.49.0-source.patch`, the reviewable
+The package also ships `patches/eve@0.63.0-source.patch`, the reviewable
 TypeScript source patch with focused Eve tests. The installable pnpm patch
 targets Eve's published `dist` files.
 
@@ -26,18 +26,18 @@ checkpoint instead of trying to reference a server-stored item by ID.
 ```sh
 pnpm add eve-openai-compaction @ai-sdk/openai
 mkdir -p patches
-cp node_modules/eve-openai-compaction/patches/eve@0.49.0.patch patches/eve@0.49.0.patch
+cp node_modules/eve-openai-compaction/patches/eve@0.63.0.patch patches/eve@0.63.0.patch
 ```
 
 Register the patch in `pnpm-workspace.yaml`:
 
 ```yaml
 patchedDependencies:
-  eve@0.49.0: patches/eve@0.49.0.patch
+  eve@0.63.0: patches/eve@0.63.0.patch
 ```
 
 Then run `pnpm install`. pnpm permits only one patch entry per package version;
-combine unified diffs if the application already patches `eve@0.49.0`.
+combine unified diffs if the application already patches `eve@0.63.0`.
 
 ## Use
 
@@ -98,3 +98,7 @@ official OpenAI [compaction guide](https://developers.openai.com/api/docs/guides
 Eve re-applies its current framework-owned post-compaction state after the
 strategy returns, and its current system instructions remain outside durable
 message history.
+
+Eve message provenance is preserved during retention and truncation. Framework
+context, compaction summaries, and execution notices are excluded from retained
+user intent; legacy messages keep their `legacy.unknown` classification.
