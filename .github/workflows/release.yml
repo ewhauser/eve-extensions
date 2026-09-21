@@ -22,6 +22,7 @@ jobs:
       issues: write # Apply labels to release pull requests.
       pull-requests: write # Create and update release pull requests.
     outputs:
+      celld-tag: ${{ steps.release.outputs['packages/eve-celld-sandbox--tag_name'] }}
       aws-tag: ${{ steps.release.outputs['packages/eve-aws-lambda-microvms--tag_name'] }}
       compaction-tag: ${{ steps.release.outputs['packages/eve-openai-compaction--tag_name'] }}
       imagegen-tag: ${{ steps.release.outputs['packages/eve-openai-imagegen--tag_name'] }}
@@ -98,6 +99,7 @@ jobs:
       contents: read
       id-token: write # Authenticate to npm through trusted publishing.
     env:
+      CELLD_TAG: ${{ needs.release-please.outputs.celld-tag }}
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       IMAGEGEN_TAG: ${{ needs.release-please.outputs.imagegen-tag }}
@@ -148,6 +150,9 @@ jobs:
                 ;;
               eve-slack-participation)
                 expected_tag="${SLACK_PARTICIPATION_TAG}"
+                ;;
+              eve-celld-sandbox)
+                expected_tag="${CELLD_TAG}"
                 ;;
               eve-aws-lambda-microvms)
                 expected_tag="${AWS_TAG}"
@@ -210,6 +215,7 @@ jobs:
     permissions:
       contents: write # Attach assets and publish the draft GitHub releases.
     env:
+      CELLD_TAG: ${{ needs.release-please.outputs.celld-tag }}
       AWS_TAG: ${{ needs.release-please.outputs.aws-tag }}
       COMPACTION_TAG: ${{ needs.release-please.outputs.compaction-tag }}
       GH_REPO: ${{ github.repository }}
@@ -256,6 +262,7 @@ jobs:
 
           publish_release eve-project-link "${PROJECT_LINK_TAG}"
           publish_release eve-slack-participation "${SLACK_PARTICIPATION_TAG}"
+          publish_release eve-celld-sandbox "${CELLD_TAG}"
           publish_release eve-aws-lambda-microvms "${AWS_TAG}"
           publish_release eve-openai-compaction "${COMPACTION_TAG}"
           publish_release eve-openai-connectors "${OPENAI_TAG}"

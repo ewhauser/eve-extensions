@@ -1,0 +1,71 @@
+{
+  "name": "eve-celld-sandbox",
+  "version": "0.1.0",
+  "description": "Eve sandbox backends for celld: durable just-bash with AgentFS and ephemeral Cloudflare Sandbox containers.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist",
+    "deploy",
+    "licenses",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./worker": "./dist/worker/index.js",
+    "./worker/just-bash": "./dist/worker/just-bash.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "pnpm run clean && tsc -p tsconfig.build.json && node scripts/build-worker.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepare": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json",
+    "test": "tsx --test test/unit/*.test.ts",
+    "test:integration": "pnpm build && tsx --test --test-concurrency=1 test/integration/*.test.ts",
+    "setup:celld": "node scripts/setup-celld.mjs",
+    "test:containers": "pnpm build && EVE_CELLD_CONTAINERS=1 tsx --test test/integration/container.test.ts"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/sandbox": "0.12.9",
+    "@cloudflare/workers-types": "5.20260919.1",
+    "@types/node": "catalog:",
+    "agentfs-sdk": "0.6.4",
+    "ai": "catalog:",
+    "esbuild": "0.25.12",
+    "eve": "catalog:",
+    "just-bash": "3.4.2",
+    "tsx": "4.23.13",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "eve": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ewhauser/eve-extensions.git",
+    "directory": "packages/eve-celld-sandbox"
+  },
+  "bugs": {
+    "url": "https://github.com/ewhauser/eve-extensions/issues"
+  },
+  "homepage": "https://github.com/ewhauser/eve-extensions/tree/main/packages/eve-celld-sandbox#readme"
+}

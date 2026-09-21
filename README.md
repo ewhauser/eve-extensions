@@ -13,6 +13,10 @@ is published as [`@ewhauser/eve-ambient`](https://www.npmjs.com/package/@ewhause
 
 ## Packages
 
+- [`eve-celld-sandbox`](packages/eve-celld-sandbox) — celld sandbox backends for
+  durable just-bash workspaces backed by AgentFS and ephemeral Linux containers
+  using the Cloudflare Sandbox SDK. It is licensed under MIT.
+
 - [`eve-agent-builder`](packages/eve-agent-builder) — an unreleased,
   experimental PR-02 foundation for private saved-agent identity, versioned
   domain state, lifecycle services, and durable store conformance. It does not
@@ -99,7 +103,7 @@ release process.
 
 There is no single license covering every package in this repository. Refer to
 the `LICENSE` file in each package directory. In particular,
-`eve-agent-builder`, `eve-project-link`, `eve-progress`,
+`eve-celld-sandbox`, `eve-agent-builder`, `eve-project-link`, `eve-progress`,
 `eve-slack-participation`, `eve-openai-compaction`, `eve-openai-connectors`,
 `eve-openai-plugins`, and `eve-openai-imagegen` are MIT-licensed, while
 `eve-aws-lambda-microvms` is Apache-2.0-licensed.

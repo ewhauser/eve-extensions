@@ -1,0 +1,17 @@
+eve-celld-sandbox
+
+The just-bash adapter, AgentFS workspace store, execution journal, portable
+bundle transformation, and integration fixtures were adapted from
+https://github.com/ewhauser/eve-durable-object (commit e50d130).
+Copyright (c) 2026 eve-durable-object contributors. MIT License (LICENSE).
+
+The Worker bundles include just-bash 3.4.2 with a build-time transformation
+that preserves typed interpreter failures. just-bash and Eve are Apache-2.0.
+AgentFS and the Cloudflare Sandbox SDK retain their upstream licenses.
+Upstream legal comments are preserved in the Worker bundles. License declarations
+and supplied license texts for bundled npm packages are recorded in
+dist/worker/THIRD_PARTY_NOTICES.txt. Reference license texts and the Eve NOTICE
+are included in licenses/.
+
+The original example's snapshot execution design references Cloudflare Think
+and Computer; their MIT license texts are included in licenses/.

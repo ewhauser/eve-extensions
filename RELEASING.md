@@ -41,6 +41,8 @@ cd ../eve-aws-lambda-microvms
 npm publish --access public
 cd ../eve-slack-participation
 npm publish --access public
+cd ../eve-celld-sandbox
+npm publish --access public
 ```
 
 Create the matching initial draft GitHub releases and publish them only after
@@ -53,12 +55,14 @@ gh release create eve-openai-plugins-v0.1.0 --draft --generate-notes --target ma
 gh release create eve-openai-imagegen-v0.1.0 --draft --generate-notes --target main
 gh release create eve-aws-lambda-microvms-v0.1.0 --draft --generate-notes --target main
 gh release create eve-slack-participation-v0.1.0 --draft --generate-notes --target main
+gh release create eve-celld-sandbox-v0.1.0 --draft --generate-notes --target main
 gh release edit eve-project-link-v0.1.0 --draft=false
 gh release edit eve-openai-connectors-v0.1.0 --draft=false
 gh release edit eve-openai-plugins-v0.1.0 --draft=false
 gh release edit eve-openai-imagegen-v0.1.0 --draft=false
 gh release edit eve-aws-lambda-microvms-v0.1.0 --draft=false
 gh release edit eve-slack-participation-v0.1.0 --draft=false
+gh release edit eve-celld-sandbox-v0.1.0 --draft=false
 ```
 
 Then configure the `release.yml` workflow as the trusted publisher for each
@@ -91,6 +95,11 @@ npm trust github eve-aws-lambda-microvms \
   --env release \
   --allow-publish
 npm trust github eve-slack-participation \
+  --repo ewhauser/eve-extensions \
+  --file release.yml \
+  --env release \
+  --allow-publish
+npm trust github eve-celld-sandbox \
   --repo ewhauser/eve-extensions \
   --file release.yml \
   --env release \
