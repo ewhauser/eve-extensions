@@ -1,0 +1,19 @@
+{
+  "name": "eve-celld-sandbox-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "eval": "eve eval --strict --skip-report",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "eve": "catalog:",
+    "ai": "catalog:",
+    "eve-celld-sandbox": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "4.23.13",
+    "typescript": "catalog:"
+  }
+}

@@ -44,6 +44,11 @@
       "component": "eve-openai-imagegen",
       "package-name": "eve-openai-imagegen",
       "release-type": "node"
+    },
+    "packages/eve-celld-sandbox": {
+      "component": "eve-celld-sandbox",
+      "package-name": "eve-celld-sandbox",
+      "release-type": "node"
     }
   }
 }

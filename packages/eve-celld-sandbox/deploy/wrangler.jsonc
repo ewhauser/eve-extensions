@@ -1,0 +1,37 @@
+{
+  "name": "eve-celld-sandbox",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CELLS",
+        "class_name": "SandboxCell"
+      },
+      {
+        "name": "CONTAINERS",
+        "class_name": "ContainerCell"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "SandboxCell",
+        "ContainerCell"
+      ]
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "ContainerCell",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 8
+    }
+  ]
+}

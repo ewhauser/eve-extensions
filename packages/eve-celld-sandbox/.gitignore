@@ -1,0 +1,4 @@
+.tools/
+.test-state/
+.dev.vars
+.celld/

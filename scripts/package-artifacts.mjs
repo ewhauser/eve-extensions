@@ -57,6 +57,28 @@ const agentBuilderPublicModules = [
 
 export const packages = new Map([
   [
+    "packages/eve-celld-sandbox",
+    {
+      name: "eve-celld-sandbox",
+      requiredFiles: [
+        "dist/index.js",
+        "dist/index.d.ts",
+        "dist/worker/index.js",
+        "dist/worker/just-bash.js",
+        "deploy/worker.js",
+        "deploy/wrangler.jsonc",
+        "deploy/Dockerfile",
+        "deploy/just-bash/worker.js",
+        "deploy/just-bash/wrangler.jsonc",
+        "licenses/just-bash-LICENSE",
+        "dist/worker/THIRD_PARTY_NOTICES.txt",
+        "LICENSE",
+        "NOTICE",
+        "README.md",
+      ],
+    },
+  ],
+  [
     "packages/eve-agent-builder",
     {
       name: "eve-agent-builder",

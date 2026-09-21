@@ -14,7 +14,10 @@ catalog:
   zod: ^4.4.3
 
 allowBuilds:
+  # Optional just-bash native codecs are not used by the portable Worker bundle.
+  "@mongodb-js/zstd": false
   esbuild: true
+  node-liblzma: false
 
 # Hold new direct and transitive releases for one day. Security updates can
 # still be selected explicitly, and Eve is exempt so this repository can track
