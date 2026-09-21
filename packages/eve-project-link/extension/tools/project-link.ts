@@ -1,4 +1,4 @@
-import { defineDynamic, defineTool } from "eve/tools";
+import { defineDurableSchema, defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { getProjectLinkConfig } from "../extension.js";
@@ -56,6 +56,36 @@ const verifiedCompleteInputSchema = completeInputSchema.extend({
 });
 
 const emptyInputSchema = z.object({});
+
+const durableNewLinkInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => newLinkInputSchema,
+});
+
+const durableExistingLinkInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => existingLinkInputSchema,
+});
+
+const durableCompleteInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => completeInputSchema,
+});
+
+const durableVerifiedCompleteInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => verifiedCompleteInputSchema,
+});
+
+const durableEmptyInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => emptyInputSchema,
+});
+
+const durableProjectContextInputSchema = defineDurableSchema({
+  closure: {},
+  schema: () => projectContextInputSchema,
+});
 
 type JsonPrimitive = boolean | null | number | string;
 type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
@@ -225,6 +255,7 @@ function stampDurableCallbacks<T extends object>(
   approvalRequired = false,
 ): T {
   const callbacks: DurableToolCallbacks = {
+    ...Reflect.get(tool, DURABLE_DYNAMIC_TOOL_CALLBACKS),
     execute: { callback: execute, closure },
     ...(approvalRequired
       ? {
@@ -260,7 +291,7 @@ export default defineDynamic({
           description: binding
             ? "Return this channel's existing project-link plan. The tool is idempotent and never calls an external project API."
             : `Reserve a stable channel link and return a plan for using tools already mounted in this agent. This tool never calls an external project API or accepts credentials. Available configured presets: ${presets}.`,
-          inputSchema: binding ? existingLinkInputSchema : newLinkInputSchema,
+          inputSchema: binding ? durableExistingLinkInputSchema : durableNewLinkInputSchema,
           ...(approval(config.approvals.link) === undefined
             ? {}
             : { approval: approval(config.approvals.link) }),
@@ -275,7 +306,7 @@ export default defineDynamic({
         defineTool({
           description:
             "Read this channel's cached project-link status without contacting an external system.",
-          inputSchema: emptyInputSchema,
+          inputSchema: durableEmptyInputSchema,
           execute: () => executeStatus(closure),
         }),
         closure,
@@ -288,7 +319,7 @@ export default defineDynamic({
         defineTool({
           description:
             "Return the configured preset's tool-discovery, provisioning, retrieval, and update guidance for this channel. This does not call the external system.",
-          inputSchema: emptyInputSchema,
+          inputSchema: durableEmptyInputSchema,
           execute: () => executeGuide(closure),
         }),
         closure,
@@ -299,7 +330,7 @@ export default defineDynamic({
         defineTool({
           description:
             "Remove this channel's project binding. This retains the external resource and all of its content.",
-          inputSchema: emptyInputSchema,
+          inputSchema: durableEmptyInputSchema,
           ...(approval(config.approvals.unlink) === undefined
             ? {}
             : { approval: approval(config.approvals.unlink) }),
@@ -318,8 +349,8 @@ export default defineDynamic({
               ? "Attach the externally verified resource and activate this channel link. Include evidence for every completion requirement in the plan. This tool does not contact the external system."
               : "Attach the external resource returned by an already-mounted tool and activate this channel link. This tool does not contact the external system.",
             inputSchema: completionRequirements
-              ? verifiedCompleteInputSchema
-              : completeInputSchema,
+              ? durableVerifiedCompleteInputSchema
+              : durableCompleteInputSchema,
             execute: (input) =>
               executeComplete(closure, input as CompleteProjectLinkInput),
           }),
@@ -333,7 +364,7 @@ export default defineDynamic({
         defineTool({
           description:
             "Save a newly curated structured context card with this channel's durable binding. Pointer-mode prompts do not inject the card. This tool does not write to the external system; use mounted system tools separately when external synchronization is requested.",
-          inputSchema: projectContextInputSchema,
+          inputSchema: durableProjectContextInputSchema,
           ...(approval(config.approvals.saveContext) === undefined
             ? {}
             : { approval: approval(config.approvals.saveContext) }),

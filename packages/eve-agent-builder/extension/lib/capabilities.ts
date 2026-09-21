@@ -13,6 +13,7 @@ import {
   ownerScopeSchema,
   savedToolRequirementSchema,
   type CapabilityId,
+  type JsonObject,
   type OwnerScope,
   type SavedToolRequirement,
 } from "./domain.js";
@@ -122,7 +123,7 @@ function isJsonValue(value: unknown, seen = new WeakSet<object>(), depth = 0): b
   return Object.values(value).every((entry) => isJsonValue(entry, seen, depth + 1));
 }
 
-function assertSerializableSchema(source: unknown, direction: "input" | "output"): void {
+export function serializeRunnerSchema(source: unknown, direction: "input" | "output"): JsonObject | undefined {
   if (source === undefined && direction === "output") return;
   if (typeof source !== "object" || source === null) {
     throw new TypeError(`Runner tool ${direction}Schema must be a JSON Schema or Standard Schema`);
@@ -148,6 +149,7 @@ function assertSerializableSchema(source: unknown, direction: "input" | "output"
   ) {
     throw new TypeError(`Runner tool ${direction}Schema emitted invalid JSON Schema data`);
   }
+  return emitted as JsonObject;
 }
 
 function assertRunnerToolAdapter(tool: RunnerToolAdapter): void {
@@ -158,8 +160,8 @@ function assertRunnerToolAdapter(tool: RunnerToolAdapter): void {
   ) {
     throw new TypeError("Runner capability tool is not a valid Eve tool adapter");
   }
-  assertSerializableSchema(tool.inputSchema, "input");
-  assertSerializableSchema(tool.outputSchema, "output");
+  serializeRunnerSchema(tool.inputSchema, "input");
+  serializeRunnerSchema(tool.outputSchema, "output");
 }
 
 /**

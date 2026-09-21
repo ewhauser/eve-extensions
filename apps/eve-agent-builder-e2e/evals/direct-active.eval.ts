@@ -3,7 +3,8 @@ import { defineEval } from "eve/evals";
 export default defineEval({
   description: "A published saved agent runs through one real parked active-runner child.",
   async test(t) {
-    const parent = await t.start("Run the active saved Weather witness agent now.");
+    const session = await t.session();
+    const parent = await session.start("Run the active saved Weather witness agent now.");
     const bootstrapCalled = await parent.waitForEvent("subagent.called", {
       data: { name: "active-runner", callId: /^active-bootstrap:/ },
     });

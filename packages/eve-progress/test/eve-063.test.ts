@@ -10,6 +10,7 @@ import {
   InitiatorAuthKey,
   SessionIdKey,
   SessionKey,
+  StaticModelReferenceKey,
 } from "../node_modules/eve/dist/src/context/keys.js";
 import {
   ContextContainer,
@@ -80,7 +81,7 @@ function eveSlackAdapter(input: {
   };
 }
 
-describe("Eve 0.54.3 Slack lifecycle", () => {
+describe("Eve 0.63.0 Slack lifecycle", () => {
   it("posts and updates todo progress using channel metadata captured outside hooks", async () => {
     const calls: SlackProgressApiInput[] = [];
     const api = vi.fn(async (input: SlackProgressApiInput) => {
@@ -90,6 +91,7 @@ describe("Eve 0.54.3 Slack lifecycle", () => {
     progress({ publisher: createSlackProgressPublisher({ api }) });
 
     const ctx = new ContextContainer();
+    ctx.set(StaticModelReferenceKey, { id: "openai/gpt-5.5" });
     const auth = { current: null, initiator: null };
     ctx.set(AuthKey, null);
     ctx.set(InitiatorAuthKey, null);
@@ -175,6 +177,7 @@ describe("Eve 0.54.3 Slack lifecycle", () => {
     });
 
     const ctx = new ContextContainer();
+    ctx.set(StaticModelReferenceKey, { id: "openai/gpt-5.5" });
     const auth = { current: null, initiator: null };
     ctx.set(AuthKey, null);
     ctx.set(InitiatorAuthKey, null);

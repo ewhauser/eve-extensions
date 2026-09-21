@@ -37,7 +37,8 @@ const resolveContext = {
     metadata: { teamId: "T1", channelId: "C1" },
   },
   messages: [],
-} as unknown as DynamicResolveContext;
+  model: null,
+} satisfies DynamicResolveContext;
 
 function durableMetadata(
   tools: Record<string, DynamicToolEntry>,
@@ -66,7 +67,7 @@ afterEach(() => {
 });
 
 describe("durable project-link tools", () => {
-  it("serializes, rebinds, and replays every mounted callback on Eve 0.54.3", async () => {
+  it("serializes, rebinds, and replays every mounted callback on Eve 0.63.0", async () => {
     const [{ default: projectLink }, { default: projectLinkTools }] =
       await Promise.all([
         import("../extension/extension.js"),
@@ -168,6 +169,7 @@ describe("durable project-link tools", () => {
       expect(savedContext.callbacks).toEqual({
         approvalRequest: { closure: { channel } },
         execute: { closure: { channel } },
+        inputSchema: { closure: {} },
       });
 
       clearDurableDynamicCallbacks(resolveContext.session.id);
@@ -183,6 +185,18 @@ describe("durable project-link tools", () => {
           tool,
         ]),
       );
+      const schema = replayedActive.save_context!.inputSchema;
+      if (schema === undefined || !("~standard" in schema)) {
+        throw new Error("Replayed context tool lost its schema validator.");
+      }
+      const validated = await schema["~standard"].validate({ summary: "  After restart.  " });
+      expect(validated).toMatchObject({ value: {
+        summary: "After restart.", principals: [], decisions: [], milestones: [],
+        upcomingMeetings: [], sources: [], openQuestions: [], nextSteps: [],
+      } });
+      const invalid = await schema["~standard"].validate({ summary: " " });
+      expect(invalid.issues?.length).toBeGreaterThan(0);
+
       await expect(
         replayedActive.save_context!.execute!(
           {

@@ -17,7 +17,8 @@ export default defineEval({
   description: "Attachments and packaged skills survive native resume and replacement restore.",
   tags: ["aws", "microvm", "slow"],
   async test(t) {
-    const first = await t.sendFile(
+    const session = await t.session();
+    const first = await session.sendFile(
       "Load persistence-probe and inspect the attachment and packaged reference.",
       "evals/fixtures/e2e attachment ünicode.txt",
       "text/plain",
@@ -27,14 +28,14 @@ export default defineEval({
     t.check(first.message, includes(SKILL_SENTINEL));
     assertAttachmentEvent(first.events);
 
-    const resumed = await t.send("Re-read the original attachment and packaged skill reference.");
+    const resumed = await session.send("Re-read the original attachment and packaged skill reference.");
     resumed.expectOk();
     t.check(resumed.message, includes(ATTACHMENT_SENTINEL));
     t.check(resumed.message, includes(SKILL_SENTINEL));
 
     await terminateFixtureMicrovms((message) => t.log(message));
 
-    const restored = await t.send(
+    const restored = await session.send(
       "After replacement, re-read the original attachment and packaged skill reference.",
     );
     restored.expectOk();

@@ -22,7 +22,7 @@ function initialProgressPublicationChannel(): ProgressPublicationChannel {
   return {};
 }
 
-/** Channel metadata captured at a dynamic-resolver boundary for Eve 0.54.3 hooks. */
+/** Channel metadata captured at a dynamic-resolver boundary for Eve 0.63.0 hooks. */
 export const progressPublicationChannelState = defineState<ProgressPublicationChannel>(
   "channel",
   initialProgressPublicationChannel,

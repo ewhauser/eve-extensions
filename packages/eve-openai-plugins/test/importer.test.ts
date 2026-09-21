@@ -272,7 +272,7 @@ export default openaiConnectors({ getToken: () => null });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.54.3", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.63.0", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });

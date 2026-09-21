@@ -1,5 +1,5 @@
+import type { DynamicResolveContext } from "eve";
 import type {
-  DynamicConnectionResolveContext,
   McpClientConnectionDefinition,
 } from "eve/connections";
 import { describe, expect, test, vi } from "vitest";
@@ -10,7 +10,7 @@ import connectors, {
 } from "../extension/connections/connectors.js";
 import extension from "../extension/extension.js";
 
-function resolveContext(): DynamicConnectionResolveContext & { readonly messages: readonly [] } {
+function resolveContext(): DynamicResolveContext {
   const current = {
     attributes: {},
     authenticator: "test",
@@ -21,6 +21,7 @@ function resolveContext(): DynamicConnectionResolveContext & { readonly messages
   return {
     channel: { kind: "test" },
     messages: [],
+    model: null,
     session: { auth: { current, initiator: current }, id: "session-1" },
   };
 }
