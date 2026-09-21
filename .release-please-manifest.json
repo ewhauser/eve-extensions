@@ -7,5 +7,5 @@
   "packages/eve-openai-connectors": "0.7.1",
   "packages/eve-openai-plugins": "0.3.2",
   "packages/eve-openai-imagegen": "0.2.1",
-  "packages/eve-celld-sandbox": "0.1.0"
+  "packages/eve-celld-sandbox": "0.2.0"
 }

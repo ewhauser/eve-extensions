@@ -1,6 +1,6 @@
 {
   "name": "eve-celld-sandbox",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Eve sandbox backends for celld: durable just-bash with AgentFS and ephemeral Cloudflare Sandbox containers.",
   "license": "MIT",
   "type": "module",
