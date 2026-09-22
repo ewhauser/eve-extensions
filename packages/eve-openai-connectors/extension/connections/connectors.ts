@@ -12,8 +12,7 @@ import type { ConnectorContext } from "../lib/types.js";
 
 export const DEFAULT_BASE_URL = "https://chatgpt.com/backend-api/ps/mcp";
 const CONNECTION_NAME = "connectors";
-const QUALIFIED_NAME_OVERHEAD = `${CONNECTION_NAME}__`.length;
-const MAX_MODEL_TOOL_NAME_LENGTH = 64 - QUALIFIED_NAME_OVERHEAD;
+const MAX_MODEL_TOOL_NAME_LENGTH = 64;
 
 function normalizeServices(
   services: readonly string[] | undefined,
@@ -53,12 +52,14 @@ function instanceKey(
   principal: string,
   allowedServices: readonly string[] | undefined,
   excludedServices: readonly string[] | undefined,
+  serviceAliases: Readonly<Record<string, string>> | undefined,
 ): string {
   return JSON.stringify({
     allowedServices: [...(allowedServices ?? [])].map((value) => value.toLowerCase()).sort(),
     excludedServices: [...(excludedServices ?? [])].map((value) => value.toLowerCase()).sort(),
-    nameMapping: "service-qualified-v1",
+    nameMapping: "service-qualified-unprefixed-v2",
     principal,
+    serviceAliases: Object.entries(serviceAliases ?? {}).sort(([a], [b]) => a.localeCompare(b)),
   });
 }
 
@@ -109,10 +110,24 @@ export default defineDynamic({
           "X-OpenAI-Product-Sku": "codex",
           originator: "codex_cli_rs",
         },
-        instanceKey: instanceKey(principal, config.allowedServices, config.excludedServices),
+        instanceKey: instanceKey(
+          principal, config.allowedServices, config.excludedServices, config.serviceAliases,
+        ),
+        toolCall: {
+          ...(config.transformCallInput === undefined ? {} : {
+            transformInput: async (ctx, upstreamToolName, input) =>
+              await config.transformCallInput!(
+                { session: ctx.session }, upstreamToolName, input,
+              ),
+          }),
+        },
         toolName: {
+          qualify: false,
+          collisionPriority: -1,
           toModelName: (upstreamName) =>
-            mapUpstreamServiceName(upstreamName, MAX_MODEL_TOOL_NAME_LENGTH),
+            mapUpstreamServiceName(
+              upstreamName, MAX_MODEL_TOOL_NAME_LENGTH, config.serviceAliases,
+            ),
         },
         tools: {
           filter: (upstreamName) =>

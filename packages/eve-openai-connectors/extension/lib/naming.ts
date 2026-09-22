@@ -57,12 +57,17 @@ export function mapUpstreamName(upstream: string, prefix: string, maxLength = 64
  *
  * Example: `zoom.search_meetings` becomes `zoom__search_meetings`.
  */
-export function mapUpstreamServiceName(upstream: string, maxLength = 64): string {
+export function mapUpstreamServiceName(
+  upstream: string,
+  maxLength = 64,
+  aliases: Readonly<Record<string, string>> = {},
+): string {
   validateMaxToolNameLength(maxLength);
   const separator = upstream.indexOf(".");
   const rawService = separator < 0 ? "connector" : upstream.slice(0, separator);
   const rawOperation = separator < 0 ? upstream : upstream.slice(separator + 1);
-  const service = rawService.replace(/[^a-zA-Z0-9_-]/g, "_") || "connector";
+  const service = (aliases[rawService.toLowerCase()] ?? rawService)
+    .replace(/[^a-zA-Z0-9_-]/g, "_") || "connector";
   const operation = rawOperation.replace(/\./g, "_").replace(/[^a-zA-Z0-9_-]/g, "_");
   let mapped = `${service}__${operation || "tool"}`;
   if (mapped.length > maxLength) {

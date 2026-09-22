@@ -71,6 +71,17 @@ describe("name mapping (the §3 failure class — every static check misses this
     expect(mapped).toBe(mapUpstreamServiceName(upstream));
   });
 
+  test("aliases only the service segment and bounds the complete projected name", () => {
+    const aliases = { datadog_preview: "datadog" };
+    expect(mapUpstreamServiceName("datadog_preview.search_logs", 64, aliases)).toBe(
+      "datadog__search_logs",
+    );
+    const long = mapUpstreamServiceName(`datadog_preview.${"x".repeat(90)}`, 64, aliases);
+    expect(long).toHaveLength(64);
+    expect(long).toMatch(TOOL_NAME_PATTERN);
+    expect(long).toBe(mapUpstreamServiceName(`datadog_preview.${"x".repeat(90)}`, 64, aliases));
+  });
+
   test("reserves room for the Eve extension namespace", () => {
     const mapped = mapUpstreamName(`service.${"x".repeat(80)}`, "", 56);
     expect(mapped).toHaveLength(56);

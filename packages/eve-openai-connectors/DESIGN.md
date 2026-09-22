@@ -11,18 +11,19 @@ The extension retains only OpenAI-connector-specific policy:
 3. restrict exact upstream dotted names by service;
 4. project those names into deterministic provider-legal names;
 5. interpret MCP annotations and application overrides for approval.
+6. optionally alias the model-facing service segment and transform call input.
 
 There is no extension-owned protocol client, catalog cache, search tool, materialized working set, transcript restoration, or provider-native tool-search marker.
 
 ## Carried Eve primitives
 
-Eve 0.63.0 is patched in two general places.
+Eve 0.63.0 is patched in three general places.
 
 ### Tool-name projection
 
 `defineMcpClientConnection({ toolName: { toModelName } })` projects an upstream name for the model. Eve keeps the exact upstream string in connection metadata and durable discovered-tool closure state. Upstream identity is used for filtering, execution, and approval context; the mapped identity is used for `connection_search`, schemas, and qualified model calls.
 
-Eve validates the complete `${connectionName}__${modelName}` against the 64-character provider contract and rejects collisions deterministically. Durable materialization also compares the current connection instance and current projection with stored discovery state, so authority or naming drift removes stale tools.
+Eve validates the complete projected name against the 64-character provider contract and rejects collisions deterministically. `qualify: false` avoids a second connection prefix for already service-qualified connector names. `collisionPriority: -1` puts explicitly authored connections ahead of this mounted connector when names overlap. Durable materialization also compares the current connection instance and current projection with stored discovery state, so authority or naming drift removes stale tools.
 
 Predicate filters receive exact upstream names. That permits fail-closed service allowlists without preloading the catalog in the extension.
 
@@ -30,15 +31,19 @@ Predicate filters receive exact upstream names. That permits fail-closed service
 
 Discovered connection approval contexts add optional `toolAnnotations` and `upstreamToolName`. Annotations are normalized across the JSON durability boundary; malformed values are omitted and therefore unsafe under the extension policy. Request and response approval callbacks receive the same retained identity.
 
+### Call-input transform
+
+`toolCall.transformInput` runs after the discovered tool's authorization and metadata revalidation, after application-provided arguments are resolved, and immediately before the MCP executor. It receives the exact upstream name. A rejected transform stops the call.
+
 These patches are deliberately protocol- and provider-neutral. They contain no OpenAI search integration, `providerOptions` bridge, private name marker, or connector endpoint behavior.
 
 ## Naming
 
-`github.search_repositories` becomes `github__search_repositories`. The bare mapped portion is bounded to 52 characters so the fixed `connectors__` prefix keeps the qualified name within 64 characters. Long names end in a six-hex SHA-256 suffix derived from the complete upstream name. Eve owns catalog-wide collision detection and exact reverse routing.
+`github.search_repositories` becomes `github__search_repositories`. An alias can change only the model-facing service segment, such as `datadog_preview.search_logs` becoming `datadog__search_logs`. Names are bounded to 64 characters. Long names end in a six-hex SHA-256 suffix derived from the complete upstream name. Eve retains the exact upstream name for filtering, approval, and execution.
 
 ## Authorization and durability
 
-The dynamic connection uses Eve's `principalType: "user"` auth and a stable, non-secret `instanceKey` containing the principal authority, service policy, and name-mapping version. Eve also includes endpoint/source identity when deriving the internal instance ID. Changes invalidate pending/stored authorization and stale discovered tools.
+The dynamic connection uses Eve's `principalType: "user"` auth and a stable, non-secret `instanceKey` containing the principal authority, service policy, sorted aliases, and name-mapping version. Eve also includes endpoint/source identity when deriving the internal instance ID. Changes invalidate pending/stored authorization and stale discovered tools.
 
 `getToken` returning `null` becomes `ConnectionAuthorizationRequiredError`; the bearer itself is returned only from the auth callback. `evictToken` is a best-effort hook for application caches below Eve's cache.
 
