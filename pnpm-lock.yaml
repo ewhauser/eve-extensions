@@ -35,7 +35,7 @@ catalogs:
       version: 4.4.3
 
 patchedDependencies:
-  eve@0.71.2: cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb
+  eve@0.71.2: c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0
 
 importers:
 
@@ -45,7 +45,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18)
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -70,7 +70,7 @@ importers:
         version: 3.1116.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -89,7 +89,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-celld-sandbox:
         specifier: workspace:*
         version: link:../../packages/eve-celld-sandbox
@@ -115,7 +115,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -155,7 +155,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -192,7 +192,7 @@ importers:
         version: 0.25.12
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       just-bash:
         specifier: 3.4.2
         version: 3.4.2
@@ -216,7 +216,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -235,7 +235,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -254,7 +254,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -273,7 +273,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -295,7 +295,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -314,7 +314,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -336,7 +336,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -3151,7 +3151,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10):
+  eve@0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10):
     dependencies:
       ai: 7.0.107(zod@4.4.3)
       nitro: 3.0.260903-beta
@@ -3161,7 +3161,7 @@ snapshots:
       just-bash: 3.4.2
       microsandbox: 0.5.10
 
-  eve@0.71.2(patch_hash=cdcdd201566eb5063b22888e972515a93077dcd3c8b6264e95a6765b823bb9eb)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18):
+  eve@0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18):
     dependencies:
       ai: 7.0.107(zod@4.4.3)
       nitro: 3.0.260903-beta

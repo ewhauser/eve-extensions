@@ -11,8 +11,8 @@ repository root. It carries:
   provenance validation, the request-overhead-adjusted history budget, and
   current authorization/provider options.
 - Connector tool-name projection, upstream-name filtering, approval annotations,
-  and descriptor validation before execution across direct MCP calls and
-  `connection_search`/`connection_execute`.
+  descriptor validation before execution across direct MCP calls and
+  `connection_search`/`connection_execute`, plus call-input transformation.
 - An optional-property declaration correction for `AlsContext.localDevRequest`
   so `ContextContainer` satisfies it with `exactOptionalPropertyTypes` enabled.
 

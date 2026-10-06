@@ -54,12 +54,14 @@ function instanceKey(
   principal: string,
   allowedServices: readonly string[] | undefined,
   excludedServices: readonly string[] | undefined,
+  serviceAliases: Readonly<Record<string, string>> | undefined,
 ): string {
   return JSON.stringify({
     allowedServices: [...(allowedServices ?? [])].map((value) => value.toLowerCase()).sort(),
     excludedServices: [...(excludedServices ?? [])].map((value) => value.toLowerCase()).sort(),
-    nameMapping: "service-qualified-v1",
+    nameMapping: "service-qualified-aliased-v2",
     principal,
+    serviceAliases: Object.entries(serviceAliases ?? {}).sort(([a], [b]) => a.localeCompare(b)),
   });
 }
 
@@ -110,10 +112,22 @@ export function createOpenAIConnectorConnection(
       "X-OpenAI-Product-Sku": "codex",
       originator: "codex_cli_rs",
     },
-    instanceKey: instanceKey(principal, config.allowedServices, config.excludedServices),
+    instanceKey: instanceKey(
+      principal, config.allowedServices, config.excludedServices, config.serviceAliases,
+    ),
+    toolCall: {
+      ...(config.transformCallInput === undefined ? {} : {
+        transformInput: async (callCtx, upstreamToolName, input) =>
+          await config.transformCallInput!(
+            { session: callCtx.session }, upstreamToolName, input,
+          ),
+      }),
+    },
     toolName: {
       toModelName: (upstreamName) =>
-        mapUpstreamServiceName(upstreamName, MAX_MODEL_TOOL_NAME_LENGTH),
+        mapUpstreamServiceName(
+          upstreamName, MAX_MODEL_TOOL_NAME_LENGTH, config.serviceAliases,
+        ),
     },
     tools: {
       filter: (upstreamName) =>

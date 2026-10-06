@@ -31,14 +31,14 @@ describe("carried Eve connection patches", () => {
     expect([...names]).toEqual([["github.search_repositories", "github__search_repositories"]]);
   });
 
-  test("rejects collisions and overlong qualified names", () => {
+  test("rejects collisions and overlong projected names", () => {
     expect(() =>
       projectConnectionToolNames(connection({ toolName: { toModelName: () => "same" } }), [
         "a.tool",
         "b.tool",
       ]),
     ).toThrow("mapping collision");
-    expect(() => projectConnectionToolNames(connection(), ["x".repeat(64)])).toThrow("must match");
+    expect(() => projectConnectionToolNames(connection(), ["x".repeat(65)])).toThrow("must match");
   });
 
   test("predicate filters receive exact upstream names", () => {
