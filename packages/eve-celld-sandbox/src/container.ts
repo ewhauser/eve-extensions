@@ -1,9 +1,5 @@
-import {
-  SandboxTemplateNotProvisionedError,
-  type SandboxBackend,
-  type SandboxBackendHandle,
-  type SandboxProcess,
-} from "eve/sandbox";
+import type { SandboxProcess } from "eve/sandbox";
+import { SandboxTemplateNotProvisionedError, type SandboxBackend, type SandboxBackendHandle } from "./legacy-backend.js";
 import { z } from "zod";
 import { CelldTransport, type CelldOptions } from "./transport.js";
 import {

@@ -54,7 +54,6 @@ describe("dynamic connector connection", () => {
     expect(connection?.toolName?.toModelName("github.search_repositories")).toBe(
       "github__search_repositories",
     );
-    expect(connection?.toolName).toMatchObject({ qualify: false, collisionPriority: -1 });
 
     const auth = connection?.auth;
     if (auth === undefined || typeof auth === "function") throw new Error("Expected static auth.");

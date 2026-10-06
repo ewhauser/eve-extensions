@@ -5,30 +5,30 @@ Two [Eve](https://eve.dev) sandbox backends hosted by
 
 | Backend | Execution | Filesystem lifetime |
 | --- | --- | --- |
-| `celldJustBash()` | just-bash inside a Durable Object | `/workspace` persists in AgentFS / object SQLite |
-| `celldContainer()` | Cloudflare Sandbox SDK in a Linux container | Files last for that physical container; replacement starts fresh |
+| `CelldJustBashSandbox` | just-bash inside a Durable Object | `/workspace` persists in AgentFS / object SQLite |
+| `CelldContainerSandbox` | Cloudflare Sandbox SDK in a Linux container | Files last for that physical container; replacement starts fresh |
 
-Both implement Eve's public `SandboxBackend`, including file I/O, commands,
-process cancellation, prewarm, capture, stop, shutdown, and deletion. Eve still
+Both adapt to Eve's sandbox provider API, including file I/O, commands,
+process cancellation, prewarm, stop, shutdown, and deletion. Eve still
 runs in the application host. Its Workflow World is configured independently.
 
 ## Install and configure
 
-This package targets Eve **0.63.0**, celld **0.5.1**, and Node **24+**.
+This package targets Eve **0.71.2**, celld **0.5.1**, and Node **24+**.
 The Worker bundles pin just-bash **3.4.2**, AgentFS **0.6.4**, and
 Cloudflare Sandbox **0.12.9**. The container image and SDK versions must match.
 The example image includes Node. Add other runtimes, such as Python, in your
 application's Dockerfile when needed.
 
 ```sh
-pnpm add eve@0.63.0 eve-celld-sandbox
+pnpm add eve@0.71.2 eve-celld-sandbox
 ```
 
 In `agent/sandbox/sandbox.ts`, select a backend explicitly:
 
 ```ts
 import { defineSandbox } from "eve/sandbox";
-import { celldJustBash, celldContainer } from "eve-celld-sandbox";
+import { CelldJustBashSandbox, CelldContainerSandbox } from "eve-celld-sandbox";
 
 const connection = {
   endpoint: process.env.CELLD_ENDPOINT!,
@@ -36,17 +36,16 @@ const connection = {
   namespace: "my-application",
 };
 
-export default defineSandbox({
-  backend: celldJustBash(connection),
-  // Or: celldContainer({ ...connection, commandTimeoutMs: 60_000 })
-});
+export const environment = CelldJustBashSandbox.environment(connection);
+// Or: CelldContainerSandbox.environment({ ...connection, commandTimeoutMs: 60_000 })
+export default defineSandbox(() => environment.open());
 ```
 
 Keep the namespace, deployment script name, and Durable Object class names
 stable. Session identities include the namespace, template key, and Eve session
 key. The two backends use separate DO namespaces and backend identifiers.
-Relative paths resolve under `/workspace`. Nonempty provider options passed to
-`use()` are rejected. `fetch` can be supplied in connection settings for tracing
+Relative paths resolve under `/workspace`. The provider accepts no per-open
+options. `fetch` can be supplied in connection settings for tracing
 or a custom transport.
 
 ## Deploy the Worker

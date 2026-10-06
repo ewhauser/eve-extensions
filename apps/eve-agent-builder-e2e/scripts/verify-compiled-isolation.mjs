@@ -16,12 +16,9 @@ if (manifestPath === undefined) {
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const failures = [];
 const requiredDisabled = [
-  "ask_question",
   "bash",
   "load_skill",
   "read_file",
-  "todo",
-  "task_cancel",
   "web_fetch",
   "web_search",
   "write_file",
@@ -74,14 +71,14 @@ for (const name of expectedChildren) {
   );
   assert(
     JSON.stringify(child.dynamicTools?.map(({ slug }) => slug).sort()) ===
-      JSON.stringify(["agent-builder", "connection_search"]),
+      JSON.stringify(["agent-builder", "connection_tools"]),
     `${name} has an unexpected dynamic tool source`,
   );
   assert(child.dynamicInstructions?.length === 1, `${name} lacks its one saved-context mount`);
-  assert(child.extensionMounts?.length === 1, `${name} lacks the pinned extension config mount`);
+  assert(child.extensionMounts?.length === 0, `${name} gained a duplicate extension config mount`);
 }
 
 if (failures.length > 0) {
   throw new Error(`Built host isolation verification failed:\n- ${failures.join("\n- ")}`);
 }
-console.log(`Verified Eve 0.63.0 compiled isolation for ${expectedChildren.join(", ")}.`);
+console.log(`Verified Eve 0.71.2 compiled isolation for ${expectedChildren.join(", ")}.`);

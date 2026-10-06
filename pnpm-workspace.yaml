@@ -8,7 +8,7 @@ catalog:
   "@types/node": ^26.1.2
   "@typescript/typescript6": ^6.0.2
   ai: ^7.0.105
-  eve: 0.63.0
+  eve: 0.71.2
   typescript: ^7.0.2
   vitest: ^4.1.11
   zod: ^4.4.3
@@ -25,7 +25,12 @@ allowBuilds:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - eve@0.63.0
+  - eve@0.71.2
+
+overrides:
+  # Fix the high-severity advisories reported by the CI audit.
+  undici: 7.29.1
+  source-map-js: 1.2.2
 
 patchedDependencies:
-  eve@0.63.0: patches/eve@0.63.0.patch
+  eve@0.71.2: patches/eve@0.71.2.patch

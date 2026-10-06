@@ -466,7 +466,7 @@ async function respondDurableCapabilityApproval(input: {
 }) {
   const runtime = getAgentBuilderRuntime();
   const resolved = await runtime.service.resolveOwner({
-    current: input.ctx.responder,
+    current: input.ctx.response.principal,
     initiator: input.ctx.session.initiator,
     channel: input.runtimeChannel,
   });
@@ -506,8 +506,8 @@ async function respondDurableCapabilityApproval(input: {
     step: step.value,
     requestId: input.ctx.request.requestId,
     responder: {
-      principalId: input.ctx.responder.principalId,
-      principalType: input.ctx.responder.principalType,
+      principalId: input.ctx.response.principal.principalId,
+      principalType: input.ctx.response.principal.principalType,
     },
     occurredAt: runtimeTimestamp(runtime),
   });

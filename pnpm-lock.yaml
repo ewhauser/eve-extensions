@@ -22,8 +22,8 @@ catalogs:
       specifier: ^7.0.105
       version: 7.0.107
     eve:
-      specifier: 0.63.0
-      version: 0.63.0
+      specifier: 0.71.2
+      version: 0.71.2
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -34,8 +34,12 @@ catalogs:
       specifier: ^4.4.3
       version: 4.4.3
 
+overrides:
+  undici: 7.29.1
+  source-map-js: 1.2.2
+
 patchedDependencies:
-  eve@0.63.0: 8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65
+  eve@0.71.2: c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0
 
 importers:
 
@@ -45,7 +49,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18)
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -70,7 +74,7 @@ importers:
         version: 3.1116.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -89,7 +93,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-celld-sandbox:
         specifier: workspace:*
         version: link:../../packages/eve-celld-sandbox
@@ -115,7 +119,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -155,7 +159,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -192,7 +196,7 @@ importers:
         version: 0.25.12
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       just-bash:
         specifier: 3.4.2
         version: 3.4.2
@@ -216,7 +220,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -235,7 +239,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -254,7 +258,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -273,7 +277,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -295,7 +299,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -314,7 +318,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -336,7 +340,7 @@ importers:
         version: 7.0.107(zod@4.4.3)
       eve:
         specifier: 'catalog:'
-        version: 0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
+        version: 0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1560,14 +1564,15 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
-  eve@0.63.0:
-    resolution: {integrity: sha512-iDv0S4MXvZimaXNTJnyB2THumRQLWQSAgpMcZsGtMNquYQpSKB1+i8sxX4KJOHHCLd04lwD+06xnh+ja7rlZIw==}
+  eve@0.71.2:
+    resolution: {integrity: sha512-1JYtSScSYevikoDVowtZdMS83LGzdw3hmgf6kriZyclpRsmmW3+Yb9byFtJ4P4lZ2JLfSSLgUMoBuTSqmFCsUg==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
       ai: ^7.0.105
       braintrust: ^3.0.0
+      chat: ^4.41.0
       dd-trace: ^6.13.0
       just-bash: ^3.1.0
       microsandbox: ^0.5.0
@@ -1575,6 +1580,8 @@ packages:
       '@opentelemetry/api':
         optional: true
       braintrust:
+        optional: true
+      chat:
         optional: true
       dd-trace:
         optional: true
@@ -1839,8 +1846,8 @@ packages:
     resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
     engines: {node: '>= 18'}
 
-  source-map-js@1.2.1:
-    resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+  source-map-js@1.2.2:
+    resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
 
   sprintf-js@1.1.3:
@@ -1932,13 +1939,9 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
-  undici@7.29.0:
-    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
     engines: {node: '>=20.18.1'}
-
-  undici@8.9.0:
-    resolution: {integrity: sha512-aWZpUj7XoGonMClx4gdDRfgBjqeA+F473aDmROQQbM9n6PRfK/u1q/a0X4wMTgcHfT8H6fpbt98PFuDUwFg2YA==}
-    engines: {node: '>=22.19.0'}
 
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
@@ -2071,7 +2074,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
-      undici: 7.29.0
+      undici: 7.29.1
       zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.45(zod@4.4.3)':
@@ -2080,7 +2083,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
-      undici: 7.29.0
+      undici: 7.29.1
       zod: 4.4.3
 
   '@ai-sdk/provider@4.0.17':
@@ -3148,21 +3151,21 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10):
+  eve@0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.5.10):
     dependencies:
       ai: 7.0.107(zod@4.4.3)
       nitro: 3.0.260903-beta
-      undici: 8.9.0
+      undici: 7.29.1
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       just-bash: 3.4.2
       microsandbox: 0.5.10
 
-  eve@0.63.0(patch_hash=8979be9c99301cc6ab71002238354aef4b71fd63f7ed0d94a49f73ce7ffa3f65)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18):
+  eve@0.71.2(patch_hash=c8db8598f172d5cc787793b3769645793c88b8ec883727e370480bd195bb62a0)(@opentelemetry/api@1.9.0)(ai@7.0.107(zod@4.4.3))(just-bash@3.4.2)(microsandbox@0.6.18):
     dependencies:
       ai: 7.0.107(zod@4.4.3)
       nitro: 3.0.260903-beta
-      undici: 8.9.0
+      undici: 7.29.1
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       just-bash: 3.4.2
@@ -3257,7 +3260,7 @@ snapshots:
       sprintf-js: 1.1.3
       sql.js: 1.14.2
       turndown: 7.2.4
-      undici: 7.29.0
+      undici: 7.29.1
       yaml: 2.9.1
     optionalDependencies:
       '@mongodb-js/zstd': 7.0.0
@@ -3364,7 +3367,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.18
       picocolors: 1.1.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   prebuild-install@7.1.3:
     dependencies:
@@ -3496,7 +3499,7 @@ snapshots:
 
   smol-toml@1.8.0: {}
 
-  source-map-js@1.2.1: {}
+  source-map-js@1.2.2: {}
 
   sprintf-js@1.1.3: {}
 
@@ -3604,9 +3607,7 @@ snapshots:
 
   undici-types@8.3.0: {}
 
-  undici@7.29.0: {}
-
-  undici@8.9.0: {}
+  undici@7.29.1: {}
 
   unenv@2.0.0-rc.24:
     dependencies:

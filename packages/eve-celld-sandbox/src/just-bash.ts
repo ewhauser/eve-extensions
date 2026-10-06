@@ -1,12 +1,5 @@
-import {
-  SandboxTemplateNotProvisionedError,
-  type SandboxBackend,
-  type SandboxBackendHandle,
-  type SandboxSession,
-  type SandboxSpawnOptions,
-  type SandboxProcess,
-  type SandboxReadTextFileOptions,
-} from "eve/sandbox";
+import type { SandboxSpawnOptions, SandboxProcess, SandboxReadTextFileOptions } from "eve/sandbox";
+import { SandboxTemplateNotProvisionedError, type SandboxBackend, type SandboxBackendHandle, type SandboxSession } from "./legacy-backend.js";
 import {
   base64,
   unbase64,

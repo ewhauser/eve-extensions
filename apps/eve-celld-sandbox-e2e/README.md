@@ -10,13 +10,15 @@ To run manually, deploy the just-bash Worker as described in
 From this directory:
 
 ```sh
-pnpm exec tsx eve.ts invoke "calculate and save"
+pnpm exec eve dev --no-ui --no-default-extensions --host 127.0.0.1 --port 2000
+# In another shell:
+pnpm exec eve remote invoke --url http://127.0.0.1:2000 "calculate and save"
 pnpm eval
 pnpm exec tsx smoke.ts
 ```
 
-The `eve.ts` wrapper routes Eve development progress to stderr so invocation
-stdout remains JSON that can be used with `--resume`. The direct smoke script
+`eve remote invoke` returns resumable JSON. To continue a session, pass that
+JSON on stdin with `--resume` and a follow-up prompt. The direct smoke script
 also verifies AgentFS metadata and binary persistence.
 
 Native containers have a separate real Docker integration suite under

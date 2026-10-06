@@ -23,7 +23,7 @@ describe("mounted MCP call input transform", () => {
     const result = await executeWithTransform(
       connection(transformInput), "datadog_preview.search_logs", { query: "x" },
       { callId: "call-1" }, execute,
-      { callId: "call-1", toolName: "datadog_preview.search_logs" },
+      { callId: "call-1", toolName: "datadog_preview.search_logs" } as never,
     );
     expect(transformInput).toHaveBeenCalledWith(
       expect.objectContaining({ callId: "call-1", toolName: "datadog_preview.search_logs" }),
@@ -39,7 +39,7 @@ describe("mounted MCP call input transform", () => {
     await expect(executeWithTransform(
       connection(transformInput), "datadog_preview.search_logs", {},
       { callId: "call-2" }, execute,
-      { callId: "call-2", toolName: "datadog_preview.search_logs" },
+      { callId: "call-2", toolName: "datadog_preview.search_logs" } as never,
     )).rejects.toThrow("blocked");
     expect(execute).not.toHaveBeenCalled();
   });

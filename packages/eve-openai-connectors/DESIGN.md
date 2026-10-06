@@ -17,13 +17,13 @@ There is no extension-owned protocol client, catalog cache, search tool, materia
 
 ## Carried Eve primitives
 
-Eve 0.63.0 is patched in three general places.
+Eve 0.71.2 is patched in three general places.
 
 ### Tool-name projection
 
-`defineMcpClientConnection({ toolName: { toModelName } })` projects an upstream name for the model. Eve keeps the exact upstream string in connection metadata and durable discovered-tool closure state. Upstream identity is used for filtering, execution, and approval context; the mapped identity is used for `connection_search`, schemas, and qualified model calls.
+`defineMcpClientConnection({ toolName: { toModelName } })` projects an upstream name for the model. Eve keeps the exact upstream string in connection metadata. Upstream identity is used for filtering, execution, and approval context; the mapped identity is used for `connection_search` and `connection_execute`.
 
-Eve validates the complete projected name against the 64-character provider contract and rejects collisions deterministically. `qualify: false` avoids a second connection prefix for already service-qualified connector names. `collisionPriority: -1` puts explicitly authored connections ahead of this mounted connector when names overlap. Durable materialization also compares the current connection instance and current projection with stored discovery state, so authority or naming drift removes stale tools.
+Eve validates the projected name against the 64-character contract and rejects collisions deterministically. `connection_execute` also receives the connection name and resolves the projected name against current metadata before execution.
 
 Predicate filters receive exact upstream names. That permits fail-closed service allowlists without preloading the catalog in the extension.
 
@@ -33,7 +33,7 @@ Discovered connection approval contexts add optional `toolAnnotations` and `upst
 
 ### Call-input transform
 
-`toolCall.transformInput` runs after the discovered tool's authorization and metadata revalidation, after application-provided arguments are resolved, and immediately before the MCP executor. It receives the exact upstream name. A rejected transform stops the call.
+`toolCall.transformInput` runs after authorization and metadata revalidation, after application-provided arguments are resolved, and immediately before the MCP executor. It receives the exact upstream name. A rejected transform stops the call.
 
 These patches are deliberately protocol- and provider-neutral. They contain no OpenAI search integration, `providerOptions` bridge, private name marker, or connector endpoint behavior.
 

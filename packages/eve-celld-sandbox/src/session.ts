@@ -1,4 +1,5 @@
-import type { SandboxSession, SandboxReadTextFileOptions } from "eve/sandbox";
+import type { SandboxReadTextFileOptions } from "eve/sandbox";
+import type { SandboxSession } from "./legacy-backend.js";
 import { LIMITS, ProtocolError, readBounded, resolvePath } from "./protocol.js";
 
 export function decode(

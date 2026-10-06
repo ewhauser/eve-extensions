@@ -5,7 +5,6 @@ import {
   passesToolFilter,
   projectConnectionToolNames,
 } from "../node_modules/eve/dist/src/runtime/connections/mcp-client.js";
-import { selectConnectionMatches } from "../node_modules/eve/dist/src/execution/tools/connection-search.js";
 import type { ResolvedConnectionDefinition } from "../node_modules/eve/dist/src/runtime/types.js";
 
 function connection(
@@ -32,25 +31,14 @@ describe("carried Eve connection patches", () => {
     expect([...names]).toEqual([["github.search_repositories", "github__search_repositories"]]);
   });
 
-  test("projects service-qualified names without an extra connection prefix", () => {
-    const names = projectConnectionToolNames(
-      connection({ toolName: {
-        qualify: false, collisionPriority: -1,
-        toModelName: (name) => name.replace(".", "__"),
-      } }),
-      ["github.search_repositories"],
-    );
-    expect([...names]).toEqual([["github.search_repositories", "github__search_repositories"]]);
-  });
-
-  test("rejects collisions and overlong qualified names", () => {
+  test("rejects collisions and overlong projected names", () => {
     expect(() =>
       projectConnectionToolNames(connection({ toolName: { toModelName: () => "same" } }), [
         "a.tool",
         "b.tool",
       ]),
     ).toThrow("mapping collision");
-    expect(() => projectConnectionToolNames(connection(), ["x".repeat(64)])).toThrow("must match");
+    expect(() => projectConnectionToolNames(connection(), ["x".repeat(65)])).toThrow("must match");
   });
 
   test("predicate filters receive exact upstream names", () => {
@@ -61,26 +49,18 @@ describe("carried Eve connection patches", () => {
     ).toBe(true);
   });
 
-  test("explicit app connection wins a projected-name collision regardless of score or order", () => {
-    const connector = {
-      item: { connection: "connectors", qualifiedName: "datadog__search_logs" },
-      priority: -1, score: 10,
-    };
-    const authored = {
-      item: { connection: "app-datadog", qualifiedName: "datadog__search_logs" },
-      priority: 0, score: 1,
-    };
-    expect(selectConnectionMatches([connector, authored], 10)).toEqual([authored]);
-    expect(selectConnectionMatches([authored, connector], 10)).toEqual([authored]);
-  });
-
-  test("compiled discovery carries annotations, upstream identity, and descriptor replay checks", () => {
-    const source = readFileSync(
-      new URL("../node_modules/eve/dist/src/execution/tools/connection-search.js", import.meta.url),
+  test("compiled discovery and execution preserve projected identity and annotations", () => {
+    const discovery = readFileSync(
+      new URL("../node_modules/eve/dist/src/execution/tools/connection-tools.js", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("toolAnnotations");
-    expect(source).toContain("upstreamToolName");
-    expect(source).toContain("expectedMetadata");
+    const approval = readFileSync(
+      new URL("../node_modules/eve/dist/src/execution/tools/connection-approval.js", import.meta.url),
+      "utf8",
+    );
+    expect(discovery).toContain("modelName");
+    expect(discovery).toContain("expectedMetadata");
+    expect(approval).toContain("toolAnnotations");
+    expect(approval).toContain("upstreamToolName");
   });
 });

@@ -1,5 +1,5 @@
 import type { DynamicResolveContext } from "eve/tools";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { ProjectBinding } from "../extension/lib/types.js";
 import { notionProjectHub } from "../extension/presets/notion.js";
@@ -49,9 +49,7 @@ describe("configured extension runtime", () => {
       approvals: { link: false, saveContext: false, unlink: false },
     });
 
-    // Dynamic contributions may be evaluated in a different authored-module
-    // graph than the configured mount. The installed config must survive it.
-    vi.resetModules();
+    // Eve 0.71 binds config in the mounted module graph.
     const [{ getProjectLinkConfig }, { default: projectLinkTools }, { default: projectContext }] =
       await Promise.all([
         import("../extension/extension.js"),

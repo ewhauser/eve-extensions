@@ -219,7 +219,10 @@ test(
       async () => {
         const portable = await celldJustBash(server.options).create(
           input("same"),
-        );
+        ).catch((error: unknown) => {
+          const logs = server.logs().slice(-6000).replaceAll(server.token, "<redacted>");
+          throw new Error(`Portable sandbox failed in the combined worker: ${logs}`, { cause: error });
+        });
         const native = await backend.create(input("same"));
         try {
           await portable.session.writeTextFile({

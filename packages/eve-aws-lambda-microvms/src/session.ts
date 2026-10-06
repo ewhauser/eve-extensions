@@ -1,7 +1,8 @@
 // Derived from vercel/eve PR #208 (Apache-2.0); adapted for Eve's public API.
 import { posix } from "node:path";
 
-import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
+import type { SandboxNetworkPolicy } from "eve/sandbox";
+import type { SandboxSession } from "./legacy-backend.js";
 
 import type { AwsLambdaMicrovmController, ControllerProcess } from "./controller-client.js";
 

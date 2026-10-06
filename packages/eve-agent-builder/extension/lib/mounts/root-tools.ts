@@ -13,6 +13,7 @@ import {
   ownerInputFromSession,
   ownersEqual,
 } from "../runtime/owner.js";
+import { currentUserInput } from "../runtime/user-input.js";
 import type { OwnerScope } from "../domain.js";
 import type { ToolContext } from "eve/tools";
 
@@ -63,7 +64,10 @@ function messageText(content: unknown): string {
 function latestUserMessage(messages: readonly unknown[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index] as Record<string, unknown> | undefined;
-    if (message?.role === "user") return messageText(message.content);
+    if (message?.role === "user") {
+      const text = messageText(message.content);
+      if (!text.startsWith("<task_result ")) return text;
+    }
   }
   return "";
 }
@@ -276,7 +280,7 @@ export default defineDynamic({
               usesVerifiedPublishApproval ? "not-applicable" : "user-approval",
             response: async (ctx) => {
               const resolved = await getAgentBuilderRuntime().service.resolveOwner({
-                current: ctx.responder,
+                current: ctx.response.principal,
                 initiator: ctx.session.initiator,
                 channel,
               });
@@ -299,7 +303,7 @@ export default defineDynamic({
                   sessionId: ctx.session.id,
                   turnId: ctx.session.turn.id,
                   callId: ctx.callId,
-                  userInput: publishUserInput,
+                  userInput: currentUserInput(ctx.session.id, ctx.session.turn.id) ?? publishUserInput,
                 });
               } catch {
                 throw new Error("INPUT_UNAVAILABLE");
@@ -323,7 +327,7 @@ export default defineDynamic({
             request: () => "user-approval",
             response: async (ctx) => {
               const resolved = await getAgentBuilderRuntime().service.resolveOwner({
-                current: ctx.responder,
+                current: ctx.response.principal,
                 initiator: ctx.session.initiator,
                 channel,
               });
@@ -350,7 +354,7 @@ export default defineDynamic({
             request: () => "user-approval",
             response: async (ctx) => {
               const resolved = await getAgentBuilderRuntime().service.resolveOwner({
-                current: ctx.responder,
+                current: ctx.response.principal,
                 initiator: ctx.session.initiator,
                 channel,
               });
@@ -377,7 +381,7 @@ export default defineDynamic({
             request: () => "user-approval",
             response: async (ctx) => {
               const resolved = await getAgentBuilderRuntime().service.resolveOwner({
-                current: ctx.responder,
+                current: ctx.response.principal,
                 initiator: ctx.session.initiator,
                 channel,
               });
@@ -404,7 +408,7 @@ export default defineDynamic({
             request: () => "user-approval",
             response: async (ctx) => {
               const resolved = await getAgentBuilderRuntime().service.resolveOwner({
-                current: ctx.responder,
+                current: ctx.response.principal,
                 initiator: ctx.session.initiator,
                 channel,
               });

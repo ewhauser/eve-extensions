@@ -158,7 +158,7 @@ export function isOpenAIPluginEnabled(
 
 /**
  * Credential seam for ChatGPT apps used inside imported subagents.
- * Subagents do not inherit the root agent's configured extensions. Return the
+ * Subagents do not inherit the root agent's configured connections. Return the
  * active principal's workspace token here, using the same external secret
  * store as the root eve-openai-connectors mount. The safe default disables
  * connector tools in imported children.
@@ -216,13 +216,19 @@ export function generatePlugin(plugin: NormalizedPlugin, options: GenerateOption
     }
     if (plugin.apps.length > 0) {
       files.set(
-        `${child}/extensions/${options.connectorExtension}.ts`,
-        `${generatedHeader}import openaiConnectors from "eve-openai-connectors";
+        `${child}/connections/${options.connectorExtension}.ts`,
+        `${generatedHeader}import { defineDynamic } from "eve/connections";
+import { createOpenAIConnectorConnection } from "eve-openai-connectors/connection";
 import { getOpenAIPluginConnectorToken } from "../../../lib/openai-plugin-access.js";
 
-export default openaiConnectors({
-  getToken: getOpenAIPluginConnectorToken,
-  allowedServices: ${JSON.stringify(plugin.apps.map((app) => app.name))},
+export default defineDynamic({
+  events: {
+    "session.started": (_event, ctx) => createOpenAIConnectorConnection({
+      getToken: getOpenAIPluginConnectorToken,
+      allowedServices: ${JSON.stringify(plugin.apps.map((app) => app.name))},
+      enabled: true,
+    }, ctx),
+  },
 });
 `,
       );
@@ -242,7 +248,7 @@ export default openaiConnectors({
         );
         for (const agent of plugin.agents) {
           files.set(
-            `agent/subagents/${qualifySlug([rootPrefix, agent.id])}/connections/${server.id}.ts`,
+            `agent/subagents/${qualifySlug([rootPrefix, agent.id])}/connections/${qualifySlug([rootPrefix, server.id])}.ts`,
             connectionSource(server.description, server.url),
           );
         }

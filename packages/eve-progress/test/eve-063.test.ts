@@ -81,7 +81,7 @@ function eveSlackAdapter(input: {
   };
 }
 
-describe("Eve 0.63.0 Slack lifecycle", () => {
+describe("Eve 0.71.2 Slack lifecycle", () => {
   it("posts and updates todo progress using channel metadata captured outside hooks", async () => {
     const calls: SlackProgressApiInput[] = [];
     const api = vi.fn(async (input: SlackProgressApiInput) => {
@@ -123,7 +123,7 @@ describe("Eve 0.63.0 Slack lifecycle", () => {
       );
 
       const registry = registryFor(progressHook);
-      await dispatchStreamEventHooks({
+      await dispatchStreamEventHooks({ cancelTurn: undefined,
         ctx,
         registry,
         event: stampMessageStreamEvent(
@@ -134,7 +134,7 @@ describe("Eve 0.63.0 Slack lifecycle", () => {
       for (const [stepIndex, status] of (
         ["in_progress", "completed"] as const
       ).entries()) {
-        await dispatchStreamEventHooks({
+        await dispatchStreamEventHooks({ cancelTurn: undefined,
           ctx,
           registry,
           event: stampMessageStreamEvent(
@@ -213,12 +213,12 @@ describe("Eve 0.63.0 Slack lifecycle", () => {
       );
 
       const registry = registryFor(progressHook);
-      await dispatchStreamEventHooks({
+      await dispatchStreamEventHooks({ cancelTurn: undefined,
         ctx,
         registry,
         event: stampMessageStreamEvent(turnStarted),
       });
-      await dispatchStreamEventHooks({
+      await dispatchStreamEventHooks({ cancelTurn: undefined,
         ctx,
         registry,
         event: stampMessageStreamEvent(

@@ -96,7 +96,7 @@ describe("owner-scoped runtime authorization", () => {
     });
     const responseContext = (responder: SessionAuthContext) =>
       ({
-        responder,
+        response: { decision: "approve", principal: responder },
         session: { initiator: principal("owner-a") },
       }) as ApprovalResponseContext<unknown>;
 
@@ -415,7 +415,7 @@ describe("consequential test approval composition", () => {
       toolInput: { value: "opaque" },
       toolName: "fixture_consequential",
     },
-    responder: principal("owner-a"),
+    response: { decision: "approve", principal: principal("owner-a") },
   } as ApprovalResponseContext<unknown>;
 
   function configuration(input: Parameters<typeof composeConsequentialTestApproval>[0]) {

@@ -1,19 +1,18 @@
-# Eve 0.63.0 compatibility patches
+# Eve 0.71.2 compatibility patches
 
-The workspace pins `eve@0.63.0`, upstream commit
-`d004e6d47e9d25d0380c24b5a47b65a18f8b2784`.
+The workspace pins `eve@0.71.2`, upstream commit
+`143fe5717aa8a77d64185c00d1dbb363f307882f` (tag `eve@0.71.2`).
 
-`eve@0.63.0.patch` is the combined patch installed by pnpm. Its reviewable
-TypeScript equivalent is `eve@0.63.0-source.patch`, applied at the upstream
+`eve@0.71.2.patch` is the combined patch installed by pnpm. Its reviewable
+TypeScript equivalent is `eve@0.71.2-source.patch`, applied at the upstream
 repository root. It carries:
 
 - Custom compaction strategy loading and execution, preserving Eve's message
   provenance validation, the request-overhead-adjusted history budget, and
   current authorization/provider options.
 - Connector tool-name projection, upstream-name filtering, approval annotations,
-  descriptor validation before execution, call-input transformation, optional
-  connection-name qualification, and deterministic collision priority. The
-  0.63.0 scoped authorization lifecycle remains in place.
+  descriptor validation before execution across direct MCP calls and
+  `connection_search`/`connection_execute`, plus call-input transformation.
 - An optional-property declaration correction for `AlsContext.localDevRequest`
   so `ContextContainer` satisfies it with `exactOptionalPropertyTypes` enabled.
 
@@ -34,8 +33,9 @@ The published tarball includes assets that the source-only compilation does not
 produce. Verify each standalone patch against a fresh tarball, update pnpm's
 lockfile hash, then run `pnpm check` in this repository.
 
-Focused upstream validation covers the tool loop, manifest normalization,
-authored agent definitions, MCP client, connection search, and connection
-resolution suites. The carried compaction tests include classified user history
-and framework state, automatic request-budget adjustment, and dynamic connector
-name projection.
+Focused upstream validation covers compaction prompt and budget accounting,
+MCP client, and connection tool suites. Direct runs of the upstream
+`compaction.test.ts` and `tool-loop.test.ts` currently fail to resolve the tag's
+`#internal/testing/media-fixtures.js` alias. The workspace's installed-patch
+unit tests, built-host evals, and package gate verify this repository's use of
+the patch.

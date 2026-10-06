@@ -9,10 +9,12 @@ import extension from "../extension.js";
 import { mapUpstreamServiceName } from "../lib/naming.js";
 import { buildApprovalPolicy } from "../lib/policy.js";
 import type { ConnectorContext } from "../lib/types.js";
+import type { OpenAIConnectorsConfig } from "../extension.js";
 
 export const DEFAULT_BASE_URL = "https://chatgpt.com/backend-api/ps/mcp";
 const CONNECTION_NAME = "connectors";
-const MAX_MODEL_TOOL_NAME_LENGTH = 64;
+const QUALIFIED_NAME_OVERHEAD = `${CONNECTION_NAME}__`.length;
+const MAX_MODEL_TOOL_NAME_LENGTH = 64 - QUALIFIED_NAME_OVERHEAD;
 
 function normalizeServices(
   services: readonly string[] | undefined,
@@ -57,84 +59,86 @@ function instanceKey(
   return JSON.stringify({
     allowedServices: [...(allowedServices ?? [])].map((value) => value.toLowerCase()).sort(),
     excludedServices: [...(excludedServices ?? [])].map((value) => value.toLowerCase()).sort(),
-    nameMapping: "service-qualified-unprefixed-v2",
+    nameMapping: "service-qualified-aliased-v2",
     principal,
     serviceAliases: Object.entries(serviceAliases ?? {}).sort(([a], [b]) => a.localeCompare(b)),
   });
 }
 
+export function createOpenAIConnectorConnection(
+  config: OpenAIConnectorsConfig,
+  ctx: DynamicConnectionResolveContext,
+) {
+  if (!config.enabled) return null;
+
+  const connectorContext: ConnectorContext = { session: ctx.session };
+  const principal =
+    config.getPrincipal === undefined
+      ? defaultPrincipal(ctx)
+      : config.getPrincipal(connectorContext);
+  if (principal === null) return null;
+
+  const approvalConfig =
+    config.approvals === undefined
+      ? undefined
+      : {
+          mode: config.approvals.mode,
+          ...(config.approvals.rules === undefined ? {} : { rules: config.approvals.rules }),
+          ...(config.approvals.fallback === undefined
+            ? {}
+            : { fallback: config.approvals.fallback }),
+        };
+  const approval = config.approval ?? buildApprovalPolicy(approvalConfig);
+  return defineMcpClientConnection({
+    approval,
+    auth: {
+      principalType: "user",
+      async getToken() {
+        const token = await config.getToken(connectorContext);
+        if (token === null) {
+          throw new ConnectionAuthorizationRequiredError(CONNECTION_NAME, {
+            message: "The current user has no ChatGPT connector credential.",
+          });
+        }
+        return { token };
+      },
+      ...(config.evictToken === undefined
+        ? {}
+        : { evict: async () => await config.evictToken!(connectorContext) }),
+    },
+    description:
+      "The current user's authorized ChatGPT connectors. The backing OpenAI MCP endpoint is experimental and undocumented.",
+    headers: {
+      "X-OpenAI-Product-Sku": "codex",
+      originator: "codex_cli_rs",
+    },
+    instanceKey: instanceKey(
+      principal, config.allowedServices, config.excludedServices, config.serviceAliases,
+    ),
+    toolCall: {
+      ...(config.transformCallInput === undefined ? {} : {
+        transformInput: async (callCtx, upstreamToolName, input) =>
+          await config.transformCallInput!(
+            { session: callCtx.session }, upstreamToolName, input,
+          ),
+      }),
+    },
+    toolName: {
+      toModelName: (upstreamName) =>
+        mapUpstreamServiceName(
+          upstreamName, MAX_MODEL_TOOL_NAME_LENGTH, config.serviceAliases,
+        ),
+    },
+    tools: {
+      filter: (upstreamName) =>
+        connectorToolFilter(upstreamName, config.allowedServices, config.excludedServices),
+    },
+    url: config.baseUrl ?? DEFAULT_BASE_URL,
+  });
+}
+
 export default defineDynamic({
   events: {
-    "session.started": (_event, ctx) => {
-      const config = extension.config;
-      if (!config.enabled) return null;
-
-      const connectorContext: ConnectorContext = { session: ctx.session };
-      const principal =
-        config.getPrincipal === undefined
-          ? defaultPrincipal(ctx)
-          : config.getPrincipal(connectorContext);
-      if (principal === null) return null;
-
-      const approvalConfig =
-        config.approvals === undefined
-          ? undefined
-          : {
-              mode: config.approvals.mode,
-              ...(config.approvals.rules === undefined ? {} : { rules: config.approvals.rules }),
-              ...(config.approvals.fallback === undefined
-                ? {}
-                : { fallback: config.approvals.fallback }),
-            };
-      const approval = config.approval ?? buildApprovalPolicy(approvalConfig);
-      return defineMcpClientConnection({
-        approval,
-        auth: {
-          principalType: "user",
-          async getToken() {
-            const token = await config.getToken(connectorContext);
-            if (token === null) {
-              throw new ConnectionAuthorizationRequiredError(CONNECTION_NAME, {
-                message: "The current user has no ChatGPT connector credential.",
-              });
-            }
-            return { token };
-          },
-          ...(config.evictToken === undefined
-            ? {}
-            : { evict: async () => await config.evictToken!(connectorContext) }),
-        },
-        description:
-          "The current user's authorized ChatGPT connectors. The backing OpenAI MCP endpoint is experimental and undocumented.",
-        headers: {
-          "X-OpenAI-Product-Sku": "codex",
-          originator: "codex_cli_rs",
-        },
-        instanceKey: instanceKey(
-          principal, config.allowedServices, config.excludedServices, config.serviceAliases,
-        ),
-        toolCall: {
-          ...(config.transformCallInput === undefined ? {} : {
-            transformInput: async (ctx, upstreamToolName, input) =>
-              await config.transformCallInput!(
-                { session: ctx.session }, upstreamToolName, input,
-              ),
-          }),
-        },
-        toolName: {
-          qualify: false,
-          collisionPriority: -1,
-          toModelName: (upstreamName) =>
-            mapUpstreamServiceName(
-              upstreamName, MAX_MODEL_TOOL_NAME_LENGTH, config.serviceAliases,
-            ),
-        },
-        tools: {
-          filter: (upstreamName) =>
-            connectorToolFilter(upstreamName, config.allowedServices, config.excludedServices),
-        },
-        url: config.baseUrl ?? DEFAULT_BASE_URL,
-      });
-    },
+    "session.started": (_event, ctx) => createOpenAIConnectorConnection(extension.config, ctx),
   },
 });

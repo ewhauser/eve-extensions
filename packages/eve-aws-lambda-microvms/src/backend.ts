@@ -1,13 +1,13 @@
 // Derived from vercel/eve PR #208 (Apache-2.0); adapted for standalone packaging.
 import { createHash, randomUUID } from "node:crypto";
 
-import type {
-  SandboxBackend,
-  SandboxBackendCreateInput,
-  SandboxBackendHandle,
-  SandboxBackendPrewarmInput,
-} from "eve/sandbox";
-import { SandboxTemplateNotProvisionedError } from "eve/sandbox";
+import {
+  SandboxTemplateNotProvisionedError,
+  type SandboxBackend,
+  type SandboxBackendCreateInput,
+  type SandboxBackendHandle,
+  type SandboxBackendPrewarmInput,
+} from "./legacy-backend.js";
 
 import type {
   AwsLambdaMicrovmApi,
@@ -924,7 +924,7 @@ function stabilizeSessionKey(
 }
 
 /**
- * Eve 0.63.0 scopes keys to the application path. Replace only that generated
+ * The legacy backend scopes keys to the application path. Replace only that generated
  * scope segment so resources remain stable across build and deployment roots.
  */
 function stabilizeEveScope(

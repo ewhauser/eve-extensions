@@ -7,7 +7,7 @@ current ChatGPT user's app tools at runtime; this package installs the rest of
 a plugin's declared capabilities at build time and uses Eve's dynamic
 resolvers to decide which caller can see them.
 
-The package targets `eve@0.63.0` and Node.js 24 or newer.
+The package targets `eve@0.71.2` and Node.js 24 or newer.
 
 ## Capability mapping
 
@@ -16,7 +16,7 @@ The package targets `eve@0.63.0` and Node.js 24 or newer.
 | `skills/*/SKILL.md` plus sibling files | `agent/skills/*.ts` using `defineSkill` | Dynamic per turn |
 | `commands/*.md` | Explicit-use Eve skills | Dynamic per turn |
 | `agents/*.md` | Declared `agent/subagents/*` graphs | Dynamic per turn |
-| `.app.json` | Connector requirements in the lockfile; connector extension mounted in imported children | The connector extension's user auth and discovery policy |
+| `.app.json` | Connector requirements in the lockfile; scoped connector connection in imported children | The connector connection's user auth and discovery policy |
 | Unauthenticated HTTP `.mcp.json` servers | Eve MCP client connections, only with `--allow-static-connections` | Static; authorize separately |
 | Plugin hooks, stdio MCP, OAuth MCP | Reported as unsupported | Never executed |
 
@@ -31,10 +31,10 @@ Eve dynamic subagent availability without runtime code installation.
 Add both packages to the Eve application when the plugin uses ChatGPT apps:
 
 ```sh
-pnpm add eve-openai-plugins 'eve-openai-connectors@^0.2.0'
+pnpm add eve-openai-plugins 'eve-openai-connectors@^0.7.1'
 ```
 
-Connector 0.2.0 or newer is required because generated subagents pass the
+Connector 0.7.1 or newer is required because generated subagents pass the
 plugin's declared `.app.json` services as an enforced allowlist.
 
 Mount `eve-openai-connectors` in the root agent as `agent/extensions/openai.ts`.
@@ -102,7 +102,7 @@ connections, and channels must still enforce their own authorization and
 approval policy.
 
 Declared Eve subagents do not inherit the root agent's mounted extensions. For
-a plugin with `.app.json`, the importer mounts `eve-openai-connectors` again in
+a plugin with `.app.json`, the importer creates a scoped connector connection in
 each generated child. Implement `getOpenAIPluginConnectorToken` in the same
 access-policy file using the application's external per-user secret store. Its
 safe generated default returns `null`, so connector tools stay disabled in the
