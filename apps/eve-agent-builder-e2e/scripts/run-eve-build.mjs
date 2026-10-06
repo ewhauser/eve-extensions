@@ -11,7 +11,7 @@ const prepared = run("pnpm", ["run", "fixture:prepare"]);
 if (prepared.error !== undefined) throw prepared.error;
 if (prepared.status !== 0) process.exit(prepared.status ?? 1);
 
-const build = run("eve", ["build"]);
+const build = run("eve", ["build", "--skip-sandbox-prewarm"]);
 await import("../../../packages/eve-agent-builder/scripts/restore-hybrid-exports.mjs");
 if (build.error !== undefined) throw build.error;
 if (build.status !== 0) process.exit(build.status ?? 1);

@@ -49,13 +49,18 @@ describe("carried Eve connection patches", () => {
     ).toBe(true);
   });
 
-  test("compiled discovery carries annotations, upstream identity, and descriptor replay checks", () => {
-    const source = readFileSync(
-      new URL("../node_modules/eve/dist/src/execution/tools/connection-search.js", import.meta.url),
+  test("compiled discovery and execution preserve projected identity and annotations", () => {
+    const discovery = readFileSync(
+      new URL("../node_modules/eve/dist/src/execution/tools/connection-tools.js", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("toolAnnotations");
-    expect(source).toContain("upstreamToolName");
-    expect(source).toContain("expectedMetadata");
+    const approval = readFileSync(
+      new URL("../node_modules/eve/dist/src/execution/tools/connection-approval.js", import.meta.url),
+      "utf8",
+    );
+    expect(discovery).toContain("modelName");
+    expect(discovery).toContain("expectedMetadata");
+    expect(approval).toContain("toolAnnotations");
+    expect(approval).toContain("upstreamToolName");
   });
 });

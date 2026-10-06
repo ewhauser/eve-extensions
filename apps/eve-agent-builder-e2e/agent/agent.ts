@@ -3,7 +3,7 @@ import { mockModel, type MockModelRequest, type MockModelResponse } from "eve/ev
 
 import { FIXTURE_TASK, fixtureState } from "./lib/fixture.js";
 
-const AGENT_ID_PATTERN = /<agent id="([^"]+)" name="active-runner"[^>]*>/u;
+
 const ROLE_CASE_PATTERN = /^ROLE_ISOLATION:(pm|implementor|qa|test-runner)$/u;
 const READY_OUTPUT_SCHEMA = {
   type: "object",
@@ -48,7 +48,7 @@ let activeChildId: string | undefined;
 let completedActiveModelCalls = 0;
 let buildStage = 0;
 let buildAgentId: string | undefined;
-const buildChildren = new Map<string, string>();
+
 
 function outputValue(output: unknown): Record<string, unknown> | null {
   if (typeof output !== "object" || output === null) return null;
@@ -59,9 +59,9 @@ function outputValue(output: unknown): Record<string, unknown> | null {
     : direct;
 }
 
-function latestChildId(messages: readonly string[], name: string): string {
-  const pattern = new RegExp(`<agent id="([^"]+)" name="${name}"[^>]*>`, "gu");
-  const matches = [...messages.join("\n").matchAll(pattern)];
+function latestChildId(request: MockModelRequest, name: string): string {
+  const pattern = new RegExp(`<task_result id="([^"]+)" tool="blocking-${name}"`, "gu");
+  const matches = [...request.messages.map((message) => message.text).join("\n").matchAll(pattern)];
   const id = matches.at(-1)?.[1];
   if (id === undefined) throw new Error(`BUILD_CHILD_ID_MISSING:${name}`);
   return id;
@@ -148,9 +148,8 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
           throw new Error(`BUILD_READY_INVALID:${name}:${JSON.stringify(readyOutput)}`);
         }
       }
-      const childId = latestChildId(scenarioMessages, name);
-      buildChildren.set(id, childId);
-      return { toolCalls: [{ id, name, input: { agentId: childId, message } }] };
+      const childId = latestChildId(request, name);
+      return { toolCalls: [{ id, name, input: { taskId: childId, message } }] };
     };
     if (request.lastUserMessage === "BUILD_WORKFLOW_OWNER_SWITCH") {
       const switched = latestNamed("agent_builder__workflow_get");
@@ -494,16 +493,13 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
     }
     if (roleResults.length === 1) {
       assertStructuredReady(roleResults[0]?.output);
-      const pattern = new RegExp(`<agent id="([^"]+)" name="${subagentName}"[^>]*>`, "u");
-      const allMessages = request.messages.map((message) => message.text).join("\n");
-      const agentId = pattern.exec(allMessages)?.[1];
-      if (agentId === undefined) throw new Error(`Parked ${subagentName} child ID missing`);
+      const agentId = latestChildId(request, subagentName);
       return {
         toolCalls: [
           {
             id: `execute-${subagentName}`,
             name: subagentName,
-            input: { agentId, message: `ROLE_EXECUTE:${leaseRole}` },
+            input: { taskId: agentId, message: `ROLE_EXECUTE:${leaseRole}` },
           },
         ],
       };
@@ -520,14 +516,15 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
           {
             id: "unknown-child",
             name: "active-runner",
-            input: { agentId: "not-a-known-child", message: "MUST_NOT_EXECUTE_UNKNOWN_TASK" },
+            input: { taskId: "not-a-known-child", message: "MUST_NOT_EXECUTE_UNKNOWN_TASK" },
           },
         ],
       };
     }
-    const blocked = JSON.stringify(activeResults[0]?.output).includes("BOOTSTRAP_REQUIRED");
+    const blocked = (activeResults[0]?.output as { code?: string } | undefined)?.code === "UNKNOWN_TASK";
     const preModel = fixtureState.activeModelCalls === unknownStart;
-    return blocked && preModel ? "UNKNOWN_CHILD_BLOCKED_PRE_MODEL" : "UNKNOWN_CHILD_ISOLATION_FAILED";
+    if (!blocked || !preModel) throw new Error("UNKNOWN_CHILD_ISOLATION_FAILED");
+    return "UNKNOWN_CHILD_BLOCKED_PRE_MODEL";
   }
 
   const prepared = request.toolResults.find(
@@ -559,16 +556,14 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
   }
   if (activeResults.length === 1) {
     assertStructuredReady(activeResults[0]?.output);
-    const allMessages = request.messages.map((message) => message.text).join("\n");
-    const agentId = AGENT_ID_PATTERN.exec(allMessages)?.[1];
-    if (agentId === undefined) throw new Error("Parked active child ID missing");
+    const agentId = latestChildId(request, "active-runner");
     activeChildId = agentId;
     return {
       toolCalls: [
         {
           id: "active-execution",
           name: "active-runner",
-          input: { agentId, message: FIXTURE_TASK },
+          input: { taskId: agentId, message: FIXTURE_TASK },
         },
       ],
     };
@@ -582,7 +577,7 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
         {
           id: "reject-third-active-turn",
           name: "active-runner",
-          input: { agentId, message: "MUST_NOT_REUSE_COMPLETED_LEASE" },
+          input: { taskId: agentId, message: "MUST_NOT_REUSE_COMPLETED_LEASE" },
         },
       ],
     };
@@ -594,18 +589,34 @@ async function respond(request: MockModelRequest): Promise<string | MockModelRes
   return `${String(activeResults[1]?.output)} LEASE_CLOSED_PROVED`;
 }
 
-// Model-facing delegation is asynchronous in Eve 0.54. Use the public
-// blocking workflow API so each deterministic scenario can inspect the
-// child's structured result before advancing its state machine.
+// A serve tool returns a task receipt immediately; the child response follows as
+// a task_result message. The deterministic script advances only after that result.
 const childNames = new Set(["pm", "implementor", "qa", "test-runner", "active-runner"]);
 const model = mockModel(async (request) => {
-  const response = await respond({
-    ...request,
-    toolResults: request.toolResults.map((result) => ({
-      ...result,
-      name: result.name.replace(/^blocking-/, ""),
-    })),
+  const taskResults = request.messages.flatMap((message) =>
+    [...message.text.matchAll(/<task_result id="([^"]+)" tool="([^"]+)" status="([^"]+)">([\s\S]*?)<\/task_result>/gu)]
+      .map((match) => ({ id: match[1], tool: match[2], status: match[3], body: match[4] })),
+  );
+  let pending = false;
+  const resultIndexByTask = new Map<string, number>();
+  const toolResults = request.toolResults.map((result) => {
+    const name = result.name.replace(/^blocking-/, "");
+    if (!childNames.has(name)) return { ...result, name };
+    const taskId = /(?:Started|Sent to) task (\S+?)\./u.exec(String(result.output))?.[1];
+    if (taskId === undefined) return { ...result, name };
+    const resultIndex = resultIndexByTask.get(taskId) ?? 0;
+    resultIndexByTask.set(taskId, resultIndex + 1);
+    const match = taskResults.filter((entry) => entry.id === taskId)[resultIndex];
+    if (match === undefined) {
+      pending = true;
+      return { ...result, name };
+    }
+    let output: unknown = match.body;
+    try { output = JSON.parse(match.body ?? ""); } catch { /* plain text result */ }
+    return { ...result, name, output };
   });
+  if (pending) return { toolCalls: [{ name: "task_wait", input: {} }] };
+  const response = await respond({ ...request, toolResults });
   if (typeof response === "string" || response.toolCalls === undefined) return response;
   return {
     ...response,

@@ -2,18 +2,22 @@ import { defineWorkflowTool } from "eve/tools";
 import { z } from "zod";
 
 export default defineWorkflowTool({
-  description: "Wait for the pm child to finish its current turn.",
+  description: "Run the pm child and keep its session available for another turn.",
   inputSchema: z.object({
-    agentId: z.string().optional(),
     message: z.string(),
     outputSchema: z.record(z.string(), z.json()).optional(),
   }).strict(),
-  async execute(input, ctx) {
+  async serve(receive, ctx) {
     "use workflow";
-    return await ctx.agent("pm", {
-      message: input.message,
-      ...(input.agentId === undefined ? {} : { agentId: input.agentId }),
-      ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
-    });
+    const agent = ctx.agent("pm");
+    for (;;) {
+      const { input } = await receive();
+      const response = await agent.send(input.message, input.outputSchema === undefined
+        ? undefined
+        : { outputSchema: input.outputSchema });
+      const result = await response.result();
+      if (result.status === "failed") throw new Error(result.error?.message ?? "Child pm failed.");
+      ctx.reply(result.data ?? result.message ?? null);
+    }
   },
 });

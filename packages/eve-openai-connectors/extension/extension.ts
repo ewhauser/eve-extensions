@@ -51,4 +51,5 @@ const config = z.object({
     .optional(),
 });
 
+export type OpenAIConnectorsConfig = z.output<typeof config>;
 export default defineExtension({ config }, "eve-openai-connectors");

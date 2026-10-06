@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomFillSync } from "node:crypto";
-import { access, mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -166,13 +166,13 @@ describe("plan and apply", () => {
     expect(dynamicSkill).toContain('"turn.started"');
     expect(dynamicSkill).toContain("isOpenAIPluginEnabled");
     expect(dynamicSkill).toContain("Buffer.from");
-    const childExtension = await readFile(
-      resolve(project, "agent/subagents/openai-plugin--design-suite--design-reviewer/extensions/openai.ts"),
+    const childConnection = await readFile(
+      resolve(project, "agent/subagents/openai-plugin--design-suite--design-reviewer/connections/openai.ts"),
       "utf8",
     );
-    expect(childExtension).toContain('from "eve-openai-connectors"');
-    expect(childExtension).toContain("getOpenAIPluginConnectorToken");
-    expect(childExtension).toContain('allowedServices: ["figma"]');
+    expect(childConnection).toContain('from "eve-openai-connectors/connection"');
+    expect(childConnection).toContain("getOpenAIPluginConnectorToken");
+    expect(childConnection).toContain('allowedServices: ["figma"]');
     const rootCommand = await readFile(
       resolve(project, "agent/skills/openai-plugin--design-suite--command-review.ts"),
       "utf8",
@@ -256,13 +256,7 @@ export default defineAgent({ model: "openai/gpt-5.5", compaction });
 
   it("emits a filesystem graph accepted by the Eve compiler", { timeout: 30_000 }, async () => {
     const { plugin, project } = await fixture();
-    await put(
-      project,
-      "agent/extensions/openai.ts",
-      `import openaiConnectors from "eve-openai-connectors";
-export default openaiConnectors({ getToken: () => null });
-`,
-    );
+    await rm(resolve(project, "agent/extensions/openai.ts"));
     await put(project, "agent/instructions.md", "You are a generated plugin test agent.\n");
     await put(
       project,
@@ -272,7 +266,7 @@ export default openaiConnectors({ getToken: () => null });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.63.0", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.71.2", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });
@@ -288,7 +282,7 @@ export default openaiConnectors({ getToken: () => null });
       allowStaticConnections: true,
     });
     const eveBin = resolve(project, "node_modules/eve/bin/eve.js");
-    const result = await execFileAsync(process.execPath, [eveBin, "build"], {
+    const result = await execFileAsync(process.execPath, [eveBin, "build", "--skip-sandbox-prewarm"], {
       cwd: project,
       maxBuffer: 10 * 1024 * 1024,
     });

@@ -1,17 +1,17 @@
 # Eve AWS Lambda MicroVM sandboxes
 
-> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.63.0. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
+> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.71.2. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
 
-The `awsLambdaMicrovm()` backend runs each durable eve sandbox in an ARM64 [AWS Lambda MicroVM](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html). It is explicit opt-in: `defaultBackend()` never selects AWS.
+The `AwsLambdaMicrovmSandbox` provider runs each durable eve sandbox in an ARM64 [AWS Lambda MicroVM](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html).
 
 eve creates and tags MicroVM images, launches MicroVMs, and stores image artifacts, leases, template descriptors, and full-filesystem checkpoints under one prefix in your S3 bucket. eve does not create the bucket, IAM roles, VPCs, or network connectors.
 
 ## Install
 
-This package targets Eve 0.63.0 exactly:
+This package targets Eve 0.71.2 exactly:
 
 ```sh
-pnpm add eve@0.63.0 eve-aws-lambda-microvms
+pnpm add eve@0.71.2 eve-aws-lambda-microvms
 ```
 
 ## Configure the backend
@@ -20,25 +20,24 @@ Create the bucket and roles first, then author the sandbox:
 
 ```ts title="agent/sandbox/sandbox.ts"
 import { defineSandbox } from "eve/sandbox";
-import { awsLambdaMicrovm } from "eve-aws-lambda-microvms";
+import { AwsLambdaMicrovmSandbox } from "eve-aws-lambda-microvms";
 
-export default defineSandbox({
-  backend: awsLambdaMicrovm({
+export const environment = AwsLambdaMicrovmSandbox.environment({
     applicationId: "analytics-agent",
     region: "us-east-1",
     artifactBucket: "company-eve-sandboxes",
     artifactKmsKeyId: process.env.EVE_AWS_ARTIFACT_KMS_KEY_ARN,
     buildRoleArn: process.env.EVE_AWS_BUILD_ROLE_ARN!,
     executionRoleArn: process.env.EVE_AWS_EXECUTION_ROLE_ARN,
-  }),
-  async bootstrap({ use }) {
-    const sandbox = await use();
-    await sandbox.run({ command: "dnf install -y git jq" });
-  },
+});
+export default defineSandbox(async () => {
+  const sandbox = await environment.open();
+  await sandbox.run({ command: "dnf install -y git jq" });
+  return sandbox;
 });
 ```
 
-`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.63.0's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
+`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.71.2's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
 
 `artifactKmsKeyId` is optional. When supplied, eve sends explicit `aws:kms` and key-ID headers on JSON, image-artifact, and multipart checkpoint writes. AWS accepts a key ID, key ARN, alias name, or alias ARN; cross-account keys require an ARN. Grant callers `kms:Encrypt`, `kms:Decrypt`, and `kms:GenerateDataKey` as needed for that key. When omitted, eve sends no SSE headers and preserves the bucket's default encryption behavior.
 
@@ -60,7 +59,7 @@ runtime:
 
 ```ts
 import {
-  awsLambdaMicrovm,
+  AwsLambdaMicrovmSandbox,
   reconcileAwsLambdaMicrovmImage,
 } from "eve-aws-lambda-microvms";
 
@@ -75,7 +74,7 @@ const verifiedImage = await reconcileAwsLambdaMicrovmImage({
   },
 });
 
-const backend = awsLambdaMicrovm({
+const environment = AwsLambdaMicrovmSandbox.environment({
   applicationId: "analytics-agent-production",
   region: "us-east-1",
   artifactBucket: "company-eve-sandboxes-production",

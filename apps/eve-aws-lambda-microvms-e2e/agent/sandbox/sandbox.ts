@@ -1,10 +1,9 @@
-import { awsLambdaMicrovm } from "eve-aws-lambda-microvms";
+import { AwsLambdaMicrovmSandbox } from "eve-aws-lambda-microvms";
 import { defineSandbox } from "eve/sandbox";
 
 const stackName = required("EVE_AWS_E2E_STACK_NAME");
 
-export default defineSandbox({
-  backend: awsLambdaMicrovm({
+export const environment = AwsLambdaMicrovmSandbox.environment({
     applicationId: required("EVE_AWS_E2E_APPLICATION_ID"),
     artifactBucket: required("EVE_AWS_E2E_ARTIFACT_BUCKET"),
     artifactPrefix: `runs/${stackName}/eve-fixture`,
@@ -19,8 +18,9 @@ export default defineSandbox({
     region: required("EVE_AWS_E2E_REGION"),
     runtimeLogging: false,
     tags: { "eve-e2e-stack": stackName },
-  }),
 });
+
+export default defineSandbox(() => environment.open());
 
 function required(name: string): string {
   const value = process.env[name];

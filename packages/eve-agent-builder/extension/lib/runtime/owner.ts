@@ -56,7 +56,7 @@ export function createOwnerApproval(input: {
     request: () => "user-approval",
     response: async (ctx: ApprovalResponseContext<unknown>) => {
       const resolved = await input.resolveOwner({
-        current: ctx.responder,
+        current: ctx.response.principal,
         initiator: ctx.session.initiator,
         channel: input.channel,
       });

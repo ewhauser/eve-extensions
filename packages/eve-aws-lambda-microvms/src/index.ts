@@ -3,6 +3,7 @@ export {
   awsLambdaMicrovm,
   createAwsLambdaMicrovmSandbox,
 } from "./backend.js";
+export { AwsLambdaMicrovmSandbox } from "./provider.js";
 export {
   AWS_LAMBDA_MICROVM_ACTIVATION_VERSION,
   AWS_LAMBDA_MICROVM_MAX_ACTIVATION_BYTES,

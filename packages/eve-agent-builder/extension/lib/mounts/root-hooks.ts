@@ -2,6 +2,7 @@ import { defineHook, type HookContext } from "eve/hooks";
 
 import { ownerChannelFromContext, ownerInputFromSession } from "../runtime/owner.js";
 import { getAgentBuilderRuntime, runtimeTimestamp } from "../runtime/service.js";
+import { forgetUserInput, rememberUserInput } from "../runtime/user-input.js";
 
 async function close(
   status: "failed" | "cancelled",
@@ -26,9 +27,20 @@ async function close(
 
 export default defineHook({
   events: {
-    "turn.completed": async (_event, ctx) =>
-      close("cancelled", "PARENT_TURN_COMPLETED_WITHOUT_EXECUTION", ctx),
-    "turn.failed": async (_event, ctx) => close("failed", "PARENT_TURN_FAILED", ctx),
-    "turn.cancelled": async (_event, ctx) => close("cancelled", "PARENT_TURN_CANCELLED", ctx),
+    "message.received": async (event, ctx) => {
+      rememberUserInput(ctx.session.id, event.data.turnId, event.data.message);
+    },
+    "turn.completed": async (_event, ctx) => {
+      forgetUserInput(ctx.session.id, ctx.session.turn.id);
+      await close("cancelled", "PARENT_TURN_COMPLETED_WITHOUT_EXECUTION", ctx);
+    },
+    "turn.failed": async (_event, ctx) => {
+      forgetUserInput(ctx.session.id, ctx.session.turn.id);
+      await close("failed", "PARENT_TURN_FAILED", ctx);
+    },
+    "turn.cancelled": async (_event, ctx) => {
+      forgetUserInput(ctx.session.id, ctx.session.turn.id);
+      await close("cancelled", "PARENT_TURN_CANCELLED", ctx);
+    },
   },
 });
