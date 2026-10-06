@@ -1,5 +1,7 @@
 # Eve AWS Lambda MicroVM sandboxes
 
+This version targets Eve `0.71.2`.
+
 > Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.71.2. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
 
 The `AwsLambdaMicrovmSandbox` provider runs each durable eve sandbox in an ARM64 [AWS Lambda MicroVM](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html).

@@ -1,5 +1,7 @@
 # eve-openai-plugins
 
+This version targets Eve `0.71.2`.
+
 `eve-openai-plugins` compiles a trusted [OpenAI Codex plugin](https://developers.openai.com/plugins/build/plugins)
 into an Eve agent's filesystem graph. It complements
 [`eve-openai-connectors`](../eve-openai-connectors): connectors provide the

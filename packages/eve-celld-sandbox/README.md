@@ -1,5 +1,7 @@
 # Eve celld sandboxes
 
+This version targets Eve `0.71.2`.
+
 Two [Eve](https://eve.dev) sandbox backends hosted by
 [celld](https://github.com/denoland/celld):
 

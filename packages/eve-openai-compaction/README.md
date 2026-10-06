@@ -1,5 +1,7 @@
 # eve-openai-compaction
 
+This version targets Eve `0.71.2`.
+
 `eve-openai-compaction` provides a remote Codex-style compaction strategy for
 [Eve](https://eve.dev). It sends the current transcript to OpenAI's stateless
 `/responses/compact` endpoint and carries the returned opaque encrypted

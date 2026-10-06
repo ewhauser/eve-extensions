@@ -1,5 +1,7 @@
 # eve-openai-connectors
 
+This version targets Eve `0.71.2`.
+
 An Eve extension that contributes the current user's authorized ChatGPT connectors as one dynamic MCP connection.
 
 The OpenAI connector endpoint used here is undocumented and experimental. Pin and test upgrades; do not treat it as a stable public API.
