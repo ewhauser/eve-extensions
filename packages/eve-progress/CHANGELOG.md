@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.4...eve-progress-v0.3.5) (2026-10-06)
+
+
+### Bug Fixes
+
+* release Eve 0.71.2 compatibility updates ([#138](https://github.com/ewhauser/eve-extensions/issues/138)) ([bffa361](https://github.com/ewhauser/eve-extensions/commit/bffa361e518c84e8787fe8597d99fb8e3186dc79))
+
 ## [0.3.4](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.3...eve-progress-v0.3.4) (2026-09-21)
 
 
