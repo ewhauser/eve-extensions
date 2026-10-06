@@ -27,5 +27,10 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - eve@0.71.2
 
+overrides:
+  # Fix the high-severity advisories reported by the CI audit.
+  undici: 7.29.1
+  source-map-js: 1.2.2
+
 patchedDependencies:
   eve@0.71.2: patches/eve@0.71.2.patch

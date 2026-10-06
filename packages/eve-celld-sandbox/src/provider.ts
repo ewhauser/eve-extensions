@@ -86,16 +86,16 @@ function providerImplementation(backend: SandboxBackend) {
     },
     async resume(
       context: { readonly host: { resolveProjectPath(path: string): string } },
-      artifact: PreparedTemplate,
+      _artifact: PreparedTemplate,
       state: SessionState,
     ): Promise<ReturnType<typeof providerHandle>> {
-      if (state.templateKey !== artifact.templateKey) {
-        throw new Error("celld sandbox template changed while resuming the session.");
-      }
+      // A new Eve generation can prepare a new template while this session
+      // still belongs to the old one. The recorded metadata validates the
+      // original namespace, template, session, and generation on reconnect.
       return providerHandle(await backend.create({
         existingMetadata: state.metadata,
         sessionKey: state.sessionKey,
-        templateKey: artifact.templateKey,
+        templateKey: state.templateKey,
         runtimeContext: { appRoot: context.host.resolveProjectPath(".") },
       }));
     },

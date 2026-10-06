@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { promisify } from "node:util";
-import { execFile } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import { celldJustBash, CelldClient, ProtocolError } from "eve-celld-sandbox";
 import {
   LIMITS,
@@ -729,7 +730,7 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
       await writeFile(`${server.directory}/eve-eval.log`, stdout + stderr);
       assert.match(stdout, /Results: 1 passed/);
       assert.match(stdout, /Gates: 6 passed/);
-      assert.match(stdout + stderr, /backend "celld-just-bash-v1"/);
+      assert.match(stdout + stderr, /celld-runtime; agentfs-info/);
     },
   );
   await t.test(
@@ -748,17 +749,61 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
         dirname(createRequire(import.meta.url).resolve("eve/package.json")),
         "bin/eve.js",
       );
+      const appDir = resolve("../../apps/eve-celld-sandbox-e2e");
+      const port = await new Promise<number>((resolvePort, reject) => {
+        const listener = createServer();
+        listener.once("error", reject);
+        listener.listen(0, "127.0.0.1", () => {
+          const address = listener.address();
+          if (address === null || typeof address === "string") {
+            reject(new Error("Could not allocate an Eve development port"));
+            return;
+          }
+          listener.close(() => resolvePort(address.port));
+        });
+      });
+      const url = `http://127.0.0.1:${port}`;
+      let eveProcess: ChildProcess | undefined;
+      async function startEve(resume: boolean): Promise<void> {
+        const child = spawn(
+          process.execPath,
+          [bin, "dev", "--no-ui", "--no-default-extensions", "--host", "127.0.0.1", "--port", String(port), ...(resume ? ["--resume"] : [])],
+          { cwd: appDir, env, stdio: ["ignore", "pipe", "pipe"] },
+        );
+        eveProcess = child;
+        let output = "";
+        let launchError: Error | undefined;
+        child.once("error", (error) => { launchError = error; });
+        child.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+        child.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+        for (let attempt = 0; attempt < 300; attempt++) {
+          if (launchError !== undefined) throw launchError;
+          if (child.exitCode !== null) throw new Error(`Eve dev exited: ${output}`);
+          try {
+            await fetch(url);
+            return;
+          } catch {
+            await delay(100);
+          }
+        }
+        throw new Error(`Eve dev did not start: ${output}`);
+      }
+      async function stopEve(): Promise<void> {
+        const child = eveProcess;
+        eveProcess = undefined;
+        if (child === undefined || child.exitCode !== null) return;
+        await new Promise<void>((resolveExit) => {
+          const timer = setTimeout(() => child.kill("SIGKILL"), 10_000);
+          child.once("exit", () => { clearTimeout(timer); resolveExit(); });
+          child.kill("SIGTERM");
+        });
+      }
+      t.after(stopEve);
       async function invoke(args: string[], stdin?: string): Promise<string> {
         return new Promise((resolveResult, reject) => {
           const child = execFile(
             process.execPath,
-            [
-              "--import",
-              "tsx",
-              resolve("../../apps/eve-celld-sandbox-e2e/eve.ts"),
-              "invoke",
-              ...args,
-            ],
+            [bin, "remote", "invoke", "--url", url, ...args],
             {
               cwd: process.cwd(),
               env,
@@ -773,13 +818,16 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
           child.stdin?.end(stdin);
         });
       }
+      await startEve(false);
       const first = await invoke(["calculate and save"]);
       const before = JSON.parse(first);
       assert.equal(before.outcome.status, "completed");
       const firstOutput = JSON.parse(before.outcome.message).stdout;
       assert.match(firstOutput, /template-ready\n5\n/);
+      await stopEve();
       await server.stop();
       await server.start();
+      await startEve(true);
       const second = JSON.parse(
         await invoke(["--resume", "read saved"], first),
       );
