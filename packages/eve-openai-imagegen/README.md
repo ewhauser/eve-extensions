@@ -1,5 +1,7 @@
 # eve-openai-imagegen
 
+This version targets Eve `0.71.2`.
+
 `eve-openai-imagegen` gives an [Eve](https://eve.dev) agent a Codex-style
 image workflow backed directly by OpenAI's `gpt-image-2` Image API. The
 extension packages a load-on-demand imagegen skill and a typed tool that:

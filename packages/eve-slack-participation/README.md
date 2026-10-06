@@ -1,5 +1,7 @@
 # eve-slack-participation
 
+This version targets Eve `0.71.2`.
+
 An Eve-only Slack participation policy. It decides whether Eve should join a
 human conversation in an already-active Slack thread without turning the
 package into a general-purpose bot framework.

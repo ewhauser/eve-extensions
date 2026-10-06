@@ -11,7 +11,9 @@ test(
     const server = await runtime("dist/worker/index.js", true);
     t.after(() => server.stop());
     await server.start();
-    const backend = celldContainer(server.options);
+    // Linux CI can spend over a minute on a cold Docker start while replaying
+    // a template's native commands. Keep the replay deadline above that cost.
+    const backend = celldContainer({ ...server.options, commandTimeoutMs: 180_000 });
     const input = (sessionKey: string, templateKey: string | null = null) => ({
       sessionKey,
       templateKey,
