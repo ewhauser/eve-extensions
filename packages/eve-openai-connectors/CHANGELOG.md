@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.2](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.7.1...eve-openai-connectors-v0.7.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **openai-connectors:** restore mounted projection hooks ([#135](https://github.com/ewhauser/eve-extensions/issues/135)) ([f6edd9b](https://github.com/ewhauser/eve-extensions/commit/f6edd9bbdf513fc75c9c8d0c2396239e3c9fe16f))
+* release Eve 0.71.2 compatibility updates ([#138](https://github.com/ewhauser/eve-extensions/issues/138)) ([bffa361](https://github.com/ewhauser/eve-extensions/commit/bffa361e518c84e8787fe8597d99fb8e3186dc79))
+
 ## [0.7.1](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.7.0...eve-openai-connectors-v0.7.1) (2026-09-21)
 
 
