@@ -1,6 +1,6 @@
 # Eve celld sandboxes
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 Two [Eve](https://eve.dev) sandbox backends hosted by
 [celld](https://github.com/denoland/celld):
@@ -16,14 +16,14 @@ runs in the application host. Its Workflow World is configured independently.
 
 ## Install and configure
 
-This package targets Eve **0.71.2**, celld **0.5.1**, and Node **24+**.
+This package targets Eve **0.75.1**, celld **0.5.1**, and Node **24+**.
 The Worker bundles pin just-bash **3.4.2**, AgentFS **0.6.4**, and
 Cloudflare Sandbox **0.12.9**. The container image and SDK versions must match.
 The example image includes Node. Add other runtimes, such as Python, in your
 application's Dockerfile when needed.
 
 ```sh
-pnpm add eve@0.71.2 eve-celld-sandbox
+pnpm add eve@0.75.1 eve-celld-sandbox
 ```
 
 In `agent/sandbox/sandbox.ts`, select a backend explicitly:

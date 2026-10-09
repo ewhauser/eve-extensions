@@ -1,6 +1,6 @@
 # eve-slack-participation
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 An Eve-only Slack participation policy. It decides whether Eve should join a
 human conversation in an already-active Slack thread without turning the
@@ -13,7 +13,7 @@ composed directly into Eve's `slackChannel({ onMessage })` hook.
 ## Install
 
 ```sh
-pnpm add ai eve@0.71.2 eve-slack-participation
+pnpm add ai eve@0.75.1 eve-slack-participation
 ```
 
 Create an authored extension, for example

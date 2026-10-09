@@ -1,6 +1,6 @@
 # eve-openai-plugins
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 `eve-openai-plugins` compiles a trusted [OpenAI Codex plugin](https://developers.openai.com/plugins/build/plugins)
 into an Eve agent's filesystem graph. It complements
@@ -9,7 +9,7 @@ current ChatGPT user's app tools at runtime; this package installs the rest of
 a plugin's declared capabilities at build time and uses Eve's dynamic
 resolvers to decide which caller can see them.
 
-The package targets `eve@0.71.2` and Node.js 24 or newer.
+The package targets `eve@0.75.1` and Node.js 24 or newer.
 
 ## Capability mapping
 

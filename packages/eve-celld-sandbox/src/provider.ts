@@ -34,8 +34,8 @@ function providerHandle(handle: SandboxBackendHandle) {
   return {
     sandbox: handle.session,
     onRuntimeShutdown: () => handle.shutdown(),
-    onSessionDelete: (options?: { readonly abortSignal?: AbortSignal }) => handle.delete(options),
-    onSessionStop: () => handle.stop(),
+    onSandboxDelete: (options?: { readonly abortSignal?: AbortSignal }) => handle.delete(options),
+    onSandboxStop: () => handle.stop(),
   };
 }
 

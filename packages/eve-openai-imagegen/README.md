@@ -1,6 +1,6 @@
 # eve-openai-imagegen
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 `eve-openai-imagegen` gives an [Eve](https://eve.dev) agent a Codex-style
 image workflow backed directly by OpenAI's `gpt-image-2` Image API. The
@@ -17,7 +17,7 @@ does not use ChatGPT or Codex included usage.
 
 ## Compatibility
 
-The package targets Node.js 24 or newer and `eve@0.71.2`. It calls the official
+The package targets Node.js 24 or newer and `eve@0.75.1`. It calls the official
 `/v1/images/generations` and `/v1/images/edits` endpoints with
 `model: "gpt-image-2"`.
 
