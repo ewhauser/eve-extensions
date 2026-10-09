@@ -1,6 +1,6 @@
 # eve-openai-compaction
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 `eve-openai-compaction` provides a remote Codex-style compaction strategy for
 [Eve](https://eve.dev). It sends the current transcript to OpenAI's stateless
@@ -12,10 +12,10 @@ the compaction attempt.
 
 ## Compatibility
 
-The package targets `eve@0.71.2`, `ai@7`, and `@ai-sdk/openai@4`. It requires
+The package targets `eve@0.75.1`, `ai@7`, and `@ai-sdk/openai@4`. It requires
 the included Eve patch to expose custom compaction strategies.
 
-The package also ships `patches/eve@0.71.2-source.patch`, the reviewable
+The package also ships `patches/eve@0.75.1-source.patch`, the reviewable
 TypeScript source patch with focused Eve tests. The installable pnpm patch
 targets Eve's published `dist` files.
 
@@ -28,18 +28,18 @@ checkpoint instead of trying to reference a server-stored item by ID.
 ```sh
 pnpm add eve-openai-compaction @ai-sdk/openai
 mkdir -p patches
-cp node_modules/eve-openai-compaction/patches/eve@0.71.2.patch patches/eve@0.71.2.patch
+cp node_modules/eve-openai-compaction/patches/eve@0.75.1.patch patches/eve@0.75.1.patch
 ```
 
 Register the patch in `pnpm-workspace.yaml`:
 
 ```yaml
 patchedDependencies:
-  eve@0.71.2: patches/eve@0.71.2.patch
+  eve@0.75.1: patches/eve@0.75.1.patch
 ```
 
 Then run `pnpm install`. pnpm permits only one patch entry per package version;
-combine unified diffs if the application already patches `eve@0.71.2`.
+combine unified diffs if the application already patches `eve@0.75.1`.
 
 ## Use
 

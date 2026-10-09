@@ -1,6 +1,6 @@
 # eve-project-link
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
 An [Eve](https://eve.dev) extension that links an entire context channel to an
 external project resource. Every active linked-channel turn receives a compact,
@@ -29,7 +29,7 @@ Project presets add only the provider- or installation-specific parts:
 ## Install
 
 ```sh
-pnpm add eve@0.71.2 eve-project-link
+pnpm add eve@0.75.1 eve-project-link
 ```
 
 Create `agent/extensions/project_link.ts`:

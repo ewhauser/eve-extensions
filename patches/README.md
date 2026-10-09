@@ -1,10 +1,10 @@
-# Eve 0.71.2 compatibility patches
+# Eve 0.75.1 compatibility patches
 
-The workspace pins `eve@0.71.2`, upstream commit
-`143fe5717aa8a77d64185c00d1dbb363f307882f` (tag `eve@0.71.2`).
+The workspace pins `eve@0.75.1`, upstream commit
+`4d9d2128f32997908c411fbc38b7157669f9d27e` (tag `eve@0.75.1`).
 
-`eve@0.71.2.patch` is the combined patch installed by pnpm. Its reviewable
-TypeScript equivalent is `eve@0.71.2-source.patch`, applied at the upstream
+`eve@0.75.1.patch` is the combined patch installed by pnpm. Its reviewable
+TypeScript equivalent is `eve@0.75.1-source.patch`, applied at the upstream
 repository root. It carries:
 
 - Custom compaction strategy loading and execution, preserving Eve's message
@@ -33,7 +33,7 @@ The published tarball includes assets that the source-only compilation does not
 produce. Verify each standalone patch against a fresh tarball, update pnpm's
 lockfile hash, then run `pnpm check` in this repository.
 
-Focused upstream validation covers compaction prompt and budget accounting,
+Focused upstream validation covers compaction strategy execution, prompt and budget accounting,
 MCP client, and connection tool suites. Direct runs of the upstream
 `compaction.test.ts` and `tool-loop.test.ts` currently fail to resolve the tag's
 `#internal/testing/media-fixtures.js` alias. The workspace's installed-patch

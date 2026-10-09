@@ -1,8 +1,8 @@
 # Eve AWS Lambda MicroVM sandboxes
 
-This version targets Eve `0.71.2`.
+This version targets Eve `0.75.1`.
 
-> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.71.2. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
+> Extracted from [vercel/eve#208](https://github.com/vercel/eve/pull/208), authored by Andrew Barba, and adapted into a standalone package for Eve 0.75.1. This package is licensed under Apache-2.0; see `LICENSE`. See `NOTICE` for upstream attribution and a summary of the packaging changes.
 
 The `AwsLambdaMicrovmSandbox` provider runs each durable eve sandbox in an ARM64 [AWS Lambda MicroVM](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html).
 
@@ -10,10 +10,10 @@ eve creates and tags MicroVM images, launches MicroVMs, and stores image artifac
 
 ## Install
 
-This package targets Eve 0.71.2 exactly:
+This package targets Eve 0.75.1 exactly:
 
 ```sh
-pnpm add eve@0.71.2 eve-aws-lambda-microvms
+pnpm add eve@0.75.1 eve-aws-lambda-microvms
 ```
 
 ## Configure the backend
@@ -39,7 +39,7 @@ export default defineSandbox(async () => {
 });
 ```
 
-`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.71.2's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
+`applicationId` is a stable resource namespace, not a display label. Keep it identical at build and runtime. The package replaces Eve 0.75.1's path-derived key scope with this application scope so templates and sessions remain stable when build and deployment roots differ. The bucket must be in `region`. The default prefix is `eve/lambda-microvms/<application-id-hash>`; set `artifactPrefix` when the bucket policy requires a fixed path.
 
 `artifactKmsKeyId` is optional. When supplied, eve sends explicit `aws:kms` and key-ID headers on JSON, image-artifact, and multipart checkpoint writes. AWS accepts a key ID, key ARN, alias name, or alias ARN; cross-account keys require an ARN. Grant callers `kms:Encrypt`, `kms:Decrypt`, and `kms:GenerateDataKey` as needed for that key. When omitted, eve sends no SSE headers and preserves the bucket's default encryption behavior.
 

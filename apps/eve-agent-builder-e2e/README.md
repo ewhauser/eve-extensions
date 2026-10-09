@@ -1,4 +1,4 @@
-# eve-agent-builder Eve 0.71.2 fixture
+# eve-agent-builder Eve 0.75.1 fixture
 
 This private workspace app is the PR 03 and PR 04 built-host proof. It declares PM,
 implementor, QA, test-runner, and active-runner subagents explicitly; mounts
@@ -29,10 +29,10 @@ fresh children whose model call IDs intentionally recur, refuses unverified
 publication, publishes on host-verified authenticated input, and proves
 current-turn get/direct-run plus next-turn roster visibility.
 
-The workspace installs `eve@0.71.2` with the repository's tracked Eve patch,
+The workspace installs `eve@0.75.1` with the repository's tracked Eve patch,
 so these built-host evals are evidence for that exact workspace runtime. The
-unmodified Eve 0.71.2 baseline is tag commit
-`143fe5717aa8a77d64185c00d1dbb363f307882f`; the fixture does not represent
+unmodified Eve 0.75.1 baseline is tag commit
+`4d9d2128f32997908c411fbc38b7157669f9d27e`; the fixture does not represent
 an unpatched binary run when invoked from this workspace.
 
 Bootstrap credentials necessarily cross Eve's model-mediated tool/message
@@ -41,7 +41,7 @@ command completion, but cannot guarantee that an interrupted process or other
 host instrumentation never observed the credential. Production hosts must
 treat those transcripts as secret-bearing.
 
-Eve 0.71.2 `ask_question` answers are ordinary tool results and cannot authorize
+Eve 0.75.1 `ask_question` answers are ordinary tool results and cannot authorize
 a later capability call. Consequential authorization is instead composed onto
 the real lowered tool approval and backed by exact scoped, single-use store
 state. The local Workflow runtime accepted but did not settle the attempted
@@ -51,4 +51,4 @@ successful grants. These deterministic tests establish lifecycle and
 containment behavior; they do not claim live-model obedience.
 
 Multi-turn evals create an explicit `t.session()` and send follow-up turns through
-that session. In Eve 0.71.2, each `t.send()` creates a new session.
+that session. In Eve 0.75.1, each `t.send()` creates a new session.

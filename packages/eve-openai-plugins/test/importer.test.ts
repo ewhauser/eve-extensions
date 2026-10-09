@@ -266,7 +266,7 @@ export default defineAgent({ model: "openai/gpt-5.5", compaction });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.71.2", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.75.1", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });
