@@ -33,9 +33,9 @@ export function roleIsolationModel(input: {
         !(input.role === "test_runner" && toolNames.includes("fixture_read"))
       ) {
         const expectedBootstrapTools =
-          input.role === "test_runner" && !toolNames.includes("final_output")
+          input.role === "test_runner" && !toolNames.includes("eve__reply")
             ? ["agent_builder__bootstrap_redeem"]
-            : ["agent_builder__bootstrap_redeem", "final_output"];
+            : ["agent_builder__bootstrap_redeem", "eve__reply"];
         if (
           JSON.stringify(toolNames) !== JSON.stringify(expectedBootstrapTools) ||
           system.includes(SAVED_INSTRUCTION_MARKER)
@@ -100,13 +100,13 @@ export function roleIsolationModel(input: {
             }
           : "BUILD_TEST_EVIDENCE_OK";
       }
-      if (!toolNames.includes("final_output")) return "BUILD_BOOTSTRAP_READY";
+      if (!toolNames.includes("eve__reply")) return "BUILD_BOOTSTRAP_READY";
       if (redeemed === undefined) throw new Error("BOOTSTRAP_RECEIPT_MISSING");
       return {
         toolCalls: [
           {
             id: `structured-ready-${input.role}`,
-            name: "final_output",
+            name: "eve__reply",
             input: { status: "ready", receipt: redeemed.output },
           },
         ],

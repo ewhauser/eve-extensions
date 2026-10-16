@@ -1,10 +1,10 @@
-# Eve 0.75.1 compatibility patches
+# Eve 0.80.0 compatibility patches
 
-The workspace pins `eve@0.75.1`, upstream commit
-`4d9d2128f32997908c411fbc38b7157669f9d27e` (tag `eve@0.75.1`).
+The workspace pins `eve@0.80.0`, upstream commit
+`faee537f8050b23ff4e60137479b2cb773f66e1a` (tag `eve@0.80.0`).
 
-`eve@0.75.1.patch` is the combined patch installed by pnpm. Its reviewable
-TypeScript equivalent is `eve@0.75.1-source.patch`, applied at the upstream
+`eve@0.80.0.patch` is the combined patch installed by pnpm. Its reviewable
+TypeScript equivalent is `eve@0.80.0-source.patch`, applied at the upstream
 repository root. It carries:
 
 - Custom compaction strategy loading and execution, preserving Eve's message
@@ -12,7 +12,7 @@ repository root. It carries:
   current authorization/provider options.
 - Connector tool-name projection, upstream-name filtering, approval annotations,
   descriptor validation before execution across direct MCP calls and
-  `connection_search`/`connection_execute`, plus call-input transformation.
+  `eve__search`/`eve__tool`, plus call-input transformation.
 - An optional-property declaration correction for `AlsContext.localDevRequest`
   so `ContextContainer` satisfies it with `exactOptionalPropertyTypes` enabled.
 
@@ -34,8 +34,5 @@ produce. Verify each standalone patch against a fresh tarball, update pnpm's
 lockfile hash, then run `pnpm check` in this repository.
 
 Focused upstream validation covers compaction strategy execution, prompt and budget accounting,
-MCP client, and connection tool suites. Direct runs of the upstream
-`compaction.test.ts` and `tool-loop.test.ts` currently fail to resolve the tag's
-`#internal/testing/media-fixtures.js` alias. The workspace's installed-patch
-unit tests, built-host evals, and package gate verify this repository's use of
-the patch.
+MCP client, and connection tool suites. The workspace's installed-patch unit tests,
+built-host evals, and package gate verify this repository's use of the patch.

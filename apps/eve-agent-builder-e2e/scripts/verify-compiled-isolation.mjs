@@ -17,7 +17,6 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const failures = [];
 const requiredDisabled = [
   "bash",
-  "load_skill",
   "read_file",
   "web_fetch",
   "web_search",
@@ -34,7 +33,7 @@ assert(manifest.diagnosticsSummary?.errors === 0, "root manifest contains errors
 assert(manifest.diagnosticsSummary?.warnings === 0, "root manifest contains warnings");
 assert(manifest.instructions?.some(({ content }) => content.includes("ROOT_PRIVATE_INSTRUCTION_03")), "root instruction canary missing");
 assert(manifest.tools?.some(({ name }) => name === "root-private"), "root tool canary missing");
-assert(manifest.connections?.some(({ connectionName }) => connectionName === "root-private"), "root connection canary missing");
+assert(manifest.connections?.some(({ connectionName }) => connectionName === "root-private-connection"), "root connection canary missing");
 assert(manifest.skills?.some(({ name }) => name === "root-private"), "root skill canary missing");
 assert(manifest.sandbox !== null, "root sandbox canary missing");
 
@@ -71,7 +70,7 @@ for (const name of expectedChildren) {
   );
   assert(
     JSON.stringify(child.dynamicTools?.map(({ slug }) => slug).sort()) ===
-      JSON.stringify(["agent-builder", "connection_tools"]),
+      JSON.stringify(["agent-builder"]),
     `${name} has an unexpected dynamic tool source`,
   );
   assert(child.dynamicInstructions?.length === 1, `${name} lacks its one saved-context mount`);
@@ -81,4 +80,4 @@ for (const name of expectedChildren) {
 if (failures.length > 0) {
   throw new Error(`Built host isolation verification failed:\n- ${failures.join("\n- ")}`);
 }
-console.log(`Verified Eve 0.75.1 compiled isolation for ${expectedChildren.join(", ")}.`);
+console.log(`Verified Eve 0.80.0 compiled isolation for ${expectedChildren.join(", ")}.`);

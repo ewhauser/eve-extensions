@@ -29,7 +29,7 @@ const model = mockModel((request) => {
     if (redeemed === undefined) {
       if (
         JSON.stringify(toolNames) !==
-          JSON.stringify(["agent_builder__bootstrap_redeem", "final_output"]) ||
+          JSON.stringify(["agent_builder__bootstrap_redeem", "eve__reply"]) ||
         system.includes(SAVED_INSTRUCTION_MARKER) ||
         request.lastUserMessage?.includes("protocolVersion") !== true
       ) {
@@ -45,7 +45,7 @@ const model = mockModel((request) => {
       toolCalls: [
         {
           id: "structured-ready",
-          name: "final_output",
+          name: "eve__reply",
           input: { status: "ready", receipt: redeemed.output },
         },
       ],
