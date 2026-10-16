@@ -17,7 +17,7 @@ There is no extension-owned protocol client, catalog cache, search tool, materia
 
 ## Carried Eve primitives
 
-Eve 0.80.0 is patched in three general places.
+Eve 0.80.1 is patched in three general places.
 
 ### Tool-name projection
 

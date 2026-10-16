@@ -1,10 +1,10 @@
-# Eve 0.80.0 compatibility patches
+# Eve 0.80.1 compatibility patches
 
-The workspace pins `eve@0.80.0`, upstream commit
-`faee537f8050b23ff4e60137479b2cb773f66e1a` (tag `eve@0.80.0`).
+The workspace pins `eve@0.80.1`, upstream commit
+`e3cea42486e7e32b7b3001bb5912e076b5443ad5` (tag `eve@0.80.1`).
 
-`eve@0.80.0.patch` is the combined patch installed by pnpm. Its reviewable
-TypeScript equivalent is `eve@0.80.0-source.patch`, applied at the upstream
+`eve@0.80.1.patch` is the combined patch installed by pnpm. Its reviewable
+TypeScript equivalent is `eve@0.80.1-source.patch`, applied at the upstream
 repository root. It carries:
 
 - Custom compaction strategy loading and execution, preserving Eve's message

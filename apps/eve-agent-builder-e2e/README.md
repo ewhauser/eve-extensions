@@ -1,4 +1,4 @@
-# eve-agent-builder Eve 0.80.0 fixture
+# eve-agent-builder Eve 0.80.1 fixture
 
 This private workspace app is the PR 03 and PR 04 built-host proof. It declares PM,
 implementor, QA, test-runner, and active-runner subagents explicitly; mounts
@@ -29,9 +29,9 @@ fresh children whose model call IDs intentionally recur, refuses unverified
 publication, publishes on host-verified authenticated input, and proves
 current-turn get/direct-run plus next-turn roster visibility.
 
-The workspace installs `eve@0.80.0` with the repository's tracked Eve patch,
+The workspace installs `eve@0.80.1` with the repository's tracked Eve patch,
 so these built-host evals are evidence for that exact workspace runtime. The
-unmodified Eve 0.80.0 baseline is tag commit
+unmodified Eve 0.80.1 baseline is tag commit
 `faee537f8050b23ff4e60137479b2cb773f66e1a`; the fixture does not represent
 an unpatched binary run when invoked from this workspace.
 
@@ -41,7 +41,7 @@ command completion, but cannot guarantee that an interrupted process or other
 host instrumentation never observed the credential. Production hosts must
 treat those transcripts as secret-bearing.
 
-Eve 0.80.0 `ask_question` answers are ordinary tool results and cannot authorize
+Eve 0.80.1 `ask_question` answers are ordinary tool results and cannot authorize
 a later capability call. Consequential authorization is instead composed onto
 the real lowered tool approval and backed by exact scoped, single-use store
 state. The local Workflow runtime accepted but did not settle the attempted
@@ -51,4 +51,4 @@ successful grants. These deterministic tests establish lifecycle and
 containment behavior; they do not claim live-model obedience.
 
 Multi-turn evals create an explicit `t.session()` and send follow-up turns through
-that session. In Eve 0.80.0, each `t.send()` creates a new session.
+that session. In Eve 0.80.1, each `t.send()` creates a new session.

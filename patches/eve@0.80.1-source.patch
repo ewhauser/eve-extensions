@@ -405,7 +405,7 @@ index ef4d67a62..3aceedb1c 100644
          messages: [...prompt.messages],
          model: this.input.model,
 diff --git c/packages/eve/src/harness/tool-loop.test.ts w/packages/eve/src/harness/tool-loop.test.ts
-index 7f0f035c4..509c18eaa 100644
+index 07797de30..cfe55871a 100644
 --- c/packages/eve/src/harness/tool-loop.test.ts
 +++ w/packages/eve/src/harness/tool-loop.test.ts
 @@ -8481,6 +8481,90 @@ describe("createToolLoopHarness", () => {
