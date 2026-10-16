@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers durable channel lifecycle and callback rebinding with Eve 0.80.1.
+
 An [Eve](https://eve.dev) extension that links an entire context channel to an
 external project resource. Every active linked-channel turn receives a compact,
 bounded pointer to the canonical resource plus guidance for retrieving current

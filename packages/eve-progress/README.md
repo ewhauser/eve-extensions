@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers Eve 0.80.1 session and turn hooks and the Slack progress adapter.
+
 `eve-progress` projects Eve's durable built-in `todo` state into a
 transport-neutral `AgentProgressSnapshot`. Its first transport adapter renders
 one independently mutable Slack `plan` message per root agent or subagent and

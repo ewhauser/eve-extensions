@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers real celld and AgentFS flows plus Docker containers on Eve 0.80.1.
+
 Two [Eve](https://eve.dev) sandbox backends hosted by
 [celld](https://github.com/denoland/celld):
 

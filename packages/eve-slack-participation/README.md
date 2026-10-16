@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers the Slack participation policy on Eve 0.80.1.
+
 An Eve-only Slack participation policy. It decides whether Eve should join a
 human conversation in an already-active Slack thread without turning the
 package into a general-purpose bot framework.

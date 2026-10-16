@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers the custom compaction strategy and its Eve 0.80.1 patch.
+
 `eve-openai-compaction` provides a remote Codex-style compaction strategy for
 [Eve](https://eve.dev). It sends the current transcript to OpenAI's stateless
 `/responses/compact` endpoint and carries the returned opaque encrypted
