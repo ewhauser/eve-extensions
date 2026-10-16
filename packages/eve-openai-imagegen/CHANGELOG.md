@@ -5,6 +5,7 @@
 
 ### Bug Fixes
 
+* upgrade compatibility to published Eve 0.80.1 ([#141](https://github.com/ewhauser/eve-extensions/pull/141)) ([2aa5a2c](https://github.com/ewhauser/eve-extensions/commit/2aa5a2ca56d633ed089f3a4473ad8c15769ef2aa))
 * document Eve 0.80.1 compatibility validation ([#142](https://github.com/ewhauser/eve-extensions/issues/142)) ([85830db](https://github.com/ewhauser/eve-extensions/commit/85830db48eef4248abec69afbefc1dfb6754dad5))
 
 ## [0.2.3](https://github.com/ewhauser/eve-extensions/compare/eve-openai-imagegen-v0.2.2...eve-openai-imagegen-v0.2.3) (2026-10-09)
