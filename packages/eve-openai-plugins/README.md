@@ -2,6 +2,8 @@
 
 This version targets Eve `0.80.1`.
 
+Release validation covers plugin import and connector integration on Eve 0.80.1.
+
 `eve-openai-plugins` compiles a trusted [OpenAI Codex plugin](https://developers.openai.com/plugins/build/plugins)
 into an Eve agent's filesystem graph. It complements
 [`eve-openai-connectors`](../eve-openai-connectors): connectors provide the
