@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/ewhauser/eve-extensions/compare/eve-slack-participation-v0.1.3...eve-slack-participation-v0.1.4) (2026-10-16)
+
+
+### Bug Fixes
+
+* document Eve 0.80.1 compatibility validation ([#142](https://github.com/ewhauser/eve-extensions/issues/142)) ([85830db](https://github.com/ewhauser/eve-extensions/commit/85830db48eef4248abec69afbefc1dfb6754dad5))
+
 ## [0.1.3](https://github.com/ewhauser/eve-extensions/compare/eve-slack-participation-v0.1.2...eve-slack-participation-v0.1.3) (2026-10-09)
 
 
