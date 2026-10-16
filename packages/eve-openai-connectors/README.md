@@ -1,34 +1,34 @@
 # eve-openai-connectors
 
-This version targets Eve `0.75.1`.
+This version targets Eve `0.80.1`.
 
 An Eve extension that contributes the current user's authorized ChatGPT connectors as one dynamic MCP connection.
 
 The OpenAI connector endpoint used here is undocumented and experimental. Pin and test upgrades; do not treat it as a stable public API.
 
-## Eve 0.75.1 patch
+## Eve 0.80.1 patch
 
-This version carries provider-neutral Eve 0.75.1 patches:
+This version carries provider-neutral Eve 0.80.1 patches:
 
 - reversible MCP tool-name projection, with Eve retaining the exact upstream name for filtering and execution;
 - MCP annotations and exact upstream identity on connection approval callbacks;
-- connector descriptor checks and projected-name resolution for `connection_search` and `connection_execute`;
+- connector descriptor checks and projected-name resolution for `eve__search` and `eve__tool`;
 - a post-authorization call-input transform.
 
-The old provider-native search/private-marker patch is gone. Discovery always uses Eve's ordinary `connection_search` path. Install the carried patch in an application because pnpm does not apply a dependency's patch automatically:
+The old provider-native search/private-marker patch is gone. Discovery always uses Eve's ordinary `eve__search` path. Install the carried patch in an application because pnpm does not apply a dependency's patch automatically:
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-openai-connectors/patches/eve@0.75.1.patch patches/eve@0.75.1.patch
+cp node_modules/eve-openai-connectors/patches/eve@0.80.1.patch patches/eve@0.80.1.patch
 ```
 
 ```yaml
 # pnpm-workspace.yaml
 patchedDependencies:
-  eve@0.75.1: patches/eve@0.75.1.patch
+  eve@0.80.1: patches/eve@0.80.1.patch
 ```
 
-Keep Eve pinned to `0.75.1` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
+Keep Eve pinned to `0.80.1` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
 
 ## Mount
 
@@ -85,7 +85,7 @@ Treat this as a breaking pre-1.0 minor upgrade: update the extension mount and i
 
 Remove `discovery`, `protocolClientLifetime`, inventory/search/materialization limits, `includeStatus`, `approvalFor`, `onAuthError`, `onResolution`, and `logger`. Use Eve connection behavior directly; replace `onAuthError` with `evictToken`, and replace `approvalFor(item)` with `approval(ctx)` or declarative `approvals`. `transformCallInput` is available on the mounted connection path.
 
-The `eve-openai-connectors/tools` and `eve-openai-connectors/connectors` subpaths are removed. Mount the extension package and use Eve's `connection_search` and `connection_execute`.
+The `eve-openai-connectors/tools` and `eve-openai-connectors/connectors` subpaths are removed. Mount the extension package and use Eve's `eve__search` and `eve__tool`.
 
 ## Security boundary
 

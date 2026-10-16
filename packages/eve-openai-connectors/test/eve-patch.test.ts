@@ -51,16 +51,16 @@ describe("carried Eve connection patches", () => {
 
   test("compiled discovery and execution preserve projected identity and annotations", () => {
     const discovery = readFileSync(
-      new URL("../node_modules/eve/dist/src/execution/tools/connection-tools.js", import.meta.url),
+      new URL("../node_modules/eve/dist/src/execution/catalog/search.js", import.meta.url),
       "utf8",
     );
-    const approval = readFileSync(
-      new URL("../node_modules/eve/dist/src/execution/tools/connection-approval.js", import.meta.url),
+    const execution = readFileSync(
+      new URL("../node_modules/eve/dist/src/execution/catalog/connection-entry.js", import.meta.url),
       "utf8",
     );
     expect(discovery).toContain("modelName");
-    expect(discovery).toContain("expectedMetadata");
-    expect(approval).toContain("toolAnnotations");
-    expect(approval).toContain("upstreamToolName");
+    expect(execution).toContain("expectedMetadata");
+    expect(execution).toContain("toolAnnotations");
+    expect(execution).toContain("upstreamToolName");
   });
 });

@@ -1,8 +1,8 @@
 diff --git c/packages/eve/src/compiler/manifest.ts w/packages/eve/src/compiler/manifest.ts
-index 055621876..6c250ce87 100644
+index 5b75bfecd..ff18b2534 100644
 --- c/packages/eve/src/compiler/manifest.ts
 +++ w/packages/eve/src/compiler/manifest.ts
-@@ -600,6 +600,7 @@ const compiledAgentWorkflowDefinitionSchema = z
+@@ -611,6 +611,7 @@ const compiledAgentWorkflowDefinitionSchema = z
  const compiledAgentCompactionDefinitionSchema: z.ZodType<CompiledAgentCompactionDefinition> = z
    .object({
      model: compiledRuntimeModelReferenceSchema.optional(),
@@ -10,7 +10,7 @@ index 055621876..6c250ce87 100644
      thresholdPercent: z.number().finite().min(0).max(1).optional(),
    })
    .strict();
-@@ -1218,6 +1219,8 @@ function cloneCompiledAgentDefinition(config: CompiledAgentDefinition): Compiled
+@@ -1232,6 +1233,8 @@ function cloneCompiledAgentDefinition(config: CompiledAgentDefinition): Compiled
          config.compaction?.model === undefined
            ? undefined
            : cloneCompiledRuntimeModelReference(config.compaction.model),
@@ -20,10 +20,10 @@ index 055621876..6c250ce87 100644
      },
      defaultTools: config.defaultTools,
 diff --git c/packages/eve/src/compiler/normalize-agent-config.ts w/packages/eve/src/compiler/normalize-agent-config.ts
-index 6b33a103f..5fd02a7d3 100644
+index 931cedb2b..b615e1c8b 100644
 --- c/packages/eve/src/compiler/normalize-agent-config.ts
 +++ w/packages/eve/src/compiler/normalize-agent-config.ts
-@@ -73,6 +73,7 @@ export async function compileAgentConfig(
+@@ -78,6 +78,7 @@ export async function compileAgentConfig(
        : undefined;
    const compaction: {
      model?: CompiledRuntimeModelReference;
@@ -31,7 +31,7 @@ index 6b33a103f..5fd02a7d3 100644
      thresholdPercent?: number;
    } = {};
  
-@@ -80,6 +81,7 @@ export async function compileAgentConfig(
+@@ -85,6 +86,7 @@ export async function compileAgentConfig(
      build?: CompiledAgentDefinition["build"];
      compaction: {
        model?: CompiledRuntimeModelReference;
@@ -39,7 +39,7 @@ index 6b33a103f..5fd02a7d3 100644
        thresholdPercent?: number;
      };
      defaultTools?: boolean;
-@@ -158,6 +160,18 @@ export async function compileAgentConfig(
+@@ -163,6 +165,18 @@ export async function compileAgentConfig(
      });
    }
  
@@ -59,10 +59,10 @@ index 6b33a103f..5fd02a7d3 100644
      compaction.thresholdPercent = definition.compaction.thresholdPercent;
    }
 diff --git c/packages/eve/src/compiler/normalize-manifest.test.ts w/packages/eve/src/compiler/normalize-manifest.test.ts
-index 6b75f17b7..441464fdd 100644
+index 8607c67ce..9e2c09f1a 100644
 --- c/packages/eve/src/compiler/normalize-manifest.test.ts
 +++ w/packages/eve/src/compiler/normalize-manifest.test.ts
-@@ -376,6 +376,31 @@ describe("compileAgentManifest source graph", () => {
+@@ -367,6 +367,31 @@ describe("compileAgentManifest source graph", () => {
      },
    );
  
@@ -95,7 +95,7 @@ index 6b75f17b7..441464fdd 100644
      const order: string[] = [];
      const sourceRegistry = registry([
 diff --git c/packages/eve/src/execution/node-step.ts w/packages/eve/src/execution/node-step.ts
-index 0bad10795..3d4bfcd31 100644
+index e89c73a84..e344ed299 100644
 --- c/packages/eve/src/execution/node-step.ts
 +++ w/packages/eve/src/execution/node-step.ts
 @@ -13,6 +13,7 @@ import { createLogger } from "#internal/logging.js";
@@ -131,18 +131,18 @@ index 0bad10795..3d4bfcd31 100644
      historyProjector: input.historyProjector,
      historyView: input.historyView,
 diff --git c/packages/eve/src/harness/compaction/step.ts w/packages/eve/src/harness/compaction/step.ts
-index c4a547377..cb6170971 100644
+index 004b671ec..97a34d003 100644
 --- c/packages/eve/src/harness/compaction/step.ts
 +++ w/packages/eve/src/harness/compaction/step.ts
-@@ -10,6 +10,7 @@ import {
-   type ToolLoopHarnessConfig,
- } from "#harness/types.js";
- import { type HarnessModelMessage, validateHarnessModelMessages } from "#harness/messages.js";
+@@ -14,6 +14,7 @@ import {
+   isUserModelMessage,
+   validateHarnessModelMessages,
+ } from "#harness/messages.js";
 +import type { AgentCompactionStrategyInput } from "#shared/agent-definition.js";
  import type { HistoryViewProjector } from "#shared/history-view.js";
  import type { Publish } from "#harness/session-machine/commit.js";
  import type { SessionAuthContext } from "#channel/types.js";
-@@ -88,6 +89,7 @@ export async function compactHistory(step: Step): Promise<StepResult> {
+@@ -92,6 +93,7 @@ export async function compactHistory(step: Step): Promise<StepResult> {
          betweenTurns: true,
          emissionState: { ...position, turnId: activeTurnId(position) },
          force: true,
@@ -150,7 +150,7 @@ index c4a547377..cb6170971 100644
          historyProjector: config.historyProjector,
          messages: [...step.session.history],
          model: resolvedModel.model,
-@@ -142,6 +144,7 @@ export async function maybeCompact(input: {
+@@ -147,6 +149,7 @@ export async function maybeCompact(input: {
    readonly betweenTurns?: boolean;
    readonly emissionState: TurnPosition;
    readonly force?: boolean;
@@ -158,7 +158,7 @@ index c4a547377..cb6170971 100644
    readonly historyProjector?: HistoryViewProjector;
    readonly messages: HarnessModelMessage[];
    readonly model: LanguageModel;
-@@ -262,7 +265,7 @@ export async function maybeCompact(input: {
+@@ -268,7 +271,7 @@ export async function maybeCompact(input: {
    let failure: { readonly error: unknown } | undefined;
    try {
      if (needsSummary) {
@@ -167,7 +167,7 @@ index c4a547377..cb6170971 100644
          [...ordinary],
          historyCompaction,
          summarize,
-@@ -278,7 +281,18 @@ export async function maybeCompact(input: {
+@@ -284,7 +287,18 @@ export async function maybeCompact(input: {
                  getRequestEnvelopeTokens(session),
                ) - requestEnvelopeTokens,
              ),
@@ -188,10 +188,10 @@ index c4a547377..cb6170971 100644
    } catch (error) {
      failure = { error };
 diff --git c/packages/eve/src/harness/model-call/call.ts w/packages/eve/src/harness/model-call/call.ts
-index 63c4aa893..9987cb1bf 100644
+index ef4d67a62..3aceedb1c 100644
 --- c/packages/eve/src/harness/model-call/call.ts
 +++ w/packages/eve/src/harness/model-call/call.ts
-@@ -255,6 +255,7 @@ export class ModelCaller {
+@@ -267,6 +267,7 @@ export class ModelCaller {
          abortSignal: config.abortSignal,
          auth: step.ctx?.get(AuthKey) ?? null,
          emissionState: step.position(),
@@ -200,10 +200,10 @@ index 63c4aa893..9987cb1bf 100644
          messages: [...prompt.messages],
          model: this.input.model,
 diff --git c/packages/eve/src/harness/tool-loop.test.ts w/packages/eve/src/harness/tool-loop.test.ts
-index 7234ae71d..47b0a438f 100644
+index 07797de30..cfe55871a 100644
 --- c/packages/eve/src/harness/tool-loop.test.ts
 +++ w/packages/eve/src/harness/tool-loop.test.ts
-@@ -8363,6 +8363,90 @@ describe("createToolLoopHarness", () => {
+@@ -8481,6 +8481,90 @@ describe("createToolLoopHarness", () => {
      ]);
    });
  
@@ -248,7 +248,7 @@ index 7234ae71d..47b0a438f 100644
 +      headers: undefined,
 +      messages: history,
 +      model: resolvedModel,
-+      providerOptions: { openai: { store: false } },
++      providerOptions: { openai: { promptCacheKey: expect.any(String), store: false } },
 +      system: "Current instructions.",
 +      telemetry: undefined,
 +      thresholdTokens: 100_000,
@@ -295,7 +295,7 @@ index 7234ae71d..47b0a438f 100644
      const { emit, events } = createEventCollector();
      const runStep = createToolLoopHarness(
 diff --git c/packages/eve/src/harness/types.ts w/packages/eve/src/harness/types.ts
-index d55b52c23..c0da04fd6 100644
+index 73169cde7..99796b136 100644
 --- c/packages/eve/src/harness/types.ts
 +++ w/packages/eve/src/harness/types.ts
 @@ -15,7 +15,10 @@ import type { SandboxState } from "#sandbox/state.js";
@@ -310,7 +310,7 @@ index d55b52c23..c0da04fd6 100644
  import type { HarnessToolDefinition } from "#harness/execute-tool.js";
  import type { HarnessModelMessage } from "#harness/messages.js";
  import type { SessionInstrumentation } from "#instrumentation/runtime.js";
-@@ -294,6 +297,8 @@ export interface ToolLoopHarnessConfig {
+@@ -312,6 +315,8 @@ export interface ToolLoopHarnessConfig {
    readonly clearOnly?: boolean;
    /** Forces one context-compaction pass without running a model turn. */
    readonly compactOnly?: boolean;
@@ -320,11 +320,11 @@ index d55b52c23..c0da04fd6 100644
    /** Projects raw durable history before it crosses a message-bearing boundary. */
    readonly historyProjector?: HistoryViewProjector;
 diff --git c/packages/eve/src/internal/authored-definition/core.test.ts w/packages/eve/src/internal/authored-definition/core.test.ts
-index 24cd6f5ef..ad2677746 100644
+index cad09575a..06eb778b5 100644
 --- c/packages/eve/src/internal/authored-definition/core.test.ts
 +++ w/packages/eve/src/internal/authored-definition/core.test.ts
-@@ -99,6 +99,31 @@ describe("normalizeAgentDefinition", () => {
-     ).toThrow('"compaction.model" does not support defineDynamic');
+@@ -117,6 +117,31 @@ describe("normalizeAgentDefinition", () => {
+     ).toThrow('"modelOptions.promptCache.anthropic.ttl" must be "5m" or "1h"; received "24h".');
    });
  
 +  it("accepts an authored compaction strategy", () => {
@@ -356,10 +356,10 @@ index 24cd6f5ef..ad2677746 100644
      expect(() =>
        normalizeAgentDefinition(
 diff --git c/packages/eve/src/internal/authored-definition/core.ts w/packages/eve/src/internal/authored-definition/core.ts
-index 4dc81e52e..54b7e4e40 100644
+index e69cd6c70..65319efbe 100644
 --- c/packages/eve/src/internal/authored-definition/core.ts
 +++ w/packages/eve/src/internal/authored-definition/core.ts
-@@ -338,7 +338,11 @@ function normalizeAgentCompactionDefinition(
+@@ -371,7 +371,11 @@ function normalizeAgentCompactionDefinition(
    message: string,
  ): NonNullable<NormalizedAgentDefinition["compaction"]> {
    const record = expectObjectRecord(value, message);
@@ -372,7 +372,7 @@ index 4dc81e52e..54b7e4e40 100644
    const normalizedDefinition: Mutable<NonNullable<NormalizedAgentDefinition["compaction"]>> = {};
  
    if (record.model !== undefined) {
-@@ -357,6 +361,13 @@ function normalizeAgentCompactionDefinition(
+@@ -390,6 +394,13 @@ function normalizeAgentCompactionDefinition(
      );
    }
  
@@ -413,7 +413,7 @@ index 7eaefc265..fb75632a2 100644
    type AgentExperimentalDefinition,
    type AgentLimitsDefinition,
 diff --git c/packages/eve/src/runtime/agent/bootstrap.ts w/packages/eve/src/runtime/agent/bootstrap.ts
-index 47ebe2167..1e2ec035f 100644
+index dfa956548..73898eee9 100644
 --- c/packages/eve/src/runtime/agent/bootstrap.ts
 +++ w/packages/eve/src/runtime/agent/bootstrap.ts
 @@ -35,6 +35,9 @@ export type RuntimeDynamicModelReference = Readonly<
@@ -426,7 +426,7 @@ index 47ebe2167..1e2ec035f 100644
  /**
   * Minimal runtime-owned agent shape prepared for one harness turn.
   */
-@@ -49,6 +52,7 @@ interface RuntimeTurnAgentBase {
+@@ -50,6 +53,7 @@ interface RuntimeTurnAgentBase {
     * When omitted, the harness uses the active turn model for compaction.
     */
    readonly compactionModel?: RuntimeModelReference;
@@ -443,10 +443,10 @@ index 47ebe2167..1e2ec035f 100644
      reasoning: config?.reasoning,
      tools: [...input.tools],
 diff --git c/packages/eve/src/runtime/agent/resolve-model.ts w/packages/eve/src/runtime/agent/resolve-model.ts
-index 356eb0a92..458936f17 100644
+index c3b4e5afa..149b31feb 100644
 --- c/packages/eve/src/runtime/agent/resolve-model.ts
 +++ w/packages/eve/src/runtime/agent/resolve-model.ts
-@@ -10,6 +10,7 @@ import {
+@@ -13,6 +13,7 @@ import {
    isAgentReasoningDefinition,
  } from "#internal/runtime-model.js";
  import type {
@@ -454,7 +454,7 @@ index 356eb0a92..458936f17 100644
    RuntimeDynamicModelReference,
    RuntimeModelReference,
  } from "#runtime/agent/bootstrap.js";
-@@ -22,6 +23,7 @@ import { loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+@@ -25,6 +26,7 @@ import { loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
  import {
    isDynamicModelDefinition,
    type AgentModelOptionsDefinition,
@@ -462,7 +462,7 @@ index 356eb0a92..458936f17 100644
    type PublicAgentDynamicModelDefinition,
    type PublicAgentDynamicModelResult,
    type PublicAgentModelSelectionDefinition,
-@@ -146,6 +148,30 @@ export async function loadDynamicRuntimeModelDefinition(input: {
+@@ -149,6 +151,30 @@ export async function loadDynamicRuntimeModelDefinition(input: {
    return authoredModel;
  }
  
@@ -494,10 +494,10 @@ index 356eb0a92..458936f17 100644
    readonly catalog?: RuntimeModelCatalog;
    readonly durability: "durable" | "live";
 diff --git c/packages/eve/src/runtime/resolve-agent.ts w/packages/eve/src/runtime/resolve-agent.ts
-index c1697f84e..415e12cdb 100644
+index 2be44552a..4aef2a0e1 100644
 --- c/packages/eve/src/runtime/resolve-agent.ts
 +++ w/packages/eve/src/runtime/resolve-agent.ts
-@@ -201,6 +201,7 @@ function createResolvedAgentConfig(
+@@ -202,6 +202,7 @@ function createResolvedAgentConfig(
    if (manifest.config.compaction !== undefined) {
      const compaction: {
        model?: NonNullable<NonNullable<ResolvedAgent["config"]>["compaction"]>["model"];
@@ -505,7 +505,7 @@ index c1697f84e..415e12cdb 100644
        thresholdPercent?: number;
      } = {};
  
-@@ -231,6 +232,10 @@ function createResolvedAgentConfig(
+@@ -232,6 +233,10 @@ function createResolvedAgentConfig(
        compaction.thresholdPercent = manifest.config.compaction.thresholdPercent;
      }
  
@@ -517,10 +517,10 @@ index c1697f84e..415e12cdb 100644
    }
  
 diff --git c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts w/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
-index 719462180..f0097e792 100644
+index 8ca35bea5..4e5cee5d9 100644
 --- c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
 +++ w/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
-@@ -47,6 +47,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
+@@ -48,6 +48,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
    if (isDynamicModelDefinition(definition.model)) {
      throw new Error(`${message} The returned "model" must be static.`);
    }
@@ -531,7 +531,7 @@ index 719462180..f0097e792 100644
    const config: {
      compaction?: DynamicSubagentAgentConfig["compaction"];
 diff --git c/packages/eve/src/shared/agent-definition.ts w/packages/eve/src/shared/agent-definition.ts
-index f0acbc502..b361316af 100644
+index f1abfab8c..5012b5ccd 100644
 --- c/packages/eve/src/shared/agent-definition.ts
 +++ w/packages/eve/src/shared/agent-definition.ts
 @@ -1,4 +1,4 @@
@@ -540,7 +540,7 @@ index f0acbc502..b361316af 100644
  import type { JsonObject } from "#shared/json.js";
  import type { ModuleSourceRef } from "#shared/source-ref.js";
  import {
-@@ -93,6 +93,33 @@ export type PublicAgentModelDefinition =
+@@ -123,6 +123,33 @@ export type PublicAgentModelDefinition =
    | PublicAgentStaticModelDefinition
    | PublicAgentDynamicModelDefinition;
  
@@ -574,7 +574,7 @@ index f0acbc502..b361316af 100644
  export interface InternalAgentCompactionDefinition {
    /**
     * Optional model used only for generating compaction summaries.
-@@ -100,6 +127,8 @@ export interface InternalAgentCompactionDefinition {
+@@ -130,6 +157,8 @@ export interface InternalAgentCompactionDefinition {
     * When omitted, eve uses the active turn model for the summary call.
     */
    model?: InternalAgentModelDefinition;
@@ -583,7 +583,7 @@ index f0acbc502..b361316af 100644
    /**
     * Fraction of the primary model context window that triggers compaction.
     *
-@@ -129,6 +158,8 @@ export interface PublicAgentCompactionDefinition {
+@@ -159,6 +188,8 @@ export interface PublicAgentCompactionDefinition {
     * When omitted, eve uses the active turn model for the summary call.
     */
    readonly model?: PublicAgentStaticModelDefinition;

@@ -629,5 +629,5 @@ const model = mockModel(async (request) => {
 
 export default defineAgent({
   model,
-  modelContextWindowTokens: 32_000,
+  modelContextWindowTokens: 128_000,
 });

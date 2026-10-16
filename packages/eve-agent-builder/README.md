@@ -1,7 +1,7 @@
 # eve-agent-builder
 
 `eve-agent-builder` is an unreleased, experimental control plane for private,
-owner-scoped saved agents in Eve 0.75.1. PR 04 adds a durable PM → implementor →
+owner-scoped saved agents in Eve 0.80.1. PR 04 adds a durable PM → implementor →
 QA workflow, isolated test evidence, fail-closed consequential test policy,
 and explicit atomic publication on top of PR 03's declared runners,
 single-use leases, capability registry, discovery, and immutable direct runs.
@@ -31,7 +31,7 @@ transactions. `createMemoryAgentBuilderStore` from
 `eve-agent-builder/stores/memory` is for tests and local development only.
 
 `verifiedTestInputPolicy` supplies request-input availability and any
-additional response validation Eve 0.75.1 does not expose to dynamic approval
+additional response validation Eve 0.80.1 does not expose to dynamic approval
 callbacks. `ask_question` output is never accepted as authorization.
 Consequential test tools retain their host schema, credential closure, and
 approval while Builder adds an exact-call, single-use check.
@@ -68,14 +68,14 @@ SHA-256 digest is stored. Grants cannot live longer than five minutes.
 
 A fresh declared child receives only `{ protocolVersion, token }`. Its first
 step exposes only `agent_builder__bootstrap_redeem` plus Eve's non-executing
-`final_output` protocol tool when structured output was requested; atomic
+`eve__reply` protocol tool when structured output was requested; atomic
 redemption binds a ready lease to that exact child session. The real task is
 sent on a second call to the same parked child. The execution turn injects
 saved text beneath the static security policy and exposes only the selected
 registry adapters.
 Completion, failure, cancellation, or expiry closes the single-run lease.
 Each later authenticated workflow turn issues a fresh grant/child. A parked
-child is reused only inside that parent turn; Eve 0.75.1 does not refresh
+child is reused only inside that parent turn; Eve 0.80.1 does not refresh
 `auth.current` on a later persistent-child resume.
 
 ## Build workflow and publication
@@ -150,7 +150,7 @@ Explicit host helpers are under `/mounts/*` and `/runtime/*`.
 This PR proves durable build orchestration, side-effect-free isolated testing,
 fail-closed consequential policy, explicit publication, and immediate
 observation with deterministic models. It does not claim live-model obedience.
-Eve 0.75.1 has no public binding from an `ask_question` answer to a later call,
+Eve 0.80.1 has no public binding from an `ask_question` answer to a later call,
 and its local Workflow/eval runtime did not settle the tested nested approval
 continuation. Unavailable consequential test capabilities are blocked and
 recorded; reusable conformance proves exact grant consumption and
@@ -160,7 +160,7 @@ Saved-skill materialization remains PR 05. External
 invocation envelopes, schedules/events, provisioning, production audit, and
 release readiness remain later work.
 
-The package targets `eve@0.75.1`, Node.js 24 or newer, strict TypeScript, Zod
+The package targets `eve@0.80.1`, Node.js 24 or newer, strict TypeScript, Zod
 validation, injected clocks/IDs, and typed result errors. See
 [RFC 0001](https://github.com/ewhauser/eve-extensions/blob/main/docs/rfcs/0001-eve-agent-builder.md)
 for the full boundary.

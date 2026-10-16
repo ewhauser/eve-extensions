@@ -81,7 +81,7 @@ function eveSlackAdapter(input: {
   };
 }
 
-describe("Eve 0.75.1 Slack lifecycle", () => {
+describe("Eve 0.80.1 Slack lifecycle", () => {
   it("posts and updates todo progress using channel metadata captured outside hooks", async () => {
     const calls: SlackProgressApiInput[] = [];
     const api = vi.fn(async (input: SlackProgressApiInput) => {
