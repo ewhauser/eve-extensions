@@ -1,18 +1,6 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 
-const snapshots = new URL("../.eve/dev-runtime/snapshots/", import.meta.url);
-const candidates = readdirSync(snapshots, { recursive: true })
-  .filter((entry) =>
-    String(entry).endsWith("/.eve/compile/compiled-agent-manifest.json"),
-  )
-  .map((entry) => join(snapshots.pathname, String(entry)))
-  .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs);
-
-const manifestPath = candidates[0];
-if (manifestPath === undefined) {
-  throw new Error("Eve eval did not produce a compiled agent manifest");
-}
+const manifestPath = new URL("../.output/.eve/compile/compiled-agent-manifest.json", import.meta.url);
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const failures = [];
 const requiredDisabled = [
@@ -80,4 +68,4 @@ for (const name of expectedChildren) {
 if (failures.length > 0) {
   throw new Error(`Built host isolation verification failed:\n- ${failures.join("\n- ")}`);
 }
-console.log(`Verified Eve 0.80.1 compiled isolation for ${expectedChildren.join(", ")}.`);
+console.log(`Verified Eve 0.83.0 compiled isolation for ${expectedChildren.join(", ")}.`);

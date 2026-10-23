@@ -1,8 +1,8 @@
 diff --git c/packages/eve/src/compiler/manifest.ts w/packages/eve/src/compiler/manifest.ts
-index 5b75bfecd..ff18b2534 100644
+index 47fb442..30f2464 100644
 --- c/packages/eve/src/compiler/manifest.ts
 +++ w/packages/eve/src/compiler/manifest.ts
-@@ -611,6 +611,7 @@ const compiledAgentWorkflowDefinitionSchema = z
+@@ -612,6 +612,7 @@ const compiledAgentWorkflowDefinitionSchema = z
  const compiledAgentCompactionDefinitionSchema: z.ZodType<CompiledAgentCompactionDefinition> = z
    .object({
      model: compiledRuntimeModelReferenceSchema.optional(),
@@ -10,7 +10,7 @@ index 5b75bfecd..ff18b2534 100644
      thresholdPercent: z.number().finite().min(0).max(1).optional(),
    })
    .strict();
-@@ -1232,6 +1233,8 @@ function cloneCompiledAgentDefinition(config: CompiledAgentDefinition): Compiled
+@@ -1229,6 +1230,8 @@ function cloneCompiledAgentDefinition(config: CompiledAgentDefinition): Compiled
          config.compaction?.model === undefined
            ? undefined
            : cloneCompiledRuntimeModelReference(config.compaction.model),
@@ -20,7 +20,7 @@ index 5b75bfecd..ff18b2534 100644
      },
      defaultTools: config.defaultTools,
 diff --git c/packages/eve/src/compiler/normalize-agent-config.ts w/packages/eve/src/compiler/normalize-agent-config.ts
-index 931cedb2b..b615e1c8b 100644
+index f33f49c..1b71a87 100644
 --- c/packages/eve/src/compiler/normalize-agent-config.ts
 +++ w/packages/eve/src/compiler/normalize-agent-config.ts
 @@ -78,6 +78,7 @@ export async function compileAgentConfig(
@@ -39,7 +39,7 @@ index 931cedb2b..b615e1c8b 100644
        thresholdPercent?: number;
      };
      defaultTools?: boolean;
-@@ -163,6 +165,18 @@ export async function compileAgentConfig(
+@@ -162,6 +164,18 @@ export async function compileAgentConfig(
      });
    }
  
@@ -59,10 +59,10 @@ index 931cedb2b..b615e1c8b 100644
      compaction.thresholdPercent = definition.compaction.thresholdPercent;
    }
 diff --git c/packages/eve/src/compiler/normalize-manifest.test.ts w/packages/eve/src/compiler/normalize-manifest.test.ts
-index 8607c67ce..9e2c09f1a 100644
+index a14d0e6..013f92b 100644
 --- c/packages/eve/src/compiler/normalize-manifest.test.ts
 +++ w/packages/eve/src/compiler/normalize-manifest.test.ts
-@@ -367,6 +367,31 @@ describe("compileAgentManifest source graph", () => {
+@@ -368,6 +368,31 @@ describe("compileAgentManifest source graph", () => {
      },
    );
  
@@ -95,7 +95,7 @@ index 8607c67ce..9e2c09f1a 100644
      const order: string[] = [];
      const sourceRegistry = registry([
 diff --git c/packages/eve/src/execution/node-step.ts w/packages/eve/src/execution/node-step.ts
-index e89c73a84..e344ed299 100644
+index fd91bc8..82baaae 100644
 --- c/packages/eve/src/execution/node-step.ts
 +++ w/packages/eve/src/execution/node-step.ts
 @@ -13,6 +13,7 @@ import { createLogger } from "#internal/logging.js";
@@ -106,7 +106,7 @@ index e89c73a84..e344ed299 100644
    resolveRuntimeModelReference,
    type RuntimeModelResolutionScope,
  } from "#runtime/agent/resolve-model.js";
-@@ -99,12 +100,23 @@ export function createExecutionNodeStep(input: CreateExecutionNodeStepInput): St
+@@ -100,12 +101,23 @@ export function createExecutionNodeStep(input: CreateExecutionNodeStepInput): St
    const tools = createNodeHarnessTools({ node: input.node });
    const instrumentation = input.instrumentation;
    const sessionInstrumentation = instrumentation?.prepareExecution();
@@ -131,7 +131,7 @@ index e89c73a84..e344ed299 100644
      historyProjector: input.historyProjector,
      historyView: input.historyView,
 diff --git c/packages/eve/src/harness/compaction/step.ts w/packages/eve/src/harness/compaction/step.ts
-index 004b671ec..97a34d003 100644
+index 004b671..97a34d0 100644
 --- c/packages/eve/src/harness/compaction/step.ts
 +++ w/packages/eve/src/harness/compaction/step.ts
 @@ -14,6 +14,7 @@ import {
@@ -188,7 +188,7 @@ index 004b671ec..97a34d003 100644
    } catch (error) {
      failure = { error };
 diff --git c/packages/eve/src/harness/model-call/call.ts w/packages/eve/src/harness/model-call/call.ts
-index ef4d67a62..3aceedb1c 100644
+index dfc1934..a3e41d9 100644
 --- c/packages/eve/src/harness/model-call/call.ts
 +++ w/packages/eve/src/harness/model-call/call.ts
 @@ -267,6 +267,7 @@ export class ModelCaller {
@@ -200,10 +200,10 @@ index ef4d67a62..3aceedb1c 100644
          messages: [...prompt.messages],
          model: this.input.model,
 diff --git c/packages/eve/src/harness/tool-loop.test.ts w/packages/eve/src/harness/tool-loop.test.ts
-index 07797de30..cfe55871a 100644
+index 1108e6d..42131ff 100644
 --- c/packages/eve/src/harness/tool-loop.test.ts
 +++ w/packages/eve/src/harness/tool-loop.test.ts
-@@ -8481,6 +8481,90 @@ describe("createToolLoopHarness", () => {
+@@ -8579,6 +8579,90 @@ describe("createToolLoopHarness", () => {
      ]);
    });
  
@@ -295,22 +295,19 @@ index 07797de30..cfe55871a 100644
      const { emit, events } = createEventCollector();
      const runStep = createToolLoopHarness(
 diff --git c/packages/eve/src/harness/types.ts w/packages/eve/src/harness/types.ts
-index 73169cde7..99796b136 100644
+index 0268436..a380327 100644
 --- c/packages/eve/src/harness/types.ts
 +++ w/packages/eve/src/harness/types.ts
-@@ -15,7 +15,10 @@ import type { SandboxState } from "#sandbox/state.js";
+@@ -15,7 +15,7 @@ import type { SandboxState } from "#sandbox/state.js";
  import type { JsonObject } from "#shared/json.js";
  import type { TokenUsage } from "#shared/token-usage.js";
  import type { InternalToolDefinition } from "#tools/definition.js";
--import type { AgentReasoningDefinition } from "#shared/agent-definition.js";
-+import type {
-+  AgentCompactionStrategy,
-+  AgentReasoningDefinition,
-+} from "#shared/agent-definition.js";
+-import type { AgentReasoningDefinition, SessionUsageLimit } from "#shared/agent-definition.js";
++import type { AgentCompactionStrategy, AgentReasoningDefinition, SessionUsageLimit } from "#shared/agent-definition.js";
  import type { HarnessToolDefinition } from "#harness/execute-tool.js";
  import type { HarnessModelMessage } from "#harness/messages.js";
  import type { SessionInstrumentation } from "#instrumentation/runtime.js";
-@@ -312,6 +315,8 @@ export interface ToolLoopHarnessConfig {
+@@ -294,6 +294,8 @@ export interface ToolLoopHarnessConfig {
    readonly clearOnly?: boolean;
    /** Forces one context-compaction pass without running a model turn. */
    readonly compactOnly?: boolean;
@@ -320,7 +317,7 @@ index 73169cde7..99796b136 100644
    /** Projects raw durable history before it crosses a message-bearing boundary. */
    readonly historyProjector?: HistoryViewProjector;
 diff --git c/packages/eve/src/internal/authored-definition/core.test.ts w/packages/eve/src/internal/authored-definition/core.test.ts
-index cad09575a..06eb778b5 100644
+index 139bb5c..818861e 100644
 --- c/packages/eve/src/internal/authored-definition/core.test.ts
 +++ w/packages/eve/src/internal/authored-definition/core.test.ts
 @@ -117,6 +117,31 @@ describe("normalizeAgentDefinition", () => {
@@ -356,10 +353,10 @@ index cad09575a..06eb778b5 100644
      expect(() =>
        normalizeAgentDefinition(
 diff --git c/packages/eve/src/internal/authored-definition/core.ts w/packages/eve/src/internal/authored-definition/core.ts
-index e69cd6c70..65319efbe 100644
+index 8182d3a..f663ea5 100644
 --- c/packages/eve/src/internal/authored-definition/core.ts
 +++ w/packages/eve/src/internal/authored-definition/core.ts
-@@ -371,7 +371,11 @@ function normalizeAgentCompactionDefinition(
+@@ -341,7 +341,11 @@ function normalizeAgentCompactionDefinition(
    message: string,
  ): NonNullable<NormalizedAgentDefinition["compaction"]> {
    const record = expectObjectRecord(value, message);
@@ -372,7 +369,7 @@ index e69cd6c70..65319efbe 100644
    const normalizedDefinition: Mutable<NonNullable<NormalizedAgentDefinition["compaction"]>> = {};
  
    if (record.model !== undefined) {
-@@ -390,6 +394,13 @@ function normalizeAgentCompactionDefinition(
+@@ -360,6 +364,13 @@ function normalizeAgentCompactionDefinition(
      );
    }
  
@@ -387,7 +384,7 @@ index e69cd6c70..65319efbe 100644
      const thresholdPercent = record.thresholdPercent;
  
 diff --git c/packages/eve/src/public/definitions/agent.ts w/packages/eve/src/public/definitions/agent.ts
-index ecc1a2427..a6cb8fbfb 100644
+index fcb0d0d..1d67da4 100644
 --- c/packages/eve/src/public/definitions/agent.ts
 +++ w/packages/eve/src/public/definitions/agent.ts
 @@ -16,6 +16,8 @@ export type {
@@ -400,7 +397,7 @@ index ecc1a2427..a6cb8fbfb 100644
    PublicAgentDynamicModelResult as AgentDynamicModelResult,
    AgentExperimentalDefinition,
 diff --git c/packages/eve/src/public/index.ts w/packages/eve/src/public/index.ts
-index 7eaefc265..fb75632a2 100644
+index 78387ef..69ab2ae 100644
 --- c/packages/eve/src/public/index.ts
 +++ w/packages/eve/src/public/index.ts
 @@ -4,6 +4,8 @@
@@ -413,7 +410,7 @@ index 7eaefc265..fb75632a2 100644
    type AgentExperimentalDefinition,
    type AgentLimitsDefinition,
 diff --git c/packages/eve/src/runtime/agent/bootstrap.ts w/packages/eve/src/runtime/agent/bootstrap.ts
-index dfa956548..73898eee9 100644
+index dfa9565..73898ee 100644
 --- c/packages/eve/src/runtime/agent/bootstrap.ts
 +++ w/packages/eve/src/runtime/agent/bootstrap.ts
 @@ -35,6 +35,9 @@ export type RuntimeDynamicModelReference = Readonly<
@@ -443,7 +440,7 @@ index dfa956548..73898eee9 100644
      reasoning: config?.reasoning,
      tools: [...input.tools],
 diff --git c/packages/eve/src/runtime/agent/resolve-model.ts w/packages/eve/src/runtime/agent/resolve-model.ts
-index c3b4e5afa..149b31feb 100644
+index 25c9884..1c5b754 100644
 --- c/packages/eve/src/runtime/agent/resolve-model.ts
 +++ w/packages/eve/src/runtime/agent/resolve-model.ts
 @@ -13,6 +13,7 @@ import {
@@ -462,7 +459,7 @@ index c3b4e5afa..149b31feb 100644
    type PublicAgentDynamicModelDefinition,
    type PublicAgentDynamicModelResult,
    type PublicAgentModelSelectionDefinition,
-@@ -149,6 +151,30 @@ export async function loadDynamicRuntimeModelDefinition(input: {
+@@ -160,6 +162,30 @@ export async function loadDynamicRuntimeModelDefinition(input: {
    return authoredModel;
  }
  
@@ -494,10 +491,10 @@ index c3b4e5afa..149b31feb 100644
    readonly catalog?: RuntimeModelCatalog;
    readonly durability: "durable" | "live";
 diff --git c/packages/eve/src/runtime/resolve-agent.ts w/packages/eve/src/runtime/resolve-agent.ts
-index 2be44552a..4aef2a0e1 100644
+index ba46474..0215a4d 100644
 --- c/packages/eve/src/runtime/resolve-agent.ts
 +++ w/packages/eve/src/runtime/resolve-agent.ts
-@@ -202,6 +202,7 @@ function createResolvedAgentConfig(
+@@ -231,6 +231,7 @@ function createResolvedAgentConfig(
    if (manifest.config.compaction !== undefined) {
      const compaction: {
        model?: NonNullable<NonNullable<ResolvedAgent["config"]>["compaction"]>["model"];
@@ -505,7 +502,7 @@ index 2be44552a..4aef2a0e1 100644
        thresholdPercent?: number;
      } = {};
  
-@@ -232,6 +233,10 @@ function createResolvedAgentConfig(
+@@ -262,6 +263,10 @@ function createResolvedAgentConfig(
        compaction.thresholdPercent = manifest.config.compaction.thresholdPercent;
      }
  
@@ -517,21 +514,21 @@ index 2be44552a..4aef2a0e1 100644
    }
  
 diff --git c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts w/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
-index 8ca35bea5..4e5cee5d9 100644
+index c4226b0..551dc3c 100644
 --- c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
 +++ w/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
-@@ -48,6 +48,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
+@@ -49,6 +49,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
    if (isDynamicModelDefinition(definition.model)) {
      throw new Error(`${message} The returned "model" must be static.`);
    }
 +  if (definition.compaction?.strategy !== undefined) {
 +    throw new Error(`${message} A custom compaction strategy cannot be selected at runtime.`);
 +  }
- 
-   const config: {
-     compaction?: DynamicSubagentAgentConfig["compaction"];
+   if (definition.limits?.sessionUsage !== undefined) {
+     throw new Error(
+       `${message} The "limits.sessionUsage" field cannot be selected at runtime; the root agent's \`sessionUsage\` applies.`,
 diff --git c/packages/eve/src/shared/agent-definition.ts w/packages/eve/src/shared/agent-definition.ts
-index f1abfab8c..5012b5ccd 100644
+index 22b45ad..9b1e8eb 100644
 --- c/packages/eve/src/shared/agent-definition.ts
 +++ w/packages/eve/src/shared/agent-definition.ts
 @@ -1,4 +1,4 @@
@@ -539,8 +536,8 @@ index f1abfab8c..5012b5ccd 100644
 +import type { CallSettings, generateText, LanguageModel, ModelMessage, TelemetryOptions } from "ai";
  import type { JsonObject } from "#shared/json.js";
  import type { ModuleSourceRef } from "#shared/source-ref.js";
- import {
-@@ -123,6 +123,33 @@ export type PublicAgentModelDefinition =
+ import type { TokenUsage } from "#shared/token-usage.js";
+@@ -126,6 +126,33 @@ export type PublicAgentModelDefinition =
    | PublicAgentStaticModelDefinition
    | PublicAgentDynamicModelDefinition;
  
@@ -574,7 +571,7 @@ index f1abfab8c..5012b5ccd 100644
  export interface InternalAgentCompactionDefinition {
    /**
     * Optional model used only for generating compaction summaries.
-@@ -130,6 +157,8 @@ export interface InternalAgentCompactionDefinition {
+@@ -133,6 +160,8 @@ export interface InternalAgentCompactionDefinition {
     * When omitted, eve uses the active turn model for the summary call.
     */
    model?: InternalAgentModelDefinition;
@@ -583,7 +580,7 @@ index f1abfab8c..5012b5ccd 100644
    /**
     * Fraction of the primary model context window that triggers compaction.
     *
-@@ -159,6 +188,8 @@ export interface PublicAgentCompactionDefinition {
+@@ -162,6 +191,8 @@ export interface PublicAgentCompactionDefinition {
     * When omitted, eve uses the active turn model for the summary call.
     */
    readonly model?: PublicAgentStaticModelDefinition;

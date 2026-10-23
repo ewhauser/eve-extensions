@@ -225,6 +225,15 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
           ),
         });
       },
+      async writeFiles(input) {
+        for (const file of input.files) {
+          await session.writeBinaryFile({
+            ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+            content: file.content,
+            path: file.path,
+          });
+        }
+      },
       async removePath(input) {
         live();
         input.abortSignal?.throwIfAborted();
