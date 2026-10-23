@@ -88,6 +88,16 @@ export function createAwsLambdaMicrovmSession(input: {
         options.abortSignal,
       );
     },
+    async writeFiles(options) {
+      await beforeMutation();
+      for (const file of options.files) {
+        await input.controller.writeFile(
+          resolvePath(file.path),
+          file.content,
+          options.abortSignal,
+        );
+      }
+    },
     async removePath(options) {
       await beforeMutation();
       await input.controller.removePath({
@@ -155,6 +165,10 @@ export function createLoggingSandboxSession(input: {
     async writeTextFile(options) {
       log?.(`bootstrap write text file: ${options.path} (${options.content.length} chars)`);
       return await session.writeTextFile(options);
+    },
+    async writeFiles(options) {
+      log?.(`bootstrap write files: ${options.files.length}`);
+      return await session.writeFiles(options);
     },
     async removePath(options) {
       log?.(`bootstrap remove path: ${options.path}`);

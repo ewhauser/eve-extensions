@@ -1,8 +1,8 @@
 # eve-progress
 
-This version targets Eve `0.80.1`.
+This version targets Eve `0.83.0`.
 
-Release validation covers Eve 0.80.1 session and turn hooks and the Slack progress adapter.
+Release validation covers Eve 0.83.0 session and turn hooks and the Slack progress adapter.
 
 `eve-progress` projects Eve's durable built-in `todo` state into a
 transport-neutral `AgentProgressSnapshot`. Its first transport adapter renders
@@ -15,12 +15,12 @@ it does not know about Slack message IDs, blocks, or transport retries.
 ## Install
 
 ```sh
-pnpm add eve@0.80.1 eve-progress
+pnpm add eve@0.83.0 eve-progress
 ```
 
-This package requires Eve 0.80.1. At each session and turn boundary, the extension
+This package requires Eve 0.83.0. At each session and turn boundary, the extension
 captures Eve's public dynamic-resolver channel metadata into session state before
-hook dispatch. This supports Eve 0.80.1's intentionally smaller hook context
+hook dispatch. This supports Eve 0.83.0's intentionally smaller hook context
 without an application patch.
 
 Create `agent/extensions/progress.ts`:
