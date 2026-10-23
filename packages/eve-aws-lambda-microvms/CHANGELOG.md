@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.9.4...eve-aws-lambda-microvms-v0.9.5) (2026-10-23)
+
+
+### Bug Fixes
+
+* upgrade compatibility to Eve 0.83.0 ([#144](https://github.com/ewhauser/eve-extensions/issues/144)) ([a701bb5](https://github.com/ewhauser/eve-extensions/commit/a701bb537b7ba91223b8254d9efbd9a30e18e68a))
+
 ## [0.9.4](https://github.com/ewhauser/eve-extensions/compare/eve-aws-lambda-microvms-v0.9.3...eve-aws-lambda-microvms-v0.9.4) (2026-10-16)
 
 
