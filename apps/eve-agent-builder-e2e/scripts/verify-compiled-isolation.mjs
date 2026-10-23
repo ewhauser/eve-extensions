@@ -1,18 +1,6 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 
-const builds = new URL("../.eve/builds/", import.meta.url);
-const candidates = readdirSync(builds, { recursive: true })
-  .filter((entry) =>
-    String(entry).endsWith("/compiler/.eve/compile/compiled-agent-manifest.json"),
-  )
-  .map((entry) => join(builds.pathname, String(entry)))
-  .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs);
-
-const manifestPath = candidates[0];
-if (manifestPath === undefined) {
-  throw new Error("Eve eval did not produce a compiled agent manifest");
-}
+const manifestPath = new URL("../.output/.eve/compile/compiled-agent-manifest.json", import.meta.url);
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const failures = [];
 const requiredDisabled = [

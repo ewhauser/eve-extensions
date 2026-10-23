@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/run-eve-build.mjs",
-    "eval": "node scripts/run-evals.mjs && node scripts/verify-compiled-isolation.mjs",
+    "eval": "node scripts/run-evals.mjs && node scripts/run-eve-build.mjs && node scripts/verify-compiled-isolation.mjs",
     "fixture:prepare": "pnpm --filter eve-agent-builder build",
     "test": "pnpm run eval",
     "test:e2e": "pnpm run eval",
