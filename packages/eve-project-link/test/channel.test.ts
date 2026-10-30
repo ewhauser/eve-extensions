@@ -1,4 +1,4 @@
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,7 +9,7 @@ import {
 function context(
   kind: string | undefined,
   metadata: Readonly<Record<string, unknown>> | undefined,
-): DynamicResolveContext {
+): DynamicContext {
   return {
     session: { id: "session", auth: {} },
     channel: {
@@ -17,13 +17,13 @@ function context(
       ...(metadata === undefined ? {} : { metadata }),
     },
     messages: [],
-  } as unknown as DynamicResolveContext;
+  } as unknown as DynamicContext;
 }
 
 describe("defaultProjectChannelResolver", () => {
   it("uses Slack team and channel metadata while ignoring thread identity", () => {
     const result = defaultProjectChannelResolver(
-      context("slack", {
+      context("channel:slack", {
         teamId: "T123",
         channelId: "C456",
         threadTs: "1710000000.001",

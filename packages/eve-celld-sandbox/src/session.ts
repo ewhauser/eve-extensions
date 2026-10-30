@@ -87,7 +87,7 @@ export function buildSession(
     async writeFiles(options) {
       for (const file of options.files) {
         await session.writeBinaryFile({
-          ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
+          ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
           content: file.content,
           path: file.path,
         });

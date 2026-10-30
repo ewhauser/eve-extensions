@@ -1,4 +1,5 @@
-import type { DynamicResolveContext } from "eve/tools";
+import { dynamicEvaluate } from "../node_modules/eve/dist/src/dynamic/definition.js";
+import type { DynamicContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 
 import type { ProjectBinding } from "../extension/lib/types.js";
@@ -25,11 +26,11 @@ const resolveContext = {
     auth: { current: null, initiator: null },
   },
   channel: {
-    kind: "slack",
+    kind: "channel:slack",
     metadata: { teamId: "T1", channelId: "C1" },
   },
   messages: [],
-} as unknown as DynamicResolveContext;
+} as unknown as DynamicContext;
 
 describe("configured extension runtime", () => {
   it("mounts dynamic tools and instructions from the installed config", async () => {
@@ -72,10 +73,7 @@ describe("configured extension runtime", () => {
       ]),
     );
 
-    const tools = await projectLinkTools.events["step.started"]?.(
-      {} as never,
-      resolveContext,
-    );
+    const tools = await dynamicEvaluate(projectLinkTools)(resolveContext);
     expect(tools).toMatchObject({
       link: expect.any(Object),
       status: expect.any(Object),
@@ -83,12 +81,9 @@ describe("configured extension runtime", () => {
       complete: expect.any(Object),
     });
 
-    const instructions = await projectContext.events["turn.started"]?.(
-      {} as never,
-      resolveContext,
-    );
+    const instructions = await dynamicEvaluate(projectContext)(resolveContext);
     expect(instructions).toMatchObject({
-      markdown: expect.stringContaining("# Pending project link"),
+      content: expect.stringContaining("# Pending project link"),
     });
 
     const active: ProjectBinding = {
@@ -114,17 +109,14 @@ describe("configured extension runtime", () => {
     };
     expect(await store.replace(active, 0)).toBe(true);
 
-    const activeInstructions = await projectContext.events["turn.started"]?.(
-      {} as never,
-      resolveContext,
-    );
+    const activeInstructions = await dynamicEvaluate(projectContext)(resolveContext);
     expect(activeInstructions).toMatchObject({
-      markdown: expect.stringContaining("# Linked project"),
+      content: expect.stringContaining("# Linked project"),
     });
-    expect(activeInstructions?.markdown).toContain(
+    expect(activeInstructions?.content).toContain(
       "Canonical resource: https://notion.so/atlas",
     );
-    expect(activeInstructions?.markdown).not.toContain("# Pending project link");
+    expect(activeInstructions?.content).not.toContain("# Pending project link");
 
     expect(
       await store.replace(
@@ -132,14 +124,11 @@ describe("configured extension runtime", () => {
         1,
       ),
     ).toBe(true);
-    const detailedInstructions = await projectContext.events["turn.started"]?.(
-      {} as never,
-      resolveContext,
-    );
-    expect(detailedInstructions?.markdown).toContain("# Linked project context");
-    expect(detailedInstructions?.markdown).toContain(
+    const detailedInstructions = await dynamicEvaluate(projectContext)(resolveContext);
+    expect(detailedInstructions?.content).toContain("# Linked project context");
+    expect(detailedInstructions?.content).toContain(
       "Summary: Detailed cached summary.",
     );
-    expect(detailedInstructions?.markdown).toContain("Principals:\n- Ada — DRI");
+    expect(detailedInstructions?.content).toContain("Principals:\n- Ada — DRI");
   });
 });

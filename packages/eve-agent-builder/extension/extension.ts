@@ -119,7 +119,7 @@ export type AgentBuilderExtensionConfig = z.output<typeof config>;
 
 // Pin the package namespace so helpers loaded from separately compiled host
 // mount modules observe the same configured object graph.
-const extension = defineExtension({ config }, "eve-agent-builder");
+const extension = defineExtension({ config });
 
 export function getAgentBuilderConfig(): AgentBuilderExtensionConfig {
   return extension.config;

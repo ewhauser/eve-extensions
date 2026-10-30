@@ -1,5 +1,5 @@
 import type { HookContext, HookEvent } from "eve/hooks";
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 
 import { getEveProgressConfig } from "../extension.js";
 import {
@@ -12,6 +12,7 @@ import {
 import {
   progressProjectionState,
   progressPublicationChannelState,
+  progressTodoCallsState,
 } from "./state.js";
 import type {
   AgentProgressSnapshot,
@@ -59,7 +60,7 @@ export function publicationContext(ctx: HookContext): ProgressPublicationContext
 }
 
 /** Capture metadata from Eve's resolver context before hook dispatch drops it. */
-export function capturePublicationChannel(ctx: DynamicResolveContext): void {
+export function capturePublicationChannel(ctx: DynamicContext): void {
   progressPublicationChannelState.update(() => ({
     ...(ctx.channel.kind === undefined ? {} : { kind: ctx.channel.kind }),
     ...(ctx.channel.continuationToken === undefined
@@ -132,19 +133,20 @@ export async function handleLifecycle(
   await applyAndPublish(projectLifecycle(progressProjectionState.get(), lifecycle), context);
 }
 
+export function handleCallRequested(event: HookEvent<"call.requested">): void {
+  if (event.data.capability.kind !== "tool" || event.data.capability.name !== "todo") return;
+  progressTodoCallsState.update((calls) => ({ ...calls, [event.data.callId]: true }));
+}
+
 export async function handleActionResult(
-  event: HookEvent<"action.result">,
+  event: HookEvent<"call.settled">,
   ctx: HookContext,
 ): Promise<void> {
-  const result = event.data.result;
-  if (
-    event.data.status !== "completed" ||
-    result.kind !== "tool-result" ||
-    result.toolName !== "todo"
-  ) {
-    return;
-  }
-  const output = parseTodoOutput(result.output);
+  const calls = progressTodoCallsState.get();
+  if (calls[event.data.callId] !== true) return;
+  progressTodoCallsState.update(({ [event.data.callId]: _settled, ...rest }) => rest);
+  if (event.data.outcome !== "completed") return;
+  const output = parseTodoOutput(event.data.output);
   const context = publicationContext(ctx);
   if (output === null) {
     await reportFailure({
@@ -159,10 +161,10 @@ export async function handleActionResult(
   await applyAndPublish(
     projectTodoSnapshot(progressProjectionState.get(), {
       sessionId: ctx.session.id,
-      eventId: event.meta.id,
-      sequence: event.data.sequence,
-      stepIndex: event.data.stepIndex,
-      turnId: event.data.turnId,
+      eventId: `${ctx.position.line}:${ctx.position.index}`,
+      sequence: ctx.position.line,
+      stepIndex: ctx.position.index,
+      turnId: event.scope?.turnId ?? ctx.session.turn.id,
       todos: output.todos,
     }),
     context,

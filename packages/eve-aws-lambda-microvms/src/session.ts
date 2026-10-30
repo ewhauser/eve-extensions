@@ -27,7 +27,7 @@ export function createAwsLambdaMicrovmSession(input: {
   async function spawn(options: Parameters<SandboxSession["spawn"]>[0]) {
     await beforeMutation();
     return await input.controller.spawn({
-      ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
+      ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
       command: options.command,
       ...(options.env === undefined ? {} : { env: options.env }),
       workingDirectory: resolvePath(options.workingDirectory ?? WORKSPACE_ROOT),
@@ -49,17 +49,17 @@ export function createAwsLambdaMicrovmSession(input: {
     spawn,
     async readFile(options) {
       await input.beforeOperation?.();
-      return await input.controller.readFile(resolvePath(options.path), options.abortSignal);
+      return await input.controller.readFile(resolvePath(options.path), options.signal);
     },
     async readBinaryFile(options) {
       await input.beforeOperation?.();
-      const stream = await input.controller.readFile(resolvePath(options.path), options.abortSignal);
+      const stream = await input.controller.readFile(resolvePath(options.path), options.signal);
       return stream === null ? null : await streamToBuffer(stream);
     },
     async readTextFile(options) {
       validateReadTextFileOptions(options);
       await input.beforeOperation?.();
-      const stream = await input.controller.readFile(resolvePath(options.path), options.abortSignal);
+      const stream = await input.controller.readFile(resolvePath(options.path), options.signal);
       if (stream === null) return null;
       const text = decodeBytes(await streamToBuffer(stream), options.encoding ?? "utf-8");
       return applyLineRange(text, options);
@@ -69,7 +69,7 @@ export function createAwsLambdaMicrovmSession(input: {
       await input.controller.writeFile(
         resolvePath(options.path),
         await streamToBuffer(options.content),
-        options.abortSignal,
+        options.signal,
       );
     },
     async writeBinaryFile(options) {
@@ -77,7 +77,7 @@ export function createAwsLambdaMicrovmSession(input: {
       await input.controller.writeFile(
         resolvePath(options.path),
         options.content,
-        options.abortSignal,
+        options.signal,
       );
     },
     async writeTextFile(options) {
@@ -85,7 +85,7 @@ export function createAwsLambdaMicrovmSession(input: {
       await input.controller.writeFile(
         resolvePath(options.path),
         encodeString(options.content, options.encoding ?? "utf-8"),
-        options.abortSignal,
+        options.signal,
       );
     },
     async writeFiles(options) {
@@ -94,14 +94,14 @@ export function createAwsLambdaMicrovmSession(input: {
         await input.controller.writeFile(
           resolvePath(file.path),
           file.content,
-          options.abortSignal,
+          options.signal,
         );
       }
     },
     async removePath(options) {
       await beforeMutation();
       await input.controller.removePath({
-        ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
+        ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
         ...(options.force === undefined ? {} : { force: options.force }),
         path: resolvePath(options.path),
         ...(options.recursive === undefined ? {} : { recursive: options.recursive }),

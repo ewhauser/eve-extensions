@@ -1,4 +1,4 @@
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 
 import type { ProjectChannel } from "./types.js";
 
@@ -12,9 +12,10 @@ function nonEmptyString(value: unknown): string | null {
  * `workspaceId` + `channelId` pair or provide a custom resolver.
  */
 export function defaultProjectChannelResolver(
-  ctx: DynamicResolveContext,
+  ctx: DynamicContext,
 ): ProjectChannel | null {
-  const kind = nonEmptyString(ctx.channel.kind);
+  const rawKind = nonEmptyString(ctx.channel.kind);
+  const kind = rawKind?.startsWith("channel:") ? rawKind.slice("channel:".length) : rawKind;
   const metadata = ctx.channel.metadata;
   if (!kind || !metadata) return null;
 

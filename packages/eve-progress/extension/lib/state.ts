@@ -28,6 +28,12 @@ export const progressPublicationChannelState = defineState<ProgressPublicationCh
   initialProgressPublicationChannel,
 );
 
+/** The current session's todo calls, retained across hook replay and process handoff. */
+export const progressTodoCallsState = defineState<Readonly<Record<string, true>>>(
+  "todo-calls",
+  () => ({}),
+);
+
 export interface SlackProgressSessionState {
   readonly binding: ProgressRootBinding | null;
   readonly surface: ProgressSurface | null;

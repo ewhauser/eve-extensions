@@ -3,53 +3,42 @@ import { defineEval } from "eve/evals";
 export default defineEval({
   description: "A published saved agent runs through one real parked active-runner child.",
   async test(t) {
-    const session = await t.session();
-    const parent = await session.start("Run the active saved Weather witness agent now.");
-    const bootstrapCalled = await parent.waitForEvent("agent.started", {
-      data: { name: "active-runner" },
-    });
-    const childId = bootstrapCalled.data.sessionId;
-    const bootstrapLive = t.target.watchTurn(childId);
-    const bootstrap = await bootstrapLive.result();
+    const result = await t.send("Run the active saved Weather witness agent now.");
+    result.expectOk();
+    const opened = result.events.find(
+      (event) => event.type === "child.opened" && event.data.name === "active-runner",
+    );
+    if (opened?.type !== "child.opened") throw new Error("ACTIVE_RUNNER_CHILD_MISSING");
+    const child = t.target.attach(opened.data.sessionId);
+    const bootstrap = await child.nextTurn();
     bootstrap.event("turn.started", { count: 1 });
     bootstrap.calledTool("agent_builder__bootstrap_redeem", { count: 1 });
-    bootstrap.event("session.waiting", { count: 1 });
+    bootstrap.event("turn.settled", { count: 1 });
 
-    await parent.waitForEvent("task.started", {
-      data: { name: "blocking-active-runner", callId: "active-execution" },
-    });
-    const executionLive = t.target.watchTurn(childId, {
-      startIndex: bootstrap.events.length,
-    });
-    const execution = await executionLive.result();
+    const execution = await child.nextTurn();
     execution.event("turn.started", { count: 1 });
     execution.calledTool("fixture_read", { count: 1 });
-    execution.event("turn.completed", { count: 1 });
-    execution.event("session.waiting", { count: 1 });
+    execution.event("turn.settled", { count: 1 });
 
-    await parent.waitForEvent("task.started", {
-      data: { name: "blocking-active-runner", callId: "reject-third-active-turn" },
-    });
-    const result = await parent.result();
-    result.expectOk();
-    t.calledTool("agent_builder__prepare_active_run", { count: 1 });
-    t.event("agent.started", { data: { name: "active-runner" }, count: 1 });
-    t.calledTool("blocking-active-runner", { count: 3 });
-    t.eventsSatisfy("one active-runner child serves both turns", (events) =>
-      events.filter((event) => event.type === "agent.started" && event.data.name === "active-runner").length === 1,
+    result.calledTool("agent_builder__prepare_active_run", { count: 1 });
+    result.event("child.opened", { data: { name: "active-runner" }, count: 1 });
+    result.calledTool("blocking-active-runner", { status: "completed", count: 2 });
+    result.calledTool("blocking-active-runner", { status: "failed", count: 1 });
+    result.eventsSatisfy("one active-runner child serves both turns", (events) =>
+      events.filter((event) => event.type === "child.opened" && event.data.name === "active-runner").length === 1,
     );
-    t.messageIncludes("DIRECT_EXECUTION_OK");
-    t.messageIncludes("clear");
-    t.messageIncludes("LEASE_CLOSED_PROVED");
-    t.eventsSatisfy("third continuation fails closed with the package lease code", (events) =>
+    result.messageIncludes("DIRECT_EXECUTION_OK");
+    result.messageIncludes("clear");
+    result.messageIncludes("LEASE_CLOSED_PROVED");
+    result.eventsSatisfy("third continuation fails closed with the package lease code", (events) =>
       events.some(
         (event) =>
-          event.type === "task.settled" &&
+          event.type === "call.settled" &&
           event.data.callId === "reject-third-active-turn" &&
-          event.data.status === "failed" &&
+          event.data.outcome === "failed" &&
           JSON.stringify(event.data).includes("LEASE_CLOSED"),
       ),
     );
-    t.succeeded();
+    result.succeeded();
   },
 });

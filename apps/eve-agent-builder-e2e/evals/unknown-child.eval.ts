@@ -6,7 +6,7 @@ export default defineEval({
     const result = await t.send("UNKNOWN_CHILD_CASE");
     result.expectOk();
     // Eve rejects an unknown task ID before opening a child session.
-    t.calledTool("blocking-active-runner", { status: "failed", count: 1 });
+    t.calledTool("blocking-active-runner", { status: "rejected", output: { code: "UNKNOWN_TASK" }, count: 1 });
     t.messageIncludes("UNKNOWN_CHILD_BLOCKED_PRE_MODEL");
     t.succeeded();
   },

@@ -1,16 +1,16 @@
 # eve-openai-connectors
 
-This version targets Eve `0.83.0`.
+This version targets Eve `0.90.0`.
 
-Release validation covers projected tool names, approval metadata, and descriptor checks on Eve 0.83.0.
+Release validation covers projected tool names, approval metadata, and descriptor checks on Eve 0.90.0.
 
 An Eve extension that contributes the current user's authorized ChatGPT connectors as one dynamic MCP connection.
 
 The OpenAI connector endpoint used here is undocumented and experimental. Pin and test upgrades; do not treat it as a stable public API.
 
-## Eve 0.83.0 patch
+## Eve 0.90.0 patch
 
-This version carries provider-neutral Eve 0.83.0 patches:
+This version carries provider-neutral Eve 0.90.0 patches:
 
 - reversible MCP tool-name projection, with Eve retaining the exact upstream name for filtering and execution;
 - MCP annotations and exact upstream identity on connection approval callbacks;
@@ -21,16 +21,16 @@ The old provider-native search/private-marker patch is gone. Discovery always us
 
 ```sh
 mkdir -p patches
-cp node_modules/eve-openai-connectors/patches/eve@0.83.0.patch patches/eve@0.83.0.patch
+cp node_modules/eve-openai-connectors/patches/eve@0.90.0.patch patches/eve@0.90.0.patch
 ```
 
 ```yaml
 # pnpm-workspace.yaml
 patchedDependencies:
-  eve@0.83.0: patches/eve@0.83.0.patch
+  eve@0.90.0: patches/eve@0.90.0.patch
 ```
 
-Keep Eve pinned to `0.83.0` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
+Keep Eve pinned to `0.90.0` until both primitives are released upstream. Annotation context is tracked by [vercel/eve#1890](https://github.com/vercel/eve/issues/1890).
 
 ## Mount
 

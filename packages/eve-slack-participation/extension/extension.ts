@@ -54,13 +54,8 @@ export const slackParticipationConfigSchema = z.union([
 
 export type ConfiguredSlackParticipation = z.output<typeof slackParticipationConfigSchema>;
 
-// Distribution entry points can be evaluated in separate authored-module
-// graphs. Pin the namespace so every handle resolves through Eve's shared,
-// scoped configuration registry.
-const extension = defineExtension(
-  { config: slackParticipationConfigSchema },
-  "eve-slack-participation",
-);
+// Eve derives the extension namespace from the mounted package name.
+const extension = defineExtension({ config: slackParticipationConfigSchema });
 
 export function getSlackParticipationConfig(): SlackParticipationConfig {
   return extension.config;

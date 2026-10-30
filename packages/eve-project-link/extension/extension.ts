@@ -1,5 +1,5 @@
 import { defineExtension } from "eve/extension";
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 import { z } from "zod";
 
 import type {
@@ -86,7 +86,7 @@ export type ProjectLinkConfig = z.output<typeof config>;
 // Distribution entry points can be evaluated in separate authored-module
 // graphs. Pin the same namespace Eve derives from this package name so every
 // handle resolves through Eve's shared, scoped configuration registry.
-const extension = defineExtension({ config }, "eve-project-link");
+const extension = defineExtension({ config });
 
 /**
  * Read the installed configuration even when Eve loads an extension-owned
@@ -96,7 +96,7 @@ export function getProjectLinkConfig(): ProjectLinkConfig {
   return extension.config;
 }
 
-export type ProjectLinkExtensionContext = DynamicResolveContext;
+export type ProjectLinkExtensionContext = DynamicContext;
 export type ResolvedProjectChannel = ProjectChannel;
 
 export default extension;

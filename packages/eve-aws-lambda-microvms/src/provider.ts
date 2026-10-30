@@ -18,10 +18,10 @@ function connection(
 ): SandboxConnection<Extensions> {
   return {
     workspaceRoot: session.resolvePath("."),
-    spawn: (options) => session.spawn(options),
-    readFile: (options) => session.readFile(options),
-    writeFiles: (options) => session.writeFiles(options),
-    removePath: (options) => session.removePath(options),
+    spawn: async (options) => await session.spawn(options),
+    readFile: async (options) => await session.readFile(options),
+    writeFiles: async (options) => await session.writeFiles(options),
+    removePath: async (options) => await session.removePath(options),
     stop: async () => { await lifecycle?.stop(); },
     close: async () => { await lifecycle?.shutdown(); },
     extensions: { setNetworkPolicy: (policy) => session.setNetworkPolicy(policy) },
@@ -84,7 +84,7 @@ export const AwsLambdaMicrovmSandbox = defineSandboxProvider<
           templateKey: state.templateKey,
           runtimeContext: { appRoot: context.resolveProjectPath(".") },
         });
-        await handle.delete({ abortSignal: endOptions.abortSignal });
+        await handle.delete({ abortSignal: endOptions.signal });
       },
     };
   },

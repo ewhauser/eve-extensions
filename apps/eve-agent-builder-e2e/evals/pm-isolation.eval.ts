@@ -5,10 +5,10 @@ export default defineEval({
   async test(t) {
     const result = await t.send("ROLE_ISOLATION:pm");
     result.expectOk();
-    t.event("agent.started", { data: { name: "pm" }, count: 1 });
+    t.event("child.opened", { data: { name: "pm" }, count: 1 });
     t.calledTool("blocking-pm", { count: 2 });
     t.messageIncludes("ROLE_ISOLATION_OK pm");
-    t.noFailedActions();
+    t.noFailedCalls();
     t.succeeded();
   },
 });

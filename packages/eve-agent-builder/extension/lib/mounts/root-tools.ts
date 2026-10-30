@@ -87,15 +87,13 @@ async function currentOwner(
   return resolved.owner;
 }
 
-export default defineDynamic({
-  events: {
-    "step.started": async (_event, dynamicCtx) => {
+export default defineDynamic(async (dynamicCtx) => {
       const runtime = getAgentBuilderRuntime();
       const dynamicOwner = await resolveDynamicOwner(runtime, dynamicCtx);
       const channel = ownerChannelFromContext(dynamicCtx.channel);
       const usesVerifiedPublishApproval =
         runtime.config.verifiedPublishApprovalPolicy !== undefined;
-      const publishUserInput = latestUserMessage(dynamicCtx.messages);
+      const publishUserInput = latestUserMessage(await dynamicCtx.messages());
 
       return {
         agent_builder__workflow_allocate: defineTool({
@@ -429,6 +427,4 @@ export default defineDynamic({
           },
         }),
       };
-    },
-  },
 });

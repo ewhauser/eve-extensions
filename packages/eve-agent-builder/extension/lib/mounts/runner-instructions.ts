@@ -19,20 +19,16 @@ export function createAgentBuilderRunnerInstructions(input: {
   readonly role: ExecutionRole;
   readonly mode: RunnerCapabilityMode;
 }) {
-  return defineDynamic({
-    events: {
-      "turn.started": async (event, ctx) => {
-        const prepared = await inspectRunnerTurn({ ...input, event, ctx, begin: false });
+  return defineDynamic(async (ctx) => {
+        const prepared = await inspectRunnerTurn({ ...input, ctx, begin: false });
         if (!prepared.ok) return null;
         return defineInstructions({
-          markdown: renderSaved(
+          content: renderSaved(
             input.role,
             prepared.value.saved.instructions,
             prepared.value.capabilities.optionalOmissionNote,
           ),
         });
-      },
-    },
   });
 }
 

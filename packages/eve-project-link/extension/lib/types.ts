@@ -1,4 +1,4 @@
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 
 export interface ProjectChannel {
   /** Eve channel kind, for example `slack`. */
@@ -209,7 +209,7 @@ export interface ProjectLinkStore {
 }
 
 export type ProjectChannelResolver = (
-  ctx: DynamicResolveContext,
+  ctx: DynamicContext,
 ) => ProjectChannel | null | Promise<ProjectChannel | null>;
 
 export interface ProjectLinkApprovals {

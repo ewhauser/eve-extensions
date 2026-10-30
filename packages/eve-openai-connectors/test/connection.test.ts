@@ -1,16 +1,17 @@
-import type { DynamicResolveContext } from "eve";
+import type { DynamicContext } from "eve";
 import type {
   McpClientConnectionDefinition,
 } from "eve/connections";
 import { describe, expect, test, vi } from "vitest";
 
-import connectors, {
+import {
+  createOpenAIConnectorConnection,
   connectorToolFilter,
   DEFAULT_BASE_URL,
 } from "../extension/connections/connectors.js";
 import extension from "../extension/extension.js";
 
-function resolveContext(): DynamicResolveContext {
+function resolveContext(): DynamicContext {
   const current = {
     attributes: {},
     authenticator: "test",
@@ -23,12 +24,11 @@ function resolveContext(): DynamicResolveContext {
     messages: [],
     model: null,
     session: { auth: { current, initiator: current }, id: "session-1" },
-  };
+  } as unknown as DynamicContext;
 }
 
 async function resolveConnection(): Promise<McpClientConnectionDefinition | null> {
-  const handler = connectors.events["session.started"]!;
-  const result = await handler({}, resolveContext());
+  const result = createOpenAIConnectorConnection(extension.config, resolveContext());
   if (result === null) return null;
   if (typeof (result as Partial<McpClientConnectionDefinition>).url === "string") {
     return result as McpClientConnectionDefinition;

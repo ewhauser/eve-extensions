@@ -32,7 +32,7 @@ export type EveProgressConfig = z.output<typeof config>;
 
 // Distribution entry points can be evaluated in separate authored-module
 // graphs. Pin the namespace so every handle resolves the same configuration.
-const extension = defineExtension({ config }, "eve-progress");
+const extension = defineExtension({ config });
 
 export function getEveProgressConfig(): EveProgressConfig {
   return extension.config;

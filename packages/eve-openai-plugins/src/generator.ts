@@ -30,7 +30,7 @@ function serializeBytes(bytes: Uint8Array): string {
 function definitionBody(skill: NormalizedSkill): string {
   const fields = [
     `description: ${JSON.stringify(skill.description)}`,
-    `markdown: ${JSON.stringify(skill.markdown)}`,
+    `content: ${JSON.stringify(skill.markdown)}`,
   ];
   if (skill.license) fields.push(`license: ${JSON.stringify(skill.license)}`);
   if (skill.metadata) fields.push(`metadata: ${JSON.stringify(skill.metadata)}`);
@@ -48,14 +48,10 @@ import { isOpenAIPluginEnabled } from "../lib/openai-plugin-access.js";
 
 const skill = defineSkill(${definitionBody(skill)});
 
-export default defineDynamic({
-  events: {
-    "turn.started": async (_event, ctx) =>
+export default defineDynamic(async (ctx) =>
       (await isOpenAIPluginEnabled(ctx, ${JSON.stringify({ pluginId, kind: "skill", id: capabilityId })}))
         ? skill
-        : null,
-  },
-});
+        : null);
 `;
 }
 
@@ -111,14 +107,10 @@ const agent = defineAgent({
   model: ${JSON.stringify(model)},
 });
 
-export default defineDynamic({
-  events: {
-    "turn.started": async (_event, ctx) =>
+export default defineDynamic(async (ctx) =>
       (await isOpenAIPluginEnabled(ctx, ${JSON.stringify({ pluginId, kind: "subagent", id: agent.id })}))
         ? agent
-        : null,
-  },
-});
+        : null);
 `;
 }
 
@@ -133,7 +125,7 @@ export default defineMcpClientConnection({
 }
 
 export function accessPolicySource(): string {
-  return `import type { DynamicResolveContext } from "eve/tools";
+  return `import type { DynamicContext } from "eve";
 
 /** A plugin capability being resolved for the active Eve principal. */
 export interface OpenAIPluginCapability {
@@ -150,7 +142,7 @@ export interface OpenAIPluginCapability {
  * and ctx.channel before serving an untrusted or restricted plugin.
  */
 export function isOpenAIPluginEnabled(
-  _ctx: DynamicResolveContext,
+  _ctx: DynamicContext,
   _capability: OpenAIPluginCapability,
 ): boolean | Promise<boolean> {
   return true;
@@ -164,7 +156,7 @@ export function isOpenAIPluginEnabled(
  * connector tools in imported children.
  */
 export function getOpenAIPluginConnectorToken(
-  _ctx: Pick<DynamicResolveContext, "session">,
+  _ctx: Pick<DynamicContext, "session">,
 ): string | null | Promise<string | null> {
   return null;
 }
@@ -221,15 +213,11 @@ export function generatePlugin(plugin: NormalizedPlugin, options: GenerateOption
 import { createOpenAIConnectorConnection } from "eve-openai-connectors/connection";
 import { getOpenAIPluginConnectorToken } from "../../../lib/openai-plugin-access.js";
 
-export default defineDynamic({
-  events: {
-    "session.started": (_event, ctx) => createOpenAIConnectorConnection({
+export default defineDynamic((ctx) => createOpenAIConnectorConnection({
       getToken: getOpenAIPluginConnectorToken,
       allowedServices: ${JSON.stringify(plugin.apps.map((app) => app.name))},
       enabled: true,
-    }, ctx),
-  },
-});
+    }, ctx));
 `,
       );
     }

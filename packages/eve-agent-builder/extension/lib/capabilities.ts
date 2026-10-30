@@ -496,7 +496,7 @@ export function lowerResolvedCapabilities(
     hostApproval: Approval<unknown> | undefined,
   ) => Approval<unknown> | undefined,
 ): DynamicToolSet {
-  const lowered: Record<string, DynamicToolEntry<any, any>> = {};
+  const lowered: Record<string, DynamicToolEntry> = {};
   for (const capability of capabilities) {
     validateModelToolName(
       capability.modelToolName,
@@ -536,7 +536,7 @@ export function lowerResolvedCapabilities(
           throw error;
         }
       },
-    } as ToolDefinition<any, any>) as DynamicToolEntry<any, any>;
+    } as ToolDefinition<any, any>) as DynamicToolEntry;
   }
   return Object.freeze(lowered);
 }

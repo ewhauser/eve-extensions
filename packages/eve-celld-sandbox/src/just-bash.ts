@@ -83,7 +83,7 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
     const gen = opened.generation;
     async function spawn(input: SandboxSpawnOptions): Promise<SandboxProcess> {
       live();
-      input.abortSignal?.throwIfAborted();
+      input.signal?.throwIfAborted();
       const command = client.command({
         command: input.command,
         cwd:
@@ -110,10 +110,10 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
       const onAbort = () => {
         void cancel().catch(() => {});
       };
-      input.abortSignal?.addEventListener("abort", onAbort, { once: true });
-      if (input.abortSignal?.aborted) onAbort();
+      input.signal?.addEventListener("abort", onAbort, { once: true });
+      if (input.signal?.aborted) onAbort();
       void execution
-        .finally(() => input.abortSignal?.removeEventListener("abort", onAbort))
+        .finally(() => input.signal?.removeEventListener("abort", onAbort))
         .catch(() => {});
       // Buffered, one chunk after the remote commit; no claim of live streaming.
       function output(which: "stdout" | "stderr") {
@@ -136,8 +136,8 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
         stderr: output("stderr"),
         async wait() {
           const r = await execution;
-          if (input.abortSignal?.aborted && r.state !== "completed")
-            throw input.abortSignal.reason;
+          if (input.signal?.aborted && r.state !== "completed")
+            throw input.signal.reason;
           terminal(r);
           return { exitCode: r.exitCode };
         },
@@ -165,11 +165,11 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
       },
       async readBinaryFile(input) {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         const data = await client.request(
           ref,
           { op: "read", generation: gen, path: resolvePath(input.path) },
-          input.abortSignal,
+          input.signal,
         );
         return data === null ? null : unbase64(data);
       },
@@ -192,7 +192,7 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
       },
       async writeBinaryFile(input) {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         if (input.content.byteLength > LIMITS.fileBytes)
           throw new ProtocolError("LIMIT", "Per-file byte limit exceeded", 413);
         await track(
@@ -204,13 +204,13 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
               path: resolvePath(input.path),
               data: base64(input.content),
             },
-            input.abortSignal,
+            input.signal,
           ),
         );
       },
       async writeFile(input) {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         await session.writeBinaryFile({
           ...input,
           content: await readBounded(input.content, LIMITS.fileBytes),
@@ -228,7 +228,7 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
       async writeFiles(input) {
         for (const file of input.files) {
           await session.writeBinaryFile({
-            ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+            ...(input.signal === undefined ? {} : { abortSignal: input.signal }),
             content: file.content,
             path: file.path,
           });
@@ -236,7 +236,7 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
       },
       async removePath(input) {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         await track(
           client.request(
             ref,
@@ -247,7 +247,7 @@ export function celldJustBash(options: CelldOptions): SandboxBackend {
               force: input.force ?? false,
               recursive: input.recursive ?? false,
             },
-            input.abortSignal,
+            input.signal,
           ),
         );
       },

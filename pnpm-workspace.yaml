@@ -8,10 +8,10 @@ catalog:
   "@types/node": ^26.1.2
   "@typescript/typescript6": ^6.0.2
   ai: ^7.0.137
-  eve: 0.83.0
+  eve: 0.90.0
   typescript: ^7.0.2
   vitest: ^4.1.11
-  zod: ^4.4.3
+  zod: ^4.6.6
 
 allowBuilds:
   # Optional just-bash native codecs are not used by the portable Worker bundle.
@@ -25,14 +25,13 @@ allowBuilds:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - eve@0.83.0
+  - eve@0.90.0
 
 overrides:
   # Fix the high-severity advisories reported by the CI audit.
-  undici: 7.29.1
-  "eve>undici": 8.10.2
+  "undici@^7.0.0": 7.30.1
   source-map-js: 1.2.2
   vite: 7.3.7
 
 patchedDependencies:
-  eve@0.83.0: patches/eve@0.83.0.patch
+  eve@0.90.0: patches/eve@0.90.0.patch

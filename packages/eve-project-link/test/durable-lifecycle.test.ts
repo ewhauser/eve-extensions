@@ -1,12 +1,5 @@
-import { clearDurableDynamicCallbacks } from "../node_modules/eve/dist/src/tools/durable-callbacks.js";
-import { replayDynamicTools } from "../node_modules/eve/dist/src/context/build-dynamic-tools.js";
-import {
-  ContextContainer,
-  contextStorage,
-} from "../node_modules/eve/dist/src/context/container.js";
-import { validateDurableDynamicToolCallbacks } from "../node_modules/eve/dist/src/context/dynamic-tool-lifecycle.js";
-import { SessionKey } from "../node_modules/eve/dist/src/context/keys.js";
-import type { DynamicResolveContext, DynamicToolEntry } from "eve/tools";
+import { dynamicEvaluate } from "../node_modules/eve/dist/src/dynamic/definition.js";
+import type { DynamicContext } from "eve/tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectBinding } from "../extension/lib/types.js";
@@ -15,7 +8,6 @@ import { preset } from "../extension/presets/preset.js";
 import { createMemoryProjectLinkStore } from "../extension/stores/memory.js";
 
 const channel = { kind: "slack", workspaceId: "T1", channelId: "C1" } as const;
-
 const pending: ProjectBinding = {
   id: "00000000-0000-4000-8000-000000000001",
   channel,
@@ -26,198 +18,78 @@ const pending: ProjectBinding = {
   updatedAt: "2026-08-11T12:00:00.000Z",
   revision: 0,
 };
-
 const resolveContext = {
-  session: {
-    id: "session",
-    auth: { current: null, initiator: null },
-  },
-  channel: {
-    kind: "slack",
-    metadata: { teamId: "T1", channelId: "C1" },
-  },
-  messages: [],
-  model: null,
-} satisfies DynamicResolveContext;
+  session: { id: "session", auth: { current: null, initiator: null } },
+  channel: { kind: "channel:slack", metadata: { teamId: "T1", channelId: "C1" } },
+} as unknown as DynamicContext;
 
-function durableMetadata(
-  tools: Record<string, DynamicToolEntry>,
-  names: readonly string[],
-) {
-  return names.map((entryKey) => {
-    const tool = tools[entryKey]!;
-    return {
-      callbacks: validateDurableDynamicToolCallbacks(
-        `project_link__${entryKey}`,
-        tool,
-        { sessionId: resolveContext.session.id, scope: "step", resolverSlug: "project-link", entryKey, name: `project_link__${entryKey}` },
-      ),
-      description: tool.description,
-      entryKey,
-      inputSchema: { type: "object", additionalProperties: true },
-      name: `project_link__${entryKey}`,
-      resolverSlug: "project-link",
-    };
+type ExecutableTool = {
+  readonly description: string;
+  readonly approval?: unknown;
+  readonly inputSchema: { safeParse(value: unknown): { success: boolean; data?: unknown } };
+  execute(input: unknown, ctx: unknown): Promise<unknown>;
+};
+
+async function loadTools(store: ReturnType<typeof createMemoryProjectLinkStore>) {
+  const [{ default: projectLink }, { default: projectLinkTools }] = await Promise.all([
+    import("../extension/extension.js"),
+    import("../extension/tools/project-link.js"),
+  ]);
+  projectLink({
+    store,
+    presets: [preset(notionProjectHub, { id: "context-hub" })],
+    approvals: { link: true, saveContext: true, unlink: true },
   });
+  return await dynamicEvaluate(projectLinkTools)(resolveContext) as unknown as Record<string, ExecutableTool>;
 }
 
-afterEach(() => {
-  clearDurableDynamicCallbacks(resolveContext.session.id);
-  vi.resetModules();
-});
+afterEach(() => vi.resetModules());
 
 describe("durable project-link tools", () => {
-  it("serializes, rebinds, and replays every mounted callback on Eve 0.83.0", async () => {
-    const [{ default: projectLink }, { default: projectLinkTools }] =
-      await Promise.all([
-        import("../extension/extension.js"),
-        import("../extension/tools/project-link.js"),
-      ]);
+  it("re-evaluates mounted callbacks after module reload and preserves the channel lifecycle", async () => {
     const store = createMemoryProjectLinkStore([pending]);
-    projectLink({
-      store,
-      presets: [preset(notionProjectHub, { id: "context-hub" })],
-      approvals: { link: true, saveContext: true, unlink: true },
+    const pendingTools = await loadTools(store);
+    const pendingNames = ["link", "status", "guide", "unlink", "complete"];
+    expect(Object.keys(pendingTools).sort()).toEqual([...pendingNames].sort());
+    expect(pendingTools.link?.approval).toBeDefined();
+    expect(pendingTools.unlink?.approval).toBeDefined();
+    const checkpoint = JSON.parse(JSON.stringify(Object.entries(pendingTools).map(([name, tool]) => ({
+      name,
+      description: tool.description,
+    }))));
+
+    vi.resetModules();
+    const resumedPending = await loadTools(store);
+    expect(Object.entries(resumedPending).map(([name, tool]) => ({ name, description: tool.description }))).toEqual(checkpoint);
+    await expect(resumedPending.link?.execute({}, {})).resolves.toMatchObject({
+      created: false, bindingId: pending.id, status: "pending",
     });
+    await expect(resumedPending.status?.execute({}, {})).resolves.toMatchObject({
+      linked: true, bindingId: pending.id, status: "pending",
+    });
+    await expect(resumedPending.guide?.execute({}, {})).resolves.toMatchObject({
+      status: "pending", plan: { bindingId: pending.id },
+    });
+    await expect(resumedPending.complete?.execute({
+      bindingId: pending.id,
+      resource: { id: "notion-page", url: "https://notion.so/atlas", title: "Atlas" },
+    }, {})).resolves.toMatchObject({ completed: true, status: "active" });
 
-    const container = new ContextContainer();
-    await contextStorage.run(container, async () => {
-      container.set(SessionKey, {
-        sessionId: resolveContext.session.id,
-        auth: resolveContext.session.auth,
-        turn: { id: "durable-turn", sequence: 0 },
-      });
-      const pendingTools = (await projectLinkTools.events["step.started"]?.(
-        {} as never,
-        resolveContext,
-      )) as Record<string, DynamicToolEntry>;
-      const pendingNames = ["link", "status", "guide", "unlink", "complete"];
-      expect(Object.keys(pendingTools).sort()).toEqual([...pendingNames].sort());
-
-      const pendingCheckpoint = JSON.parse(
-        JSON.stringify(durableMetadata(pendingTools, pendingNames)),
-      );
-      for (const metadata of pendingCheckpoint) {
-        expect(metadata.callbacks.execute.closure).toEqual({ channel });
-      }
-      expect(pendingCheckpoint[0].callbacks.approvalRequest.closure).toEqual({
-        channel,
-      });
-      expect(pendingCheckpoint[3].callbacks.approvalRequest.closure).toEqual({
-        channel,
-      });
-
-      clearDurableDynamicCallbacks(resolveContext.session.id);
-      const reboundPending = (await projectLinkTools.events["step.started"]?.(
-        {} as never,
-        resolveContext,
-      )) as Record<string, DynamicToolEntry>;
-      durableMetadata(reboundPending, pendingNames);
-
-      const replayedPending = Object.fromEntries(
-        replayDynamicTools(pendingCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
-          tool.name.replace("project_link__", ""),
-          tool,
-        ]),
-      );
-      await expect(
-        replayedPending.link!.execute!({}, {} as never),
-      ).resolves.toMatchObject({
-        created: false,
-        bindingId: pending.id,
-        status: "pending",
-      });
-      await expect(
-        replayedPending.status!.execute!({}, {} as never),
-      ).resolves.toMatchObject({
-        linked: true,
-        bindingId: pending.id,
-        status: "pending",
-      });
-      await expect(
-        replayedPending.guide!.execute!({}, {} as never),
-      ).resolves.toMatchObject({
-        status: "pending",
-        plan: { bindingId: pending.id },
-      });
-      await expect(
-        replayedPending.complete!.execute!(
-          {
-            bindingId: pending.id,
-            resource: {
-              id: "notion-page",
-              url: "https://notion.so/atlas",
-              title: "Atlas",
-            },
-          },
-          {} as never,
-        ),
-      ).resolves.toMatchObject({ completed: true, status: "active" });
-
-      const activeTools = (await projectLinkTools.events["step.started"]?.(
-        {} as never,
-        resolveContext,
-      )) as Record<string, DynamicToolEntry>;
-      const activeNames = ["link", "status", "guide", "unlink", "save_context"];
-      expect(Object.keys(activeTools).sort()).toEqual([...activeNames].sort());
-      const activeCheckpoint = JSON.parse(
-        JSON.stringify(durableMetadata(activeTools, activeNames)),
-      );
-      const savedContext = activeCheckpoint.find(
-        (metadata: { entryKey: string }) => metadata.entryKey === "save_context",
-      );
-      expect(savedContext.callbacks).toEqual({
-        approvalRequest: { closure: { channel } },
-        execute: { closure: { channel } },
-        inputSchema: { closure: {} },
-      });
-
-      clearDurableDynamicCallbacks(resolveContext.session.id);
-      const reboundActive = (await projectLinkTools.events["step.started"]?.(
-        {} as never,
-        resolveContext,
-      )) as Record<string, DynamicToolEntry>;
-      durableMetadata(reboundActive, activeNames);
-
-      const replayedActive = Object.fromEntries(
-        replayDynamicTools(activeCheckpoint as never, { sessionId: resolveContext.session.id, scope: "step" }).map((tool) => [
-          tool.name.replace("project_link__", ""),
-          tool,
-        ]),
-      );
-      const schema = replayedActive.save_context!.inputSchema;
-      if (schema === undefined || !("~standard" in schema)) {
-        throw new Error("Replayed context tool lost its schema validator.");
-      }
-      const validated = await schema["~standard"].validate({ summary: "  After restart.  " });
-      expect(validated).toMatchObject({ value: {
-        summary: "After restart.", principals: [], decisions: [], milestones: [],
-        upcomingMeetings: [], sources: [], openQuestions: [], nextSteps: [],
-      } });
-      const invalid = await schema["~standard"].validate({ summary: " " });
-      expect(invalid.issues?.length).toBeGreaterThan(0);
-
-      await expect(
-        replayedActive.save_context!.execute!(
-          {
-            summary: "Curated after restart.",
-            principals: [],
-            decisions: [],
-            milestones: [],
-            upcomingMeetings: [],
-            sources: [],
-            openQuestions: [],
-            nextSteps: [],
-          },
-          {} as never,
-        ),
-      ).resolves.toMatchObject({ saved: true, revision: 2 });
-      await expect(
-        replayedActive.unlink!.execute!({}, {} as never),
-      ).resolves.toEqual({
-        unlinked: true,
-        retainedResourceUrl: "https://notion.so/atlas",
-      });
+    vi.resetModules();
+    const activeTools = await loadTools(store);
+    expect(Object.keys(activeTools).sort()).toEqual(["link", "status", "guide", "unlink", "save_context"].sort());
+    expect(activeTools.save_context?.approval).toBeDefined();
+    const schema = activeTools.save_context?.inputSchema;
+    expect(schema?.safeParse({ summary: "  After restart.  " })).toMatchObject({
+      success: true,
+      data: { summary: "After restart.", principals: [], decisions: [], milestones: [], upcomingMeetings: [], sources: [], openQuestions: [], nextSteps: [] },
+    });
+    expect(schema?.safeParse({ summary: " " }).success).toBe(false);
+    await expect(activeTools.save_context?.execute({
+      summary: "Curated after restart.", principals: [], decisions: [], milestones: [], upcomingMeetings: [], sources: [], openQuestions: [], nextSteps: [],
+    }, {})).resolves.toMatchObject({ saved: true, revision: 2 });
+    await expect(activeTools.unlink?.execute({}, {})).resolves.toEqual({
+      unlinked: true, retainedResourceUrl: "https://notion.so/atlas",
     });
   });
 });

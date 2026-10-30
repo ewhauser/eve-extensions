@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { celldJustBash, CelldClient, ProtocolError } from "eve-celld-sandbox";
+import { Client } from "eve/client";
 import {
   LIMITS,
   VERSION,
@@ -424,7 +425,7 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
       const controller = new AbortController();
       const aborted = await h.session.spawn({
         command: "sleep 3",
-        abortSignal: controller.signal,
+        signal: controller.signal,
       });
       const rejected = rejects(aborted.wait(), { name: "AbortError" });
       controller.abort();
@@ -799,40 +800,22 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
         });
       }
       t.after(stopEve);
-      async function invoke(args: string[], stdin?: string): Promise<string> {
-        return new Promise((resolveResult, reject) => {
-          const child = execFile(
-            process.execPath,
-            [bin, "remote", "invoke", "--url", url, ...args],
-            {
-              cwd: process.cwd(),
-              env,
-              timeout: 60_000,
-              maxBuffer: 2 * 1024 * 1024,
-            },
-            (error, stdout, stderr) =>
-              error
-                ? reject(new Error(stderr, { cause: error }))
-                : resolveResult(stdout),
-          );
-          child.stdin?.end(stdin);
-        });
-      }
       await startEve(false);
-      const first = await invoke(["calculate and save"]);
-      const before = JSON.parse(first);
-      assert.equal(before.outcome.status, "completed");
-      const firstOutput = JSON.parse(before.outcome.message).stdout;
+      const remote = new Client({ baseUrl: url });
+      const { delivery, session } = await remote.sessions.create({ message: "calculate and save" });
+      const before = await delivery.result();
+      assert.equal(before.status, "completed");
+      assert.ok(before.reply);
+      const firstOutput = JSON.parse(before.reply).stdout as string;
       assert.match(firstOutput, /template-ready\n5\n/);
       await stopEve();
       await server.stop();
       await server.start();
       await startEve(true);
-      const second = JSON.parse(
-        await invoke(["--resume", "read saved"], first),
-      );
-      assert.equal(second.outcome.status, "completed");
-      const secondOutput = JSON.parse(second.outcome.message).stdout;
+      const second = await (await session.send("read saved")).result();
+      assert.equal(second.status, "completed");
+      assert.ok(second.reply);
+      const secondOutput = JSON.parse(second.reply).stdout as string;
       const firstLines = firstOutput.trim().split("\n");
       const secondLines = secondOutput.trim().split("\n");
       assert.equal(secondLines[0], firstLines[0]); // same remote cell after restart
@@ -844,10 +827,7 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
       // the result.txt file created by the first command.
       assert.equal(secondFs.inodes, firstFs.inodes + 1);
       assert.equal(secondFs.bytesUsed, firstFs.bytesUsed + 2);
-      assert.equal(
-        second.resume.session.sessionId,
-        before.resume.session.sessionId,
-      );
+      assert.equal(second.sessionId, before.sessionId);
     },
   );
 });
