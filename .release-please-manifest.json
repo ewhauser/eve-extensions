@@ -1,11 +1,11 @@
 {
-  "packages/eve-project-link": "0.5.6",
-  "packages/eve-progress": "0.3.8",
-  "packages/eve-slack-participation": "0.1.5",
-  "packages/eve-aws-lambda-microvms": "0.9.5",
-  "packages/eve-openai-compaction": "0.2.5",
-  "packages/eve-openai-connectors": "0.7.5",
-  "packages/eve-openai-plugins": "0.3.6",
-  "packages/eve-openai-imagegen": "0.2.5",
-  "packages/eve-celld-sandbox": "0.2.4"
+  "packages/eve-project-link": "0.5.7",
+  "packages/eve-progress": "0.3.9",
+  "packages/eve-slack-participation": "0.1.6",
+  "packages/eve-aws-lambda-microvms": "0.9.6",
+  "packages/eve-openai-compaction": "0.2.6",
+  "packages/eve-openai-connectors": "0.7.6",
+  "packages/eve-openai-plugins": "0.3.7",
+  "packages/eve-openai-imagegen": "0.2.6",
+  "packages/eve-celld-sandbox": "0.2.5"
 }

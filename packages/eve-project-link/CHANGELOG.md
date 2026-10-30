@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.7](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.5.6...eve-project-link-v0.5.7) (2026-10-30)
+
+
+### Bug Fixes
+
+* support Eve 0.90.0 across extensions ([09a8060](https://github.com/ewhauser/eve-extensions/commit/09a8060d5c08ed055c1d431f3d3661e7862778b0))
+
 ## [0.5.6](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.5.5...eve-project-link-v0.5.6) (2026-10-23)
 
 

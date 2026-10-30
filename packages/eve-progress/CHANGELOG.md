@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.9](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.8...eve-progress-v0.3.9) (2026-10-30)
+
+
+### Bug Fixes
+
+* support Eve 0.90.0 across extensions ([09a8060](https://github.com/ewhauser/eve-extensions/commit/09a8060d5c08ed055c1d431f3d3661e7862778b0))
+
 ## [0.3.8](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.7...eve-progress-v0.3.8) (2026-10-23)
 
 
