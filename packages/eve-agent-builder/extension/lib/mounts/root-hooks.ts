@@ -27,20 +27,18 @@ async function close(
 
 export default defineHook({
   events: {
-    "message.received": async (event, ctx) => {
-      rememberUserInput(ctx.session.id, event.data.turnId, event.data.message);
+    "delivery.consumed": async (event, ctx) => {
+      const message = event.data.parts.flatMap((part) => part.kind === "text" ? [part.text] : []).join("\n");
+      rememberUserInput(ctx.session.id, event.data.turnId, message);
     },
-    "turn.completed": async (_event, ctx) => {
-      forgetUserInput(ctx.session.id, ctx.session.turn.id);
-      await close("cancelled", "PARENT_TURN_COMPLETED_WITHOUT_EXECUTION", ctx);
-    },
-    "turn.failed": async (_event, ctx) => {
-      forgetUserInput(ctx.session.id, ctx.session.turn.id);
-      await close("failed", "PARENT_TURN_FAILED", ctx);
-    },
-    "turn.cancelled": async (_event, ctx) => {
-      forgetUserInput(ctx.session.id, ctx.session.turn.id);
-      await close("cancelled", "PARENT_TURN_CANCELLED", ctx);
+    "turn.settled": async (event, ctx) => {
+      forgetUserInput(ctx.session.id, event.data.turnId);
+      const outcome = event.data.outcome;
+      await close(
+        outcome === "failed" ? "failed" : "cancelled",
+        outcome === "failed" ? "PARENT_TURN_FAILED" : outcome === "cancelled" ? "PARENT_TURN_CANCELLED" : "PARENT_TURN_COMPLETED_WITHOUT_EXECUTION",
+        ctx,
+      );
     },
   },
 });

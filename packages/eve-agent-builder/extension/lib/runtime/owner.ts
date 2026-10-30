@@ -1,5 +1,5 @@
 import type { SessionContext } from "eve/context";
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicModelContext } from "eve/tools";
 import type { ApprovalConfiguration, ApprovalResponseContext } from "eve/tools/approval";
 
 import type {
@@ -20,7 +20,7 @@ export function ownerChannelFromContext(input: RuntimeChannel): OwnerResolutionI
   };
 }
 
-export function ownerInputFromDynamic(ctx: DynamicResolveContext): OwnerResolutionInput {
+export function ownerInputFromDynamic(ctx: DynamicModelContext): OwnerResolutionInput {
   return {
     current: ctx.session.auth.current,
     initiator: ctx.session.auth.initiator,

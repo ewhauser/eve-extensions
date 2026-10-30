@@ -4,6 +4,9 @@ import { eveChannel } from "eve/channels/eve";
 import { fixtureAuth } from "../lib/fixture.js";
 
 const authenticateFixture: AuthFn<Request> = (request) =>
-  fixtureAuth(request.headers.get("x-fixture-principal") ?? undefined);
+  ({
+    ...fixtureAuth(request.headers.get("x-fixture-principal") ?? undefined),
+    allowAgentInfo: true,
+  });
 
 export default eveChannel({ auth: authenticateFixture });

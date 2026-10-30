@@ -40,9 +40,14 @@ export function createAgentBuilderLeaseHooks(role: ExecutionRole) {
   }
   return defineHook({
     events: {
-      "turn.completed": async (_event, ctx) => close("succeeded", "TURN_COMPLETED", ctx),
-      "turn.failed": async (_event, ctx) => close("failed", "TURN_FAILED", ctx),
-      "turn.cancelled": async (_event, ctx) => close("cancelled", "TURN_CANCELLED", ctx),
+      "turn.settled": async (event, ctx) => {
+        const outcome = event.data.outcome;
+        await close(
+          outcome === "completed" ? "succeeded" : outcome,
+          outcome === "completed" ? "TURN_COMPLETED" : outcome === "failed" ? "TURN_FAILED" : "TURN_CANCELLED",
+          ctx,
+        );
+      },
     },
   });
 }

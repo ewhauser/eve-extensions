@@ -41,7 +41,7 @@ export default defineTool({
     const outputPath = posix.join(config.outputDirectory, filename);
 
     const existing = await sandbox.readBinaryFile({
-      abortSignal: ctx.abortSignal,
+      signal: ctx.abortSignal,
       path: outputPath,
     });
     if (existing !== null) {
@@ -67,7 +67,7 @@ export default defineTool({
     let totalInputBytes = 0;
     for (const path of referencedImagePaths) {
       const bytes = await sandbox.readBinaryFile({
-        abortSignal: ctx.abortSignal,
+        signal: ctx.abortSignal,
         path,
       });
       if (bytes === null) throw new Error(`Referenced image does not exist: ${path}`);
@@ -113,7 +113,7 @@ export default defineTool({
       );
     }
     await sandbox.writeBinaryFile({
-      abortSignal: ctx.abortSignal,
+      signal: ctx.abortSignal,
       content: outputBytes,
       path: outputPath,
     });

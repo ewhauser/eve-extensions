@@ -1,7 +1,7 @@
 import { getProjectLinkConfig } from "../extension.js";
 import { defaultProjectChannelResolver } from "./channel.js";
 import { ProjectLinkService } from "./project-link.js";
-import type { DynamicResolveContext } from "eve/tools";
+import type { DynamicContext } from "eve/tools";
 import type { ProjectChannel } from "./types.js";
 
 let configuredFor: object | undefined;
@@ -23,7 +23,7 @@ export function getProjectLinkService(): ProjectLinkService {
 }
 
 export async function resolveProjectChannel(
-  ctx: DynamicResolveContext,
+  ctx: DynamicContext,
 ): Promise<ProjectChannel | null> {
   return (getProjectLinkConfig().resolveChannel ?? defaultProjectChannelResolver)(
     ctx,

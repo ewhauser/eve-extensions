@@ -20,7 +20,7 @@ export default defineEval({
     const pm = await session.send("BUILD_WORKFLOW_PM");
     pm.expectOk();
     t.messageIncludes("BUILD_PM_HANDOFF_OK");
-    pm.event("agent.started", { data: { name: "pm" }, count: 1 });
+    pm.event("child.opened", { data: { name: "pm" }, count: 1 });
     pm.calledTool("blocking-pm", { count: 2 });
 
     const implementor = await session.send("BUILD_WORKFLOW_IMPLEMENTOR");
@@ -34,7 +34,7 @@ export default defineEval({
     const testCompleted = await session.send("BUILD_WORKFLOW_TEST");
     testCompleted.expectOk();
     t.messageIncludes("BUILD_TEST_EVIDENCE_OK");
-    testCompleted.event("agent.started", { data: { name: "test-runner" }, count: 1 });
+    testCompleted.event("child.opened", { data: { name: "test-runner" }, count: 1 });
     testCompleted.calledTool("blocking-test-runner", { count: 2 });
 
     const qaApproved = await session.send("BUILD_WORKFLOW_QA_APPROVE");
@@ -42,13 +42,13 @@ export default defineEval({
     t.messageIncludes("BUILD_QA_APPROVED_OK");
     const workflowAfterTest = qaApproved.events.find(
       (event) =>
-        event.type === "action.result" &&
-        event.data.result.callId === "build-workflow-after-test" &&
-        event.data.status === "completed",
+        event.type === "call.settled" &&
+        event.data.callId === "build-workflow-after-test" &&
+        event.data.outcome === "completed",
     );
     if (
-      workflowAfterTest?.type !== "action.result" ||
-      !JSON.stringify(workflowAfterTest.data.result.output).includes(
+      workflowAfterTest?.type !== "call.settled" ||
+      !JSON.stringify(workflowAfterTest.data.output).includes(
         '"capabilityId":"fixture.notify.consequential.v1","reason":"disabled"',
       )
     ) {
@@ -87,28 +87,28 @@ export default defineEval({
     const completed = await session.send("BUILD_WORKFLOW_PUBLISH");
     completed.expectOk();
     t.messageIncludes("BUILD_WORKFLOW_PUBLISHED_CURRENT_RUN_OK");
-    t.event("agent.started", { data: { name: "pm" }, count: 2 });
+    t.event("child.opened", { data: { name: "pm" }, count: 2 });
     t.calledTool("blocking-pm", { count: 4 });
-    t.event("agent.started", { data: { name: "implementor" }, count: 2 });
+    t.event("child.opened", { data: { name: "implementor" }, count: 2 });
     t.calledTool("blocking-implementor", { count: 4 });
-    t.event("agent.started", { data: { name: "qa" }, count: 4 });
+    t.event("child.opened", { data: { name: "qa" }, count: 4 });
     t.calledTool("blocking-qa", { count: 8 });
-    t.event("agent.started", { data: { name: "test-runner" }, count: 2 });
+    t.event("child.opened", { data: { name: "test-runner" }, count: 2 });
     t.calledTool("blocking-test-runner", { count: 4 });
     t.calledTool("agent_builder__workflow_publish", { status: "completed", count: 1 });
     t.calledTool("agent_builder__agent_get", { count: 1 });
     t.calledTool("agent_builder__prepare_active_run", { count: 1 });
-    t.event("agent.started", { data: { name: "active-runner" }, count: 1 });
+    t.event("child.opened", { data: { name: "active-runner" }, count: 1 });
     t.calledTool("blocking-active-runner", { count: 2 });
     const current = completed.events.find(
       (event) =>
-        event.type === "action.result" &&
-        event.data.result.callId === "build-current-get" &&
-        event.data.status === "completed",
+        event.type === "call.settled" &&
+        event.data.callId === "build-current-get" &&
+        event.data.outcome === "completed",
     );
     if (
-      current?.type !== "action.result" ||
-      !JSON.stringify(current.data.result.output).includes(
+      current?.type !== "call.settled" ||
+      !JSON.stringify(current.data.output).includes(
         "PR04 revised deterministic workflow and publication witness",
       )
     ) {
@@ -118,7 +118,7 @@ export default defineEval({
     nextTurn.expectOk();
     t.messageIncludes("BUILD_NEXT_TURN_ROSTER_OK");
     t.messageIncludes("Published workflow witness");
-    nextTurn.noFailedActions();
+    nextTurn.noFailedCalls();
     t.succeeded();
   },
 });

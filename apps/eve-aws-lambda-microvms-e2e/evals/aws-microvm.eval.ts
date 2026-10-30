@@ -8,7 +8,6 @@ import {
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { defineEval } from "eve/evals";
-import { includes } from "eve/evals/expect";
 
 const ATTACHMENT_SENTINEL = "attachment-payload:lambda-microvm-e2e";
 const SKILL_SENTINEL = "skill-reference:lambda-microvm-e2e";
@@ -24,14 +23,14 @@ export default defineEval({
       "text/plain",
     );
     first.expectOk();
-    t.check(first.message, includes(ATTACHMENT_SENTINEL));
-    t.check(first.message, includes(SKILL_SENTINEL));
+    first.messageIncludes(ATTACHMENT_SENTINEL);
+    first.messageIncludes(SKILL_SENTINEL);
     assertAttachmentEvent(first.events);
 
     const resumed = await session.send("Re-read the original attachment and packaged skill reference.");
     resumed.expectOk();
-    t.check(resumed.message, includes(ATTACHMENT_SENTINEL));
-    t.check(resumed.message, includes(SKILL_SENTINEL));
+    resumed.messageIncludes(ATTACHMENT_SENTINEL);
+    resumed.messageIncludes(SKILL_SENTINEL);
 
     await terminateFixtureMicrovms((message) => t.log(message));
 
@@ -39,9 +38,9 @@ export default defineEval({
       "After replacement, re-read the original attachment and packaged skill reference.",
     );
     restored.expectOk();
-    t.check(restored.message, includes(ATTACHMENT_SENTINEL));
-    t.check(restored.message, includes(SKILL_SENTINEL));
-    t.loadedSkill("persistence-probe", { count: 3 });
+    restored.messageIncludes(ATTACHMENT_SENTINEL);
+    restored.messageIncludes(SKILL_SENTINEL);
+    t.calledSkill("persistence-probe", { count: 3 });
     t.calledTool("read_file", { count: 6 });
     t.succeeded();
   },

@@ -260,9 +260,10 @@ describe("stable runner capability registry", () => {
     expect(Object.keys(lowered)).toEqual(["host_weather_read"]);
     expect(lowered.host_weather_read).not.toBe(realTool);
     expect(lowered.host_weather_read?.inputSchema).toBe(realTool.inputSchema);
-    expect(lowered.host_weather_read?.approval).toBe(approval);
+    const loweredTool = lowered.host_weather_read as typeof realTool;
+    expect(loweredTool.approval).toBe(approval);
     await expect(
-      lowered.host_weather_read?.execute({ city: "Denver" }, {} as never),
+      loweredTool.execute({ city: "Denver" }, {} as never),
     ).resolves.toEqual({ city: "Denver", secretWasUsedByClosure: true });
     expect(guardCalls).toBe(1);
   });
@@ -285,8 +286,9 @@ describe("stable runner capability registry", () => {
     const lowered = lowerResolvedCapabilities([guarded], async () => {
       throw new Error("OWNER_MISMATCH");
     });
+    const loweredGuarded = lowered.guarded_weather_read as typeof guardedTool;
     await expect(
-      lowered.guarded_weather_read?.execute({ city: "Denver" }, {} as never),
+      loweredGuarded.execute({ city: "Denver" }, {} as never),
     ).rejects.toThrow("OWNER_MISMATCH");
     expect(adapterCalls).toBe(0);
   });
@@ -411,7 +413,7 @@ describe("consequential test approval composition", () => {
   const responseContext = {
     request: {
       callId: "capability-call",
-      requestId: "approval-request",
+      interactionId: "approval-request",
       toolInput: { value: "opaque" },
       toolName: "fixture_consequential",
     },

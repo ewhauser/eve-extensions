@@ -43,7 +43,7 @@ describe("carried Eve connection patches", () => {
 
   test("predicate filters receive exact upstream names", () => {
     expect(
-      passesToolFilter("github.search_repositories", {
+      passesToolFilter(["github.search_repositories"], {
         filter: (upstream) => upstream.startsWith("github."),
       }),
     ).toBe(true);

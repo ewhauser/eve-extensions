@@ -1,4 +1,4 @@
-import type { DynamicResolveContext, DynamicToolSet } from "eve/tools";
+import type { DynamicContext, DynamicModelContext, DynamicToolSet } from "eve/tools";
 
 import { getAgentBuilderConfig, type AgentBuilderExtensionConfig } from "../../extension.js";
 import {
@@ -142,22 +142,15 @@ export function scopedToolOperationId(
   });
 }
 
-export function eventTurnId(event: unknown): string {
-  if (typeof event !== "object" || event === null) throw new Error("EVE_TURN_CONTEXT_REQUIRED");
-  const data = (event as Record<string, unknown>).data;
-  const turnId =
-    typeof data === "object" && data !== null
-      ? (data as Record<string, unknown>).turnId
-      : undefined;
-  if (typeof turnId !== "string" || turnId.length === 0) {
-    throw new Error("EVE_TURN_CONTEXT_REQUIRED");
-  }
+export function requiredTurnId(ctx: DynamicModelContext): string {
+  const turnId = ctx.turn?.id;
+  if (typeof turnId !== "string" || turnId.length === 0) throw new Error("EVE_TURN_CONTEXT_REQUIRED");
   return turnId;
 }
 
 export async function resolveDynamicOwner(
   runtime: AgentBuilderRuntime,
-  ctx: DynamicResolveContext,
+  ctx: DynamicModelContext,
 ): Promise<OwnerScope> {
   const resolved = await runtime.service.resolveOwner(ownerInputFromDynamic(ctx));
   if (!resolved.ok) throw new Error(resolved.error.code);
@@ -193,13 +186,12 @@ async function loadSaved(
 export async function inspectRunnerTurn(input: {
   readonly role: ExecutionRole;
   readonly mode: RunnerCapabilityMode;
-  readonly event: unknown;
-  readonly ctx: DynamicResolveContext;
+  readonly ctx: DynamicModelContext;
   readonly begin: boolean;
 }): Promise<BootstrapResult<PreparedRunnerTurn>> {
   const runtime = getAgentBuilderRuntime();
   const owner = await resolveDynamicOwner(runtime, input.ctx);
-  const turnId = eventTurnId(input.event);
+  const turnId = requiredTurnId(input.ctx);
   const key = preparedKey(owner, input.ctx.session.id, turnId);
   const turns = preparedTurns(runtime);
   const cached = turns.get(key);
@@ -297,12 +289,11 @@ export async function inspectRunnerTurn(input: {
 export async function cachedRunnerTurn(input: {
   readonly role: ExecutionRole;
   readonly mode: RunnerCapabilityMode;
-  readonly event: unknown;
-  readonly ctx: DynamicResolveContext;
+  readonly ctx: DynamicContext;
 }): Promise<BootstrapResult<PreparedRunnerTurn>> {
   const runtime = getAgentBuilderRuntime();
   const owner = await resolveDynamicOwner(runtime, input.ctx);
-  const turnId = eventTurnId(input.event);
+  const turnId = requiredTurnId(input.ctx);
   const cached = preparedTurns(runtime).get(preparedKey(owner, input.ctx.session.id, turnId));
   return cached === undefined
     ? inspectRunnerTurn({ ...input, begin: false })

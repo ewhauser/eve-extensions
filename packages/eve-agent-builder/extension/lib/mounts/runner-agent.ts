@@ -1,9 +1,10 @@
-import { defineAgent, defineDynamic, type AgentStaticModelDefinition } from "eve";
+import { defineAgent, defineDynamic, type AgentStaticModelDefinition, type DynamicModelContext } from "eve";
+import type { DynamicModelResult } from "eve/models";
 
 import { parseBootstrapMessage, type ExecutionRole } from "../bootstrap.js";
 import type { RunnerCapabilityMode } from "../capabilities.js";
 import {
-  eventTurnId,
+  requiredTurnId,
   getAgentBuilderRuntime,
   inspectRunnerTurn,
   resolveDynamicOwner,
@@ -41,31 +42,27 @@ export function createAgentBuilderGuardedModel(input: {
     model: input.model,
     modelContextWindowTokens: input.modelContextWindowTokens,
   } as const;
-  return defineDynamic({
-    events: {
-      "step.started": async (event, ctx) => {
+  return defineDynamic<DynamicModelResult, DynamicModelContext>(async (ctx) => {
         const runtime = getAgentBuilderRuntime();
         const owner = await resolveDynamicOwner(runtime, ctx);
         const lease = await runtime.config.store.getExecutionLease({
           owner,
           childSessionId: ctx.session.id,
         });
-        if (lease === null && parseBootstrapMessage(latestUserMessage(ctx.messages)) === null) {
+        if (lease === null && parseBootstrapMessage(latestUserMessage(await ctx.messages())) === null) {
           throw new Error("BOOTSTRAP_REQUIRED");
         }
         if (lease === null) {
           return selection;
         }
-        const turnId = eventTurnId(event);
+        const turnId = requiredTurnId(ctx);
         if (lease.role !== input.role) throw new Error("BOOTSTRAP_BINDING_MISMATCH");
         if (lease.bootstrapTurnId === turnId && lease.status === "ready") {
           return selection;
         }
-        const prepared = await inspectRunnerTurn({ ...input, event, ctx, begin: true });
+        const prepared = await inspectRunnerTurn({ ...input, ctx, begin: true });
         if (!prepared.ok) throw new Error(`${prepared.error.code}: ${prepared.error.message}`);
         return selection;
-      },
-    },
   });
 }
 

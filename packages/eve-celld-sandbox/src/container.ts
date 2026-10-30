@@ -89,7 +89,7 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
       id: ref.key,
       async spawn(input): Promise<SandboxProcess> {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         const command = ContainerCommand.parse({
           id: crypto.randomUUID(),
           command: input.command,
@@ -114,11 +114,11 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
         const onAbort = () => {
           void cancel().catch(() => {});
         };
-        input.abortSignal?.addEventListener("abort", onAbort, { once: true });
-        if (input.abortSignal?.aborted) onAbort();
+        input.signal?.addEventListener("abort", onAbort, { once: true });
+        if (input.signal?.aborted) onAbort();
         void execution
           .finally(() =>
-            input.abortSignal?.removeEventListener("abort", onAbort),
+            input.signal?.removeEventListener("abort", onAbort),
           )
           .catch(() => {});
         const output = (which: "stdout" | "stderr") =>
@@ -142,7 +142,7 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
           async wait() {
             const result = await execution;
             if (result.state !== "completed") {
-              if (input.abortSignal?.aborted) throw input.abortSignal.reason;
+              if (input.signal?.aborted) throw input.signal.reason;
               throw new ProtocolError(
                 result.error ?? result.state.toUpperCase(),
                 result.stderr,
@@ -158,13 +158,13 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
         const data = await request(
           ref,
           { op: "read", ...state, path: resolvePath(input.path) },
-          input.abortSignal,
+          input.signal,
         );
         return data === null ? null : unbase64(data);
       },
       async writeBinaryFile(input) {
         live();
-        input.abortSignal?.throwIfAborted();
+        input.signal?.throwIfAborted();
         if (input.content.byteLength > LIMITS.fileBytes)
           throw new ProtocolError(
             "LIMIT",
@@ -180,7 +180,7 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
               path: resolvePath(input.path),
               data: base64(input.content),
             },
-            input.abortSignal,
+            input.signal,
           ),
         );
       },
@@ -196,7 +196,7 @@ export function celldContainer(options: CelldContainerOptions): SandboxBackend {
               recursive: input.recursive ?? false,
               force: input.force ?? false,
             },
-            input.abortSignal,
+            input.signal,
           ),
         );
       },

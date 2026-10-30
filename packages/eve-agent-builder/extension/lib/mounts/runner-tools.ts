@@ -1,6 +1,5 @@
 import {
   defineDynamic,
-  defineDurableSchema,
   defineTool,
   type DynamicToolEntry,
   type DynamicToolSet,
@@ -44,7 +43,7 @@ import {
 } from "../runtime/owner.js";
 import {
   cachedRunnerTurn,
-  eventTurnId,
+  requiredTurnId,
   getAgentBuilderRuntime,
   resolveDynamicOwner,
   runtimeTimestamp,
@@ -504,7 +503,7 @@ async function respondDurableCapabilityApproval(input: {
   }
   const authorized = await runtime.config.store.authorizeTestInput({
     step: step.value,
-    requestId: input.ctx.request.requestId,
+    requestId: input.ctx.request.interactionId,
     responder: {
       principalId: input.ctx.response.principal.principalId,
       principalType: input.ctx.response.principal.principalType,
@@ -705,7 +704,7 @@ function lowerDurableCapabilities(input: {
   const selectedById = new Map(
     lease.capabilityPlan?.selected.map((entry) => [entry.capabilityId, entry]) ?? [],
   );
-  const lowered: Record<string, DynamicToolEntry<any, any>> = {};
+  const lowered: Record<string, DynamicToolEntry> = {};
   for (const capability of input.capabilities) {
     const selected = selectedById.get(capability.descriptor.capabilityId);
     if (
@@ -724,10 +723,10 @@ function lowerDurableCapabilities(input: {
     const tool = capability.tool;
     lowered[reference.modelToolName] = defineTool({
       description: tool.description,
-      inputSchema: defineDurableSchema(durableCapabilitySchema(tool.inputSchema, "input", reference, lease.owner)),
+      inputSchema: (() => { const factory = durableCapabilitySchema(tool.inputSchema, "input", reference, lease.owner); return factory.schema(factory.closure); })(),
       ...(tool.outputSchema === undefined
         ? {}
-        : { outputSchema: defineDurableSchema(durableCapabilitySchema(tool.outputSchema, "output", reference, lease.owner)) }),
+        : { outputSchema: (() => { const factory = durableCapabilitySchema(tool.outputSchema, "output", reference, lease.owner); return factory.schema(factory.closure); })() }),
       approval: {
         request: async (ctx) =>
           requestDurableCapabilityApproval({
@@ -757,7 +756,7 @@ function lowerDurableCapabilities(input: {
           toolInput,
           ctx,
         }),
-    } as ToolDefinition<any, any>) as DynamicToolEntry<any, any>;
+    } as ToolDefinition<any, any>) as DynamicToolEntry;
   }
   return Object.freeze(lowered);
 }
@@ -766,9 +765,7 @@ export function createAgentBuilderRunnerTools(input: {
   readonly role: ExecutionRole;
   readonly mode: RunnerCapabilityMode;
 }) {
-  return defineDynamic({
-    events: {
-      "step.started": async (event, dynamicCtx) => {
+  return defineDynamic(async (dynamicCtx) => {
         const runtime = getAgentBuilderRuntime();
         const owner = await resolveDynamicOwner(runtime, dynamicCtx);
         const runtimeChannel = ownerChannelFromContext(dynamicCtx.channel);
@@ -777,7 +774,7 @@ export function createAgentBuilderRunnerTools(input: {
           childSessionId: dynamicCtx.session.id,
         });
         if (lease === null) {
-          const bootstrap = parseBootstrapMessage(latestUserMessage(dynamicCtx.messages));
+          const bootstrap = parseBootstrapMessage(latestUserMessage(await dynamicCtx.messages()));
           if (bootstrap === null) return null;
           return {
             agent_builder__bootstrap_redeem: defineTool({
@@ -805,11 +802,11 @@ export function createAgentBuilderRunnerTools(input: {
             }),
           };
         }
-        const turnId = eventTurnId(event);
+        const turnId = requiredTurnId(dynamicCtx);
         if (lease.bootstrapTurnId === turnId) {
           return null;
         }
-        const prepared = await cachedRunnerTurn({ ...input, event, ctx: dynamicCtx });
+        const prepared = await cachedRunnerTurn({ ...input, ctx: dynamicCtx });
         if (!prepared.ok) return null;
         const runnerLease = prepared.value.lease;
         const capabilityOmissions = prepared.value.capabilities.plan.optionalOmissions;
@@ -839,8 +836,6 @@ export function createAgentBuilderRunnerTools(input: {
             : {}),
           agent_builder__run_context: contextTool,
         };
-      },
-    },
   });
 }
 

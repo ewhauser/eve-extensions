@@ -1,4 +1,4 @@
-import { defineDurableSchema, defineDynamic, defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { getProjectLinkConfig } from "../extension.js";
@@ -57,35 +57,17 @@ const verifiedCompleteInputSchema = completeInputSchema.extend({
 
 const emptyInputSchema = z.object({});
 
-const durableNewLinkInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => newLinkInputSchema,
-});
+const durableNewLinkInputSchema = newLinkInputSchema;
 
-const durableExistingLinkInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => existingLinkInputSchema,
-});
+const durableExistingLinkInputSchema = existingLinkInputSchema;
 
-const durableCompleteInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => completeInputSchema,
-});
+const durableCompleteInputSchema = completeInputSchema;
 
-const durableVerifiedCompleteInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => verifiedCompleteInputSchema,
-});
+const durableVerifiedCompleteInputSchema = verifiedCompleteInputSchema;
 
-const durableEmptyInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => emptyInputSchema,
-});
+const durableEmptyInputSchema = emptyInputSchema;
 
-const durableProjectContextInputSchema = defineDurableSchema({
-  closure: {},
-  schema: () => projectContextInputSchema,
-});
+const durableProjectContextInputSchema = projectContextInputSchema;
 
 type JsonPrimitive = boolean | null | number | string;
 type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
@@ -273,9 +255,7 @@ function stampDurableCallbacks<T extends object>(
   return tool;
 }
 
-export default defineDynamic({
-  events: {
-    "step.started": async (_event, ctx) => {
+export default defineDynamic(async (ctx) => {
       const config = getProjectLinkConfig();
       const channel = await resolveProjectChannel(ctx);
       if (!channel) return null;
@@ -376,6 +356,4 @@ export default defineDynamic({
       );
 
       return tools;
-    },
-  },
 });

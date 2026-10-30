@@ -163,7 +163,7 @@ describe("plan and apply", () => {
       resolve(project, "agent/skills/openai-plugin--design-suite--inspect-design.ts"),
       "utf8",
     );
-    expect(dynamicSkill).toContain('"turn.started"');
+    expect(dynamicSkill).toContain("defineDynamic(async (ctx) =>");
     expect(dynamicSkill).toContain("isOpenAIPluginEnabled");
     expect(dynamicSkill).toContain("Buffer.from");
     const childConnection = await readFile(
@@ -266,7 +266,7 @@ export default defineAgent({ model: "openai/gpt-5.5", compaction });
         version: "0.0.0",
         private: true,
         type: "module",
-        dependencies: { eve: "0.83.0", "eve-openai-connectors": "0.1.0" },
+        dependencies: { eve: "0.90.0", "eve-openai-connectors": "0.1.0" },
       }),
     );
     await mkdir(resolve(project, "node_modules"), { recursive: true });

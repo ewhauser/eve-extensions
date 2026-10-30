@@ -1,8 +1,8 @@
-import type { DynamicConnectionResolveContext } from "eve/connections";
+import type { DynamicContext } from "eve/connections";
 
 /** Safe subset shared with application-owned credential callbacks. */
 export interface ConnectorContext {
-  readonly session: DynamicConnectionResolveContext["session"];
+  readonly session: DynamicContext["session"];
 }
 
 export type ApprovalAction = "allow" | "approve" | "deny";

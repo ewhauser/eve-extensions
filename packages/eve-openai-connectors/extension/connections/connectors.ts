@@ -2,7 +2,7 @@ import {
   ConnectionAuthorizationRequiredError,
   defineDynamic,
   defineMcpClientConnection,
-  type DynamicConnectionResolveContext,
+  type DynamicContext,
 } from "eve/connections";
 
 import extension from "../extension.js";
@@ -44,7 +44,7 @@ export function connectorToolFilter(
   return allowed === undefined || allowed.has(service);
 }
 
-function defaultPrincipal(ctx: DynamicConnectionResolveContext): string | null {
+function defaultPrincipal(ctx: DynamicContext): string | null {
   const current = ctx.session.auth.current;
   if (current?.principalType !== "user") return null;
   return `user:${current.issuer ?? "vercel"}:${current.principalId}`;
@@ -67,7 +67,7 @@ function instanceKey(
 
 export function createOpenAIConnectorConnection(
   config: OpenAIConnectorsConfig,
-  ctx: DynamicConnectionResolveContext,
+  ctx: DynamicContext,
 ) {
   if (!config.enabled) return null;
 
@@ -137,8 +137,4 @@ export function createOpenAIConnectorConnection(
   });
 }
 
-export default defineDynamic({
-  events: {
-    "session.started": (_event, ctx) => createOpenAIConnectorConnection(extension.config, ctx),
-  },
-});
+export default defineDynamic((ctx) => createOpenAIConnectorConnection(extension.config, ctx));

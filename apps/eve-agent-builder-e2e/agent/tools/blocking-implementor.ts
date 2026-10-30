@@ -17,7 +17,7 @@ export default defineWorkflowTool({
         : { outputSchema: input.outputSchema });
       const result = await response.result();
       if (result.status === "failed") throw new Error(result.error?.message ?? "Child implementor failed.");
-      ctx.reply(result.data ?? result.message ?? null);
+      ctx.reply(result.data ?? result.reply ?? null);
     }
   },
 });
