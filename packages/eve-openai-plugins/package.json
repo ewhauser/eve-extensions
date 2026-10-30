@@ -1,6 +1,6 @@
 {
   "name": "eve-openai-plugins",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Compile OpenAI Codex plugins into dynamic Eve skills, subagents, and connections.",
   "license": "MIT",
   "type": "module",
