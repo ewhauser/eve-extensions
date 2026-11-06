@@ -1,7 +1,7 @@
-diff --git c/packages/eve/src/approval/definition.ts i/packages/eve/src/approval/definition.ts
+diff --git a/packages/eve/src/approval/definition.ts b/packages/eve/src/approval/definition.ts
 index a218bb5..298a8e0 100644
---- c/packages/eve/src/approval/definition.ts
-+++ i/packages/eve/src/approval/definition.ts
+--- a/packages/eve/src/approval/definition.ts
++++ b/packages/eve/src/approval/definition.ts
 @@ -39,6 +39,7 @@ export interface ApprovalContext<TInput = Record<string, unknown>> extends Sessi
    readonly toolAnnotations?: ConnectionToolAnnotations;
    readonly toolInput?: ApprovalToolInput<TInput>;
@@ -19,10 +19,10 @@ index a218bb5..298a8e0 100644
  }
  
  /** Read-only session identity and lineage available to a response authorizer. */
-diff --git c/packages/eve/src/compiler/manifest.ts i/packages/eve/src/compiler/manifest.ts
+diff --git a/packages/eve/src/compiler/manifest.ts b/packages/eve/src/compiler/manifest.ts
 index e0cb15b..65d8d8b 100644
---- c/packages/eve/src/compiler/manifest.ts
-+++ i/packages/eve/src/compiler/manifest.ts
+--- a/packages/eve/src/compiler/manifest.ts
++++ b/packages/eve/src/compiler/manifest.ts
 @@ -602,6 +602,7 @@ const compiledAgentWorkflowDefinitionSchema = z
  const compiledAgentCompactionDefinitionSchema: z.ZodType<CompiledAgentCompactionDefinition> = z
    .object({
@@ -40,10 +40,10 @@ index e0cb15b..65d8d8b 100644
        thresholdPercent: config.compaction?.thresholdPercent,
      },
      defaultTools: config.defaultTools,
-diff --git c/packages/eve/src/compiler/normalize-agent-config.ts i/packages/eve/src/compiler/normalize-agent-config.ts
+diff --git a/packages/eve/src/compiler/normalize-agent-config.ts b/packages/eve/src/compiler/normalize-agent-config.ts
 index 3aaf485..0254b8e 100644
---- c/packages/eve/src/compiler/normalize-agent-config.ts
-+++ i/packages/eve/src/compiler/normalize-agent-config.ts
+--- a/packages/eve/src/compiler/normalize-agent-config.ts
++++ b/packages/eve/src/compiler/normalize-agent-config.ts
 @@ -83,6 +83,7 @@ export async function compileAgentConfig(
        : undefined;
    const compaction: {
@@ -79,10 +79,10 @@ index 3aaf485..0254b8e 100644
    if (definition.compaction?.threshold !== undefined) {
      compaction.thresholdPercent = definition.compaction.threshold;
    }
-diff --git c/packages/eve/src/compiler/normalize-manifest.test.ts i/packages/eve/src/compiler/normalize-manifest.test.ts
+diff --git a/packages/eve/src/compiler/normalize-manifest.test.ts b/packages/eve/src/compiler/normalize-manifest.test.ts
 index e23066a..16564b3 100644
---- c/packages/eve/src/compiler/normalize-manifest.test.ts
-+++ i/packages/eve/src/compiler/normalize-manifest.test.ts
+--- a/packages/eve/src/compiler/normalize-manifest.test.ts
++++ b/packages/eve/src/compiler/normalize-manifest.test.ts
 @@ -395,6 +395,31 @@ describe("compileAgentManifest source graph", () => {
      },
    );
@@ -115,10 +115,10 @@ index e23066a..16564b3 100644
    it("loads the selected config before any non-config definition", async () => {
      const order: string[] = [];
      const sourceRegistry = registry([
-diff --git c/packages/eve/src/context/container.ts i/packages/eve/src/context/container.ts
+diff --git a/packages/eve/src/context/container.ts b/packages/eve/src/context/container.ts
 index 6737c2a..2bee3ee 100644
---- c/packages/eve/src/context/container.ts
-+++ i/packages/eve/src/context/container.ts
+--- a/packages/eve/src/context/container.ts
++++ b/packages/eve/src/context/container.ts
 @@ -17,7 +17,7 @@ const EVE_CONTEXT_STORAGE_KEY = Symbol.for("eve.context-storage");
   */
  export interface AlsContext extends ContextAccessor {
@@ -128,10 +128,10 @@ index 6737c2a..2bee3ee 100644
    /** Removes a durable or step-local value from the context. */
    delete<T>(key: ContextKey<T>): boolean;
    /**
-diff --git c/packages/eve/src/execution/catalog/connection-entry.test.ts i/packages/eve/src/execution/catalog/connection-entry.test.ts
+diff --git a/packages/eve/src/execution/catalog/connection-entry.test.ts b/packages/eve/src/execution/catalog/connection-entry.test.ts
 index 1c74651..3312efc 100644
---- c/packages/eve/src/execution/catalog/connection-entry.test.ts
-+++ i/packages/eve/src/execution/catalog/connection-entry.test.ts
+--- a/packages/eve/src/execution/catalog/connection-entry.test.ts
++++ b/packages/eve/src/execution/catalog/connection-entry.test.ts
 @@ -92,6 +92,20 @@ describe("connection approval context", () => {
      expect(seen[0]?.toolName).toBe("tracker__delete_issue");
    });
@@ -153,10 +153,10 @@ index 1c74651..3312efc 100644
    it("leaves annotations out when the server declared none", async () => {
      const { request, seen } = setup();
      await request("list_issues");
-diff --git c/packages/eve/src/execution/catalog/connection-entry.ts i/packages/eve/src/execution/catalog/connection-entry.ts
+diff --git a/packages/eve/src/execution/catalog/connection-entry.ts b/packages/eve/src/execution/catalog/connection-entry.ts
 index 6d8eb1a..a9c8804 100644
---- c/packages/eve/src/execution/catalog/connection-entry.ts
-+++ i/packages/eve/src/execution/catalog/connection-entry.ts
+--- a/packages/eve/src/execution/catalog/connection-entry.ts
++++ b/packages/eve/src/execution/catalog/connection-entry.ts
 @@ -188,7 +188,7 @@ async function runConnectionTool(
          }),
        );
@@ -255,10 +255,10 @@ index 6d8eb1a..a9c8804 100644
  }
  
  async function authorizeApprovalResponse(
-diff --git c/packages/eve/src/execution/catalog/search.test.ts i/packages/eve/src/execution/catalog/search.test.ts
+diff --git a/packages/eve/src/execution/catalog/search.test.ts b/packages/eve/src/execution/catalog/search.test.ts
 index 634b4ae..8b8025a 100644
---- c/packages/eve/src/execution/catalog/search.test.ts
-+++ i/packages/eve/src/execution/catalog/search.test.ts
+--- a/packages/eve/src/execution/catalog/search.test.ts
++++ b/packages/eve/src/execution/catalog/search.test.ts
 @@ -168,6 +168,24 @@ describe("search", () => {
    });
  
@@ -284,10 +284,10 @@ index 634b4ae..8b8025a 100644
      const linear = () =>
        fakeConnection({
          description: "Linear issues and projects",
-diff --git c/packages/eve/src/execution/catalog/search.ts i/packages/eve/src/execution/catalog/search.ts
+diff --git a/packages/eve/src/execution/catalog/search.ts b/packages/eve/src/execution/catalog/search.ts
 index cf15b1b..1b930a1 100644
---- c/packages/eve/src/execution/catalog/search.ts
-+++ i/packages/eve/src/execution/catalog/search.ts
+--- a/packages/eve/src/execution/catalog/search.ts
++++ b/packages/eve/src/execution/catalog/search.ts
 @@ -321,12 +321,13 @@ function toolCandidate(
    connection: ResolvedConnectionDefinition,
    tool: ConnectionToolMetadata,
@@ -304,10 +304,10 @@ index cf15b1b..1b930a1 100644
      result: () => ({
        description: tool.description,
        signature: connectionToolSignature(connection, tool),
-diff --git c/packages/eve/src/execution/catalog/signatures.ts i/packages/eve/src/execution/catalog/signatures.ts
+diff --git a/packages/eve/src/execution/catalog/signatures.ts b/packages/eve/src/execution/catalog/signatures.ts
 index 7d0a57e..55b81bb 100644
---- c/packages/eve/src/execution/catalog/signatures.ts
-+++ i/packages/eve/src/execution/catalog/signatures.ts
+--- a/packages/eve/src/execution/catalog/signatures.ts
++++ b/packages/eve/src/execution/catalog/signatures.ts
 @@ -33,7 +33,7 @@ export function connectionToolSignature(
  ): string {
    return renderToolSignature({
@@ -317,10 +317,10 @@ index 7d0a57e..55b81bb 100644
      outputSchema: tool.outputSchema,
    });
  }
-diff --git c/packages/eve/src/execution/node-step.ts i/packages/eve/src/execution/node-step.ts
+diff --git a/packages/eve/src/execution/node-step.ts b/packages/eve/src/execution/node-step.ts
 index 4995411..e9ef1d6 100644
---- c/packages/eve/src/execution/node-step.ts
-+++ i/packages/eve/src/execution/node-step.ts
+--- a/packages/eve/src/execution/node-step.ts
++++ b/packages/eve/src/execution/node-step.ts
 @@ -11,6 +11,7 @@ import { createLogger } from "#internal/logging.js";
  import type { RuntimeIdentity } from "#protocol/session-events/families/session.js";
  import { UNSPECIFIED_INPUT_SCHEMA } from "#tools/schema.js";
@@ -354,10 +354,10 @@ index 4995411..e9ef1d6 100644
      handleEvent: input.handleEvent,
      instrumentation: sessionInstrumentation,
      signInCompletions: input.signInCompletions,
-diff --git c/packages/eve/src/harness/compaction/step.integration.test.ts i/packages/eve/src/harness/compaction/step.integration.test.ts
+diff --git a/packages/eve/src/harness/compaction/step.integration.test.ts b/packages/eve/src/harness/compaction/step.integration.test.ts
 index fbbf63a..8b9ee91 100644
---- c/packages/eve/src/harness/compaction/step.integration.test.ts
-+++ i/packages/eve/src/harness/compaction/step.integration.test.ts
+--- a/packages/eve/src/harness/compaction/step.integration.test.ts
++++ b/packages/eve/src/harness/compaction/step.integration.test.ts
 @@ -11,6 +11,7 @@ import { createToolLoopHarness } from "#harness/tool-loop.js";
  import { eventsOf } from "#harness/publication.js";
  import { sessionUsage, takeSessionUsageDelta } from "#harness/session-usage.js";
@@ -458,10 +458,10 @@ index fbbf63a..8b9ee91 100644
  describe("compaction summary call", () => {
    it.each([
      { error: new CompactionOverLimitError("Still over the limit."), terminal: true },
-diff --git c/packages/eve/src/harness/compaction/step.ts i/packages/eve/src/harness/compaction/step.ts
+diff --git a/packages/eve/src/harness/compaction/step.ts b/packages/eve/src/harness/compaction/step.ts
 index 35cdb3c..86b8ef5 100644
---- c/packages/eve/src/harness/compaction/step.ts
-+++ i/packages/eve/src/harness/compaction/step.ts
+--- a/packages/eve/src/harness/compaction/step.ts
++++ b/packages/eve/src/harness/compaction/step.ts
 @@ -17,6 +17,7 @@ import {
    isUserModelMessage,
    validateHarnessModelMessages,
@@ -515,11 +515,11 @@ index 35cdb3c..86b8ef5 100644
      }
    } catch (error) {
      failure = { error };
-diff --git c/packages/eve/src/harness/model-call/call.ts i/packages/eve/src/harness/model-call/call.ts
-index 653ec33..ef3f5f5 100644
---- c/packages/eve/src/harness/model-call/call.ts
-+++ i/packages/eve/src/harness/model-call/call.ts
-@@ -314,6 +314,7 @@ export class ModelCaller {
+diff --git a/packages/eve/src/harness/model-call/call.ts b/packages/eve/src/harness/model-call/call.ts
+index 4e93f23..8efbf26 100644
+--- a/packages/eve/src/harness/model-call/call.ts
++++ b/packages/eve/src/harness/model-call/call.ts
+@@ -328,6 +328,7 @@ export class ModelCaller {
          ctx: step.ctx,
          emissionState: step.position(),
          // A hook's compact intent compacts before this call, once.
@@ -527,10 +527,10 @@ index 653ec33..ef3f5f5 100644
          messages: [...prompt.messages],
          model: this.input.model,
          promptMessages: withClientContext(prompt),
-diff --git c/packages/eve/src/harness/types.ts i/packages/eve/src/harness/types.ts
+diff --git a/packages/eve/src/harness/types.ts b/packages/eve/src/harness/types.ts
 index 679505d..98b5f63 100644
---- c/packages/eve/src/harness/types.ts
-+++ i/packages/eve/src/harness/types.ts
+--- a/packages/eve/src/harness/types.ts
++++ b/packages/eve/src/harness/types.ts
 @@ -14,7 +14,7 @@ import type { JsonObject } from "#shared/json.js";
  import type { TokenUsage } from "#shared/token-usage.js";
  import type { Principal } from "#protocol/session-events/envelope.js";
@@ -549,10 +549,10 @@ index 679505d..98b5f63 100644
    readonly handleEvent?: HandleEventFn;
    /**
     * Internal lifecycle hooks injected into each actual model attempt.
-diff --git c/packages/eve/src/internal/authored-definition/connection.ts i/packages/eve/src/internal/authored-definition/connection.ts
+diff --git a/packages/eve/src/internal/authored-definition/connection.ts b/packages/eve/src/internal/authored-definition/connection.ts
 index 9b734f2..952509a 100644
---- c/packages/eve/src/internal/authored-definition/connection.ts
-+++ i/packages/eve/src/internal/authored-definition/connection.ts
+--- a/packages/eve/src/internal/authored-definition/connection.ts
++++ b/packages/eve/src/internal/authored-definition/connection.ts
 @@ -1,3 +1,4 @@
 +import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
  import { normalizeApproval } from "#internal/authored-definition/approval.js";
@@ -685,10 +685,10 @@ index 9b734f2..952509a 100644
  }
  
  function validateStringArray(value: unknown, label: string): void {
-diff --git c/packages/eve/src/internal/authored-definition/core.test.ts i/packages/eve/src/internal/authored-definition/core.test.ts
+diff --git a/packages/eve/src/internal/authored-definition/core.test.ts b/packages/eve/src/internal/authored-definition/core.test.ts
 index 2c33d1e..2e86dfb 100644
---- c/packages/eve/src/internal/authored-definition/core.test.ts
-+++ i/packages/eve/src/internal/authored-definition/core.test.ts
+--- a/packages/eve/src/internal/authored-definition/core.test.ts
++++ b/packages/eve/src/internal/authored-definition/core.test.ts
 @@ -106,6 +106,31 @@ describe("normalizeAgentDefinition", () => {
      ).toThrow('"modelOptions.promptCache.anthropic.ttl" must be "5m" or "1h"; received "24h".');
    });
@@ -721,10 +721,10 @@ index 2c33d1e..2e86dfb 100644
    it("rejects unsupported reasoning effort", () => {
      expect(() =>
        normalizeAgentDefinition(
-diff --git c/packages/eve/src/internal/authored-definition/core.ts i/packages/eve/src/internal/authored-definition/core.ts
+diff --git a/packages/eve/src/internal/authored-definition/core.ts b/packages/eve/src/internal/authored-definition/core.ts
 index d4ce15b..d9251f9 100644
---- c/packages/eve/src/internal/authored-definition/core.ts
-+++ i/packages/eve/src/internal/authored-definition/core.ts
+--- a/packages/eve/src/internal/authored-definition/core.ts
++++ b/packages/eve/src/internal/authored-definition/core.ts
 @@ -326,7 +326,7 @@ function normalizeAgentCompactionDefinition(
        `${message} Rename "compaction.thresholdPercent" to "compaction.threshold" (a fraction from 0 to 1).`,
      );
@@ -748,20 +748,20 @@ index d4ce15b..d9251f9 100644
    if (record.threshold !== undefined) {
      const threshold = record.threshold;
  
-diff --git c/packages/eve/src/public/connections/index.ts i/packages/eve/src/public/connections/index.ts
+diff --git a/packages/eve/src/public/connections/index.ts b/packages/eve/src/public/connections/index.ts
 index 4f3bfb3..b009a4e 100644
---- c/packages/eve/src/public/connections/index.ts
-+++ i/packages/eve/src/public/connections/index.ts
+--- a/packages/eve/src/public/connections/index.ts
++++ b/packages/eve/src/public/connections/index.ts
 @@ -56,3 +56,5 @@ export {
    isConnectionAuthorizationFailedError,
    isConnectionAuthorizationRequiredError,
  } from "#public/connections/errors.js";
 +
 +export type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
-diff --git c/packages/eve/src/public/definitions/agent.ts i/packages/eve/src/public/definitions/agent.ts
+diff --git a/packages/eve/src/public/definitions/agent.ts b/packages/eve/src/public/definitions/agent.ts
 index fc22903..9df03b0 100644
---- c/packages/eve/src/public/definitions/agent.ts
-+++ i/packages/eve/src/public/definitions/agent.ts
+--- a/packages/eve/src/public/definitions/agent.ts
++++ b/packages/eve/src/public/definitions/agent.ts
 @@ -18,6 +18,10 @@ export type {
    AgentModelOptionsDefinition,
    AgentReasoningDefinition,
@@ -773,10 +773,10 @@ index fc22903..9df03b0 100644
    AgentExperimentalDefinition,
    AgentLimitsDefinition,
    SessionUsageLimit,
-diff --git c/packages/eve/src/public/definitions/connections/mcp.ts i/packages/eve/src/public/definitions/connections/mcp.ts
+diff --git a/packages/eve/src/public/definitions/connections/mcp.ts b/packages/eve/src/public/definitions/connections/mcp.ts
 index 1945a93..25b55bb 100644
---- c/packages/eve/src/public/definitions/connections/mcp.ts
-+++ i/packages/eve/src/public/definitions/connections/mcp.ts
+--- a/packages/eve/src/public/definitions/connections/mcp.ts
++++ b/packages/eve/src/public/definitions/connections/mcp.ts
 @@ -1,4 +1,5 @@
  import type { ConnectionEvents } from "#public/definitions/connections/events.js";
 +import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
@@ -792,10 +792,10 @@ index 1945a93..25b55bb 100644
    /**
     * Client-side tool filter. When set, `eve__search` returns and `eve__tool`
     * calls only tools whose names pass the filter.
-diff --git c/packages/eve/src/public/definitions/connections/tool-call.ts i/packages/eve/src/public/definitions/connections/tool-call.ts
+diff --git a/packages/eve/src/public/definitions/connections/tool-call.ts b/packages/eve/src/public/definitions/connections/tool-call.ts
 index 9101fdf..bf81760 100644
---- c/packages/eve/src/public/definitions/connections/tool-call.ts
-+++ i/packages/eve/src/public/definitions/connections/tool-call.ts
+--- a/packages/eve/src/public/definitions/connections/tool-call.ts
++++ b/packages/eve/src/public/definitions/connections/tool-call.ts
 @@ -27,4 +27,10 @@ export type ProvidedArgumentsDefinition = Readonly<Record<string, ProvidedArgume
  export interface ConnectionToolCallDefinition {
    /** Application-owned arguments hidden from the model and added at execution time. */
@@ -807,10 +807,10 @@ index 9101fdf..bf81760 100644
 +    input: Readonly<Record<string, unknown>>,
 +  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
  }
-diff --git c/packages/eve/src/public/index.ts i/packages/eve/src/public/index.ts
+diff --git a/packages/eve/src/public/index.ts b/packages/eve/src/public/index.ts
 index aaf43dc..ce7818c 100644
---- c/packages/eve/src/public/index.ts
-+++ i/packages/eve/src/public/index.ts
+--- a/packages/eve/src/public/index.ts
++++ b/packages/eve/src/public/index.ts
 @@ -4,6 +4,8 @@
  
  export {
@@ -820,10 +820,10 @@ index aaf43dc..ce7818c 100644
    type AgentDefinition,
    type AgentExperimentalDefinition,
    type AgentLimitsDefinition,
-diff --git c/packages/eve/src/runtime/agent/bootstrap.ts i/packages/eve/src/runtime/agent/bootstrap.ts
+diff --git a/packages/eve/src/runtime/agent/bootstrap.ts b/packages/eve/src/runtime/agent/bootstrap.ts
 index f879e13..e7a0aea 100644
---- c/packages/eve/src/runtime/agent/bootstrap.ts
-+++ i/packages/eve/src/runtime/agent/bootstrap.ts
+--- a/packages/eve/src/runtime/agent/bootstrap.ts
++++ b/packages/eve/src/runtime/agent/bootstrap.ts
 @@ -31,6 +31,9 @@ export type RuntimeModelReference = Readonly<
   */
  export type RuntimeDynamicModelReference = Readonly<ModuleSourceRef>;
@@ -850,10 +850,10 @@ index f879e13..e7a0aea 100644
      nodeId: input.nodeId,
      reasoning: config?.reasoning,
      tools: [...input.tools],
-diff --git c/packages/eve/src/runtime/agent/resolve-model.ts i/packages/eve/src/runtime/agent/resolve-model.ts
+diff --git a/packages/eve/src/runtime/agent/resolve-model.ts b/packages/eve/src/runtime/agent/resolve-model.ts
 index 10440b4..4e819df 100644
---- c/packages/eve/src/runtime/agent/resolve-model.ts
-+++ i/packages/eve/src/runtime/agent/resolve-model.ts
+--- a/packages/eve/src/runtime/agent/resolve-model.ts
++++ b/packages/eve/src/runtime/agent/resolve-model.ts
 @@ -12,6 +12,7 @@ import {
    toAiSdkLanguageModel,
  } from "#internal/runtime-model.js";
@@ -901,10 +901,10 @@ index 10440b4..4e819df 100644
  export async function resolveRuntimeModelSelection(input: {
    readonly durability: "durable" | "live";
    /** The build's model metadata snapshot, read only when the selection omits its context window. */
-diff --git c/packages/eve/src/runtime/connections/mcp-client.ts i/packages/eve/src/runtime/connections/mcp-client.ts
+diff --git a/packages/eve/src/runtime/connections/mcp-client.ts b/packages/eve/src/runtime/connections/mcp-client.ts
 index 55dc982..2d8e624 100644
---- c/packages/eve/src/runtime/connections/mcp-client.ts
-+++ i/packages/eve/src/runtime/connections/mcp-client.ts
+--- a/packages/eve/src/runtime/connections/mcp-client.ts
++++ b/packages/eve/src/runtime/connections/mcp-client.ts
 @@ -1,4 +1,5 @@
  import { ConnectionEventActions, isEventAction } from "#runtime/connections/events/actions.js";
 +import { jsonValuesEqual } from "#shared/json.js";
@@ -1072,10 +1072,10 @@ index 55dc982..2d8e624 100644
 +    jsonValuesEqual(a.annotations, b.annotations)
 +  );
 +}
-diff --git c/packages/eve/src/runtime/resolve-agent.ts i/packages/eve/src/runtime/resolve-agent.ts
+diff --git a/packages/eve/src/runtime/resolve-agent.ts b/packages/eve/src/runtime/resolve-agent.ts
 index 8933b70..0400d75 100644
---- c/packages/eve/src/runtime/resolve-agent.ts
-+++ i/packages/eve/src/runtime/resolve-agent.ts
+--- a/packages/eve/src/runtime/resolve-agent.ts
++++ b/packages/eve/src/runtime/resolve-agent.ts
 @@ -230,6 +230,7 @@ function createResolvedAgentConfig(
    if (manifest.config.compaction !== undefined) {
      const compaction: {
@@ -1095,16 +1095,16 @@ index 8933b70..0400d75 100644
      config.compaction = compaction;
    }
  
-diff --git c/packages/eve/src/runtime/resolve-connection.ts i/packages/eve/src/runtime/resolve-connection.ts
-index 8036e0f..249339b 100644
---- c/packages/eve/src/runtime/resolve-connection.ts
-+++ i/packages/eve/src/runtime/resolve-connection.ts
+diff --git a/packages/eve/src/runtime/resolve-connection.ts b/packages/eve/src/runtime/resolve-connection.ts
+index 274c643..e403eb8 100644
+--- a/packages/eve/src/runtime/resolve-connection.ts
++++ b/packages/eve/src/runtime/resolve-connection.ts
 @@ -1,3 +1,4 @@
 +import type { ConnectionToolNameDefinition } from "#shared/connection-types.js";
  import type { CompiledConnectionDefinition } from "#compiler/manifest.js";
  import type { CompiledModuleMap } from "#compiler/module-map.js";
  import { expectObjectRecord } from "#internal/authored-module.js";
-@@ -81,6 +82,7 @@ export async function resolveConnectionDefinition(
+@@ -82,6 +83,7 @@ export async function resolveConnectionDefinition(
        sourceKind: "module";
        spec?: ResolvedConnectionDefinition["spec"];
        toolCall?: Readonly<ConnectionToolCallDefinition>;
@@ -1112,7 +1112,7 @@ index 8036e0f..249339b 100644
        tools?: Readonly<ToolFilterDefinition>;
        url: string;
      } = {
-@@ -161,6 +163,9 @@ export async function resolveConnectionDefinition(
+@@ -162,6 +164,9 @@ export async function resolveConnectionDefinition(
        result.headers = resolvedRecord.headers as Readonly<HeadersDefinition>;
      }
  
@@ -1122,7 +1122,7 @@ index 8036e0f..249339b 100644
      if (resolvedRecord.toolCall !== undefined) {
        result.toolCall = resolvedRecord.toolCall as Readonly<ConnectionToolCallDefinition>;
      }
-@@ -267,6 +272,7 @@ export function resolveDynamicConnectionValue(
+@@ -271,6 +276,7 @@ export function resolveDynamicConnectionValue(
      toolCall: normalized.toolCall,
      protocolVersionDiscovery: normalized.protocolVersionDiscovery,
      forwardPrincipal: normalized.forwardPrincipal,
@@ -1130,10 +1130,10 @@ index 8036e0f..249339b 100644
      tools: normalized.tools,
      url: normalized.url,
    });
-diff --git c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts i/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
+diff --git a/packages/eve/src/runtime/subagents/dynamic-agent-config.ts b/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
 index 6577938..5c7babd 100644
---- c/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
-+++ i/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
+--- a/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
++++ b/packages/eve/src/runtime/subagents/dynamic-agent-config.ts
 @@ -56,6 +56,9 @@ export async function normalizeDynamicSubagentAgentConfig(input: {
    if (isDynamicModelDefinition(definition.model)) {
      throw new Error(`${message} The returned "model" must be static.`);
@@ -1144,10 +1144,10 @@ index 6577938..5c7babd 100644
    if (definition.limits?.sessionUsage !== undefined) {
      throw new Error(
        `${message} The "limits.sessionUsage" field cannot be selected at runtime; the root agent's \`sessionUsage\` applies.`,
-diff --git c/packages/eve/src/runtime/types.ts i/packages/eve/src/runtime/types.ts
+diff --git a/packages/eve/src/runtime/types.ts b/packages/eve/src/runtime/types.ts
 index d9696f0..455c5c4 100644
---- c/packages/eve/src/runtime/types.ts
-+++ i/packages/eve/src/runtime/types.ts
+--- a/packages/eve/src/runtime/types.ts
++++ b/packages/eve/src/runtime/types.ts
 @@ -1,6 +1,7 @@
  import type { ConnectionEvents } from "#public/definitions/connections/events.js";
  import type { ConnectionEventsBackend } from "#shared/connection-events.js";
@@ -1164,10 +1164,10 @@ index d9696f0..455c5c4 100644
    /**
     * Wire protocol. Selects the runtime client implementation. `tools`
     * carries the connection's operation/tool filter regardless of
-diff --git c/packages/eve/src/shared/agent-definition.ts i/packages/eve/src/shared/agent-definition.ts
+diff --git a/packages/eve/src/shared/agent-definition.ts b/packages/eve/src/shared/agent-definition.ts
 index 04686eb..ac90bc9 100644
---- c/packages/eve/src/shared/agent-definition.ts
-+++ i/packages/eve/src/shared/agent-definition.ts
+--- a/packages/eve/src/shared/agent-definition.ts
++++ b/packages/eve/src/shared/agent-definition.ts
 @@ -1,3 +1,4 @@
 +import type { generateText, LanguageModel, ModelMessage, TelemetryOptions } from "ai";
  import type { JsonObject } from "#shared/json.js";
@@ -1225,10 +1225,10 @@ index 04686eb..ac90bc9 100644
    /**
     * Fraction of the primary model context window that triggers compaction.
     *
-diff --git c/packages/eve/src/shared/connection-types.ts i/packages/eve/src/shared/connection-types.ts
+diff --git a/packages/eve/src/shared/connection-types.ts b/packages/eve/src/shared/connection-types.ts
 index fc6c77f..3007c41 100644
---- c/packages/eve/src/shared/connection-types.ts
-+++ i/packages/eve/src/shared/connection-types.ts
+--- a/packages/eve/src/shared/connection-types.ts
++++ b/packages/eve/src/shared/connection-types.ts
 @@ -89,7 +89,12 @@ export type HeadersDefinition =
   */
  export type ToolFilterDefinition =
