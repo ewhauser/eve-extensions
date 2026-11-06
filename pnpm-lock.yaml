@@ -22,8 +22,8 @@ catalogs:
       specifier: ^7.0.137
       version: 7.0.141
     eve:
-      specifier: 0.90.0
-      version: 0.90.0
+      specifier: 0.91.0
+      version: 0.91.0
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -40,7 +40,7 @@ overrides:
   vite: 7.3.7
 
 patchedDependencies:
-  eve@0.90.0: 5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa
+  eve@0.91.0: f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8
 
 importers:
 
@@ -50,7 +50,7 @@ importers:
     dependencies:
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       eve-agent-builder:
         specifier: workspace:*
         version: link:../../packages/eve-agent-builder
@@ -75,7 +75,7 @@ importers:
         version: 3.1116.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       eve-aws-lambda-microvms:
         specifier: workspace:*
         version: link:../../packages/eve-aws-lambda-microvms
@@ -94,7 +94,7 @@ importers:
         version: 7.0.141(zod@4.6.7)
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       eve-celld-sandbox:
         specifier: workspace:*
         version: link:../../packages/eve-celld-sandbox
@@ -120,7 +120,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -160,7 +160,7 @@ importers:
         version: 7.0.141(zod@4.6.7)
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -197,7 +197,7 @@ importers:
         version: 0.25.12
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       just-bash:
         specifier: 3.4.2
         version: 3.4.2
@@ -221,7 +221,7 @@ importers:
         version: 7.0.141(zod@4.6.7)
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -240,7 +240,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -259,7 +259,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -278,7 +278,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       eve-openai-connectors:
         specifier: workspace:*
         version: link:../eve-openai-connectors
@@ -300,7 +300,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -319,7 +319,7 @@ importers:
         version: 26.2.0
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -341,7 +341,7 @@ importers:
         version: 7.0.141(zod@4.6.7)
       eve:
         specifier: 'catalog:'
-        version: 0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1136,10 +1136,12 @@ packages:
   '@smithy/core@3.33.3':
     resolution: {integrity: sha512-CsOeKq/9kA3y6VJHt+/+VTCtBaxJ4OTFpgrjIUhPpDIKxBci1k2bJaQASF2h/ELWrulGp+t97DZ0mevfAD8idg==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/core@3.34.1':
     resolution: {integrity: sha512-dLcOUxz8YCv1RZUMKq6GbyUf95pLbrqh34bPvpCZ1+CByFF31BEAFewZjsGCnVsZTKdThNENfGyAgk2TJqVwSw==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -1545,8 +1547,8 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
-  eve@0.90.0:
-    resolution: {integrity: sha512-1z707TxmTokVbQAtpoIqoLBaNR0Xy2FY9+KkJLr8kud8JNLyVYqCJt2bpBt3jzRF6sl0Xxt2CG9Ecpa5LsxyHA==}
+  eve@0.91.0:
+    resolution: {integrity: sha512-IVZ73uGFUm3k5sUju/XNi/O3z9Rmq6Iv8mfA0nzrDMypRu+N7iJUIcOhxuU6qDWxLglfqoXimfoOZiyd9/UCxg==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
@@ -3146,7 +3148,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eve@0.90.0(patch_hash=5226ee1b4ffc1199789a3c7139d0db6ce38d683097691660f3f32a202bfbfcaa)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1)):
+  eve@0.91.0(patch_hash=f660d6f1c32ec0110fab812d5cc12ddb7e95312cfe1d1df2efb0dd0c4d842bf8)(@opentelemetry/api@1.9.0)(ai@7.0.141(zod@4.6.7))(just-bash@3.4.2)(vite@7.3.7(@types/node@26.2.0)(tsx@4.23.13)(yaml@2.9.1)):
     dependencies:
       ai: 7.0.141(zod@4.6.7)
       nitro: 3.0.260903-beta
