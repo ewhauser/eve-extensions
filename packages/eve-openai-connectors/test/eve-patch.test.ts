@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   passesToolFilter,
   projectConnectionToolNames,
-} from "../node_modules/eve/dist/src/runtime/connections/mcp-client.js";
+} from "./eve-runtime.js";
 import type { ResolvedConnectionDefinition } from "../node_modules/eve/dist/src/runtime/types.js";
 
 function connection(
