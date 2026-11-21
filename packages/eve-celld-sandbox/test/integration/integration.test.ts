@@ -806,7 +806,8 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
       const before = await delivery.result();
       assert.equal(before.status, "completed");
       assert.ok(before.reply);
-      const firstOutput = JSON.parse(before.reply).stdout as string;
+      const firstOutput = JSON.parse(before.reply) as string;
+      assert.equal(typeof firstOutput, "string", "Eve 1.1 projects bash output to model-visible text");
       assert.match(firstOutput, /template-ready\n5\n/);
       await stopEve();
       await server.stop();
@@ -815,7 +816,8 @@ test("real celld integration", { timeout: 180_000 }, async (t) => {
       const second = await (await session.send("read saved")).result();
       assert.equal(second.status, "completed");
       assert.ok(second.reply);
-      const secondOutput = JSON.parse(second.reply).stdout as string;
+      const secondOutput = JSON.parse(second.reply) as string;
+      assert.equal(typeof secondOutput, "string", "Eve 1.1 projects bash output to model-visible text");
       const firstLines = firstOutput.trim().split("\n");
       const secondLines = secondOutput.trim().split("\n");
       assert.equal(secondLines[0], firstLines[0]); // same remote cell after restart

@@ -3,12 +3,11 @@ import { defineEval } from "eve/evals";
 export default defineEval({
   description: "A published saved agent runs through one real parked active-runner child.",
   async test(t) {
-    const result = await t.send("Run the active saved Weather witness agent now.");
-    result.expectOk();
-    const opened = result.events.find(
-      (event) => event.type === "child.opened" && event.data.name === "active-runner",
-    );
-    if (opened?.type !== "child.opened") throw new Error("ACTIVE_RUNNER_CHILD_MISSING");
+    const session = await t.session();
+    const live = await session.start("Run the active saved Weather witness agent now.");
+    // Eve 1.x can expire a failed child immediately. Observe both successful
+    // turns while the parent is running, before it probes the closed lease.
+    const opened = await live.waitForEvent("child.opened", { data: { name: "active-runner" } });
     const child = t.target.attach(opened.data.sessionId);
     const bootstrap = await child.nextTurn();
     bootstrap.event("turn.started", { count: 1 });
@@ -20,6 +19,8 @@ export default defineEval({
     execution.calledTool("fixture_read", { count: 1 });
     execution.event("turn.settled", { count: 1 });
 
+    const result = await live.result();
+    result.expectOk();
     result.calledTool("agent_builder__prepare_active_run", { count: 1 });
     result.event("child.opened", { data: { name: "active-runner" }, count: 1 });
     result.calledTool("blocking-active-runner", { status: "completed", count: 2 });

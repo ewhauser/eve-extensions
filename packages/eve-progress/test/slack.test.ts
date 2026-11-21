@@ -10,10 +10,15 @@ import {
   ContextContainer,
   contextStorage,
 } from "../node_modules/eve/dist/src/context/container.js";
-import {
-  deserializeContext,
-  serializeContext,
-} from "../node_modules/eve/dist/src/context/serialize.js";
+import type { AlsContext } from "../node_modules/eve/dist/src/context/container.js";
+
+const { deserializeContext, serializeContext } = await import(new URL(
+  "../node_modules/eve/dist/src/context/serialize.js",
+  import.meta.url,
+).href) as {
+  serializeContext(ctx: AlsContext): Record<string, unknown>;
+  deserializeContext(serialized: Record<string, unknown>): Promise<ContextContainer>;
+};
 
 function context(sessionId = "root", rootSessionId = "root"): ProgressPublicationContext {
   return {

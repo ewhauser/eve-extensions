@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { executeWithTransform } from "../node_modules/eve/dist/src/runtime/connections/mcp-client.js";
+import { executeWithTransform } from "./eve-runtime.js";
 import type { ResolvedConnectionDefinition } from "../node_modules/eve/dist/src/runtime/types.js";
 
 function connection(transformInput: NonNullable<NonNullable<ResolvedConnectionDefinition["toolCall"]>["transformInput"]>): ResolvedConnectionDefinition {
