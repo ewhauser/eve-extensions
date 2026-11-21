@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.5.8...eve-project-link-v0.6.0) (2026-11-21)
+
+
+### Features
+
+* support Eve 1.1.0 ([#150](https://github.com/ewhauser/eve-extensions/issues/150)) ([2a60e18](https://github.com/ewhauser/eve-extensions/commit/2a60e18c77fc9c42f439e3009f52c36a7a6853bb))
+
 ## [0.5.8](https://github.com/ewhauser/eve-extensions/compare/eve-project-link-v0.5.7...eve-project-link-v0.5.8) (2026-11-06)
 
 

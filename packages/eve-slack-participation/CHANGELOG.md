@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/ewhauser/eve-extensions/compare/eve-slack-participation-v0.1.7...eve-slack-participation-v0.2.0) (2026-11-21)
+
+
+### Features
+
+* support Eve 1.1.0 ([#150](https://github.com/ewhauser/eve-extensions/issues/150)) ([2a60e18](https://github.com/ewhauser/eve-extensions/commit/2a60e18c77fc9c42f439e3009f52c36a7a6853bb))
+
 ## [0.1.7](https://github.com/ewhauser/eve-extensions/compare/eve-slack-participation-v0.1.6...eve-slack-participation-v0.1.7) (2026-11-06)
 
 

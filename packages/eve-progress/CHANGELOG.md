@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.10...eve-progress-v0.4.0) (2026-11-21)
+
+
+### Features
+
+* support Eve 1.1.0 ([#150](https://github.com/ewhauser/eve-extensions/issues/150)) ([2a60e18](https://github.com/ewhauser/eve-extensions/commit/2a60e18c77fc9c42f439e3009f52c36a7a6853bb))
+
 ## [0.3.10](https://github.com/ewhauser/eve-extensions/compare/eve-progress-v0.3.9...eve-progress-v0.3.10) (2026-11-06)
 
 

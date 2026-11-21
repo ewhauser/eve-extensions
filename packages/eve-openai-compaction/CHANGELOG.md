@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-compaction-v0.2.7...eve-openai-compaction-v0.3.0) (2026-11-21)
+
+
+### Features
+
+* support Eve 1.1.0 ([#150](https://github.com/ewhauser/eve-extensions/issues/150)) ([2a60e18](https://github.com/ewhauser/eve-extensions/commit/2a60e18c77fc9c42f439e3009f52c36a7a6853bb))
+
 ## [0.2.7](https://github.com/ewhauser/eve-extensions/compare/eve-openai-compaction-v0.2.6...eve-openai-compaction-v0.2.7) (2026-11-06)
 
 
