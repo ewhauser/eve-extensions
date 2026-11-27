@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ewhauser/eve-extensions/compare/eve-celld-sandbox-v0.3.0...eve-celld-sandbox-v0.4.0) (2026-11-27)
+
+
+### Features
+
+* support Eve 1.5.0 ([#153](https://github.com/ewhauser/eve-extensions/issues/153)) ([aa07b31](https://github.com/ewhauser/eve-extensions/commit/aa07b312d796cad3eb11a95b05abf072d1e22cdc))
+
 ## [0.3.0](https://github.com/ewhauser/eve-extensions/compare/eve-celld-sandbox-v0.2.6...eve-celld-sandbox-v0.3.0) (2026-11-21)
 
 
