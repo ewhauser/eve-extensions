@@ -1,8 +1,8 @@
 # Eve celld sandboxes
 
-This version targets Eve `1.1.0`.
+This version targets Eve `1.5.0`.
 
-Release validation covers real celld and AgentFS flows plus Docker containers on Eve 1.1.0.
+Release validation covers real celld and AgentFS flows plus Docker containers on Eve 1.5.0.
 
 Two [Eve](https://eve.dev) sandbox backends hosted by
 [celld](https://github.com/denoland/celld):
@@ -16,16 +16,29 @@ Both adapt to Eve's sandbox provider API, including file I/O, commands,
 process cancellation, prewarm, stop, shutdown, and deletion. Eve still
 runs in the application host. Its Workflow World is configured independently.
 
+### Upgrading an Eve application
+
+The local Eve fixture uses Workflow 5.8.0 with `@workflow/world-local` 5.6.0.
+New runs use spec 10. A run created on Eve 1.5.0 can resume after restarting
+both Eve and celld, including access to its existing AgentFS files.
+
+On the local World, Eve parks runs owned by earlier Eve versions. Sending
+directly to an Eve 1.1.0 session ID after upgrading returns `409 session_stranded`.
+Finish active work on the earlier version before upgrading, or start a fresh
+session on 1.5.0. Workflow Postgres migration 0033 applies only to
+`@workflow/world-postgres` 5.5.0 databases. celld's AgentFS storage uses its own
+migrations.
+
 ## Install and configure
 
-This package targets Eve **1.1.0**, celld **0.5.1**, and Node **24+**.
+This package targets Eve **1.5.0**, celld **0.5.1**, and Node **24+**.
 The Worker bundles pin just-bash **3.4.2**, AgentFS **0.6.4**, and
 Cloudflare Sandbox **0.12.9**. The container image and SDK versions must match.
 The example image includes Node. Add other runtimes, such as Python, in your
 application's Dockerfile when needed.
 
 ```sh
-pnpm add eve@1.1.0 eve-celld-sandbox
+pnpm add eve@1.5.0 eve-celld-sandbox
 ```
 
 In `agent/sandbox/sandbox.ts`, select a backend explicitly:

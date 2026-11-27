@@ -1,10 +1,10 @@
-# Eve 1.1.0 compatibility patches
+# Eve 1.5.0 compatibility patches
 
-The workspace pins `eve@1.1.0`, upstream commit
-`08034cde67d2c301c8c339f56db5d118cf14b74a` (tag `eve@1.1.0`).
+The workspace pins `eve@1.5.0`, upstream commit
+`ef6a15115f8d5ae8d22a04d7bc32a0df04fe69a2` (tag `eve@1.5.0`).
 
-`eve@1.1.0.patch` is the combined patch installed by pnpm. Its reviewable
-TypeScript equivalent is `eve@1.1.0-source.patch`, applied at the upstream
+`eve@1.5.0.patch` is the combined patch installed by pnpm. Its reviewable
+TypeScript equivalent is `eve@1.5.0-source.patch`, applied at the upstream
 repository root. It carries:
 
 - Custom compaction strategy loading and execution, preserving Eve's message

@@ -1,8 +1,8 @@
 # eve-project-link
 
-This version targets Eve `1.1.0`.
+This version targets Eve `1.5.0`.
 
-Release validation covers durable channel lifecycle and callback rebinding with Eve 1.1.0.
+Release validation covers durable channel lifecycle and callback rebinding with Eve 1.5.0.
 
 An [Eve](https://eve.dev) extension that links an entire context channel to an
 external project resource. Every active linked-channel turn receives a compact,
@@ -31,7 +31,7 @@ Project presets add only the provider- or installation-specific parts:
 ## Install
 
 ```sh
-pnpm add eve@1.1.0 eve-project-link
+pnpm add eve@1.5.0 eve-project-link
 ```
 
 Create `agent/extensions/project_link.ts`:
