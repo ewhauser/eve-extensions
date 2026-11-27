@@ -1,8 +1,8 @@
 # eve-slack-participation
 
-This version targets Eve `1.1.0`.
+This version targets Eve `1.5.0`.
 
-Release validation covers the Slack participation policy on Eve 1.1.0.
+Release validation covers the Slack participation policy on Eve 1.5.0.
 
 An Eve-only Slack participation policy. It decides whether Eve should join a
 human conversation in an already-active Slack thread without turning the
@@ -15,7 +15,7 @@ composed directly into Eve's `slackChannel({ onMessage })` hook.
 ## Install
 
 ```sh
-pnpm add ai eve@1.1.0 eve-slack-participation
+pnpm add ai eve@1.5.0 eve-slack-participation
 ```
 
 Create an authored extension, for example

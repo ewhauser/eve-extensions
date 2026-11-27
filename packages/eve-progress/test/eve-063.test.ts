@@ -45,7 +45,7 @@ async function runTodoCall(
   } as never, ctx);
 }
 
-describe("Eve 1.1.0 Slack lifecycle", () => {
+describe("Eve 1.5.0 Slack lifecycle", () => {
   it("posts and updates todo progress using channel metadata captured outside hooks", async () => {
     const calls: SlackProgressApiInput[] = [];
     const api = vi.fn(async (input: SlackProgressApiInput) => {
