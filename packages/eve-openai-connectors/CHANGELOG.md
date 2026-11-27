@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.8.0...eve-openai-connectors-v0.9.0) (2026-11-27)
+
+
+### Features
+
+* support Eve 1.5.0 ([#153](https://github.com/ewhauser/eve-extensions/issues/153)) ([aa07b31](https://github.com/ewhauser/eve-extensions/commit/aa07b312d796cad3eb11a95b05abf072d1e22cdc))
+
 ## [0.8.0](https://github.com/ewhauser/eve-extensions/compare/eve-openai-connectors-v0.7.7...eve-openai-connectors-v0.8.0) (2026-11-21)
 
 
